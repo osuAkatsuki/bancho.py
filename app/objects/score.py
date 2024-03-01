@@ -23,8 +23,6 @@ from app.utils import pymysql_encode
 if TYPE_CHECKING:
     from app.objects.player import Player
 
-__all__ = ("Grade", "SubmissionStatus", "Score")
-
 BEATMAPS_PATH = Path.cwd() / ".data/osu"
 
 
@@ -326,8 +324,6 @@ class Score:
             mode=mode_vn,
             mods=int(self.mods),
             combo=self.max_combo,
-            # prefer to use the score's specific params that add up to the acc
-            acc=self.acc,
             ngeki=self.ngeki,
             n300=self.n300,
             nkatu=self.nkatu,

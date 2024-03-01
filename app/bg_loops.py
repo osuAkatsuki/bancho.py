@@ -10,8 +10,6 @@ from app.constants.privileges import Privileges
 from app.logging import Ansi
 from app.logging import log
 
-__all__ = ("initialize_housekeeping_tasks",)
-
 OSU_CLIENT_MIN_PING_INTERVAL = 300000 // 1000  # defined by osu!
 
 

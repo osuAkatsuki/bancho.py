@@ -1,25 +1,35 @@
 from __future__ import annotations
 
-import textwrap
-from typing import Any
 from typing import TypedDict
 from typing import cast
+
+from sqlalchemy import Column
+from sqlalchemy import Index
+from sqlalchemy import Integer
+from sqlalchemy import insert
+from sqlalchemy import select
 
 import app.state.services
 from app._typing import UNSET
 from app._typing import _UnsetSentinel
+from app.repositories import Base
 
-# create table user_achievements
-# (
-# 	userid int not null,
-# 	achid int not null,
-# 	primary key (userid, achid)
-# );
 
-READ_PARAMS = textwrap.dedent(
-    """\
-        userid, achid
-    """,
+class UserAchievementsTable(Base):
+    __tablename__ = "user_achievements"
+
+    userid = Column("userid", Integer, nullable=False, primary_key=True)
+    achid = Column("achid", Integer, nullable=False, primary_key=True)
+
+    __table_args__ = (
+        Index("user_achievements_achid_index", achid),
+        Index("user_achievements_userid_index", userid),
+    )
+
+
+READ_PARAMS = (
+    UserAchievementsTable.userid,
+    UserAchievementsTable.achid,
 )
 
 
@@ -30,56 +40,40 @@ class UserAchievement(TypedDict):
 
 async def create(user_id: int, achievement_id: int) -> UserAchievement:
     """Creates a new user achievement entry."""
-    query = """\
-        INSERT INTO user_achievements (userid, achid)
-                VALUES (:user_id, :achievement_id)
-    """
-    params: dict[str, Any] = {
-        "user_id": user_id,
-        "achievement_id": achievement_id,
-    }
-    await app.state.services.database.execute(query, params)
+    insert_stmt = insert(UserAchievementsTable).values(
+        userid=user_id,
+        achid=achievement_id,
+    )
+    await app.state.services.database.execute(insert_stmt)
 
-    query = f"""\
-        SELECT {READ_PARAMS}
-          FROM user_achievements
-         WHERE userid = :user_id
-         AND achid = :achievement_id
-    """
-    user_achievement = await app.state.services.database.fetch_one(query, params)
-
+    select_stmt = (
+        select(*READ_PARAMS)
+        .where(UserAchievementsTable.userid == user_id)
+        .where(UserAchievementsTable.achid == achievement_id)
+    )
+    user_achievement = await app.state.services.database.fetch_one(select_stmt)
     assert user_achievement is not None
-    return cast(UserAchievement, dict(user_achievement._mapping))
+    return cast(UserAchievement, user_achievement)
 
 
 async def fetch_many(
-    user_id: int,
-    page: int | _UnsetSentinel = UNSET,
-    page_size: int | _UnsetSentinel = UNSET,
+    user_id: int | _UnsetSentinel = UNSET,
+    achievement_id: int | _UnsetSentinel = UNSET,
+    page: int | None = None,
+    page_size: int | None = None,
 ) -> list[UserAchievement]:
     """Fetch a list of user achievements."""
-    query = f"""\
-        SELECT {READ_PARAMS}
-          FROM user_achievements
-          WHERE userid = :user_id
-    """
-    params: dict[str, Any] = {
-        "user_id": user_id,
-    }
+    select_stmt = select(*READ_PARAMS)
+    if not isinstance(user_id, _UnsetSentinel):
+        select_stmt = select_stmt.where(UserAchievementsTable.userid == user_id)
+    if not isinstance(achievement_id, _UnsetSentinel):
+        select_stmt = select_stmt.where(UserAchievementsTable.achid == achievement_id)
 
-    if not isinstance(page, _UnsetSentinel) and not isinstance(
-        page_size,
-        _UnsetSentinel,
-    ):
-        query += """\
-            LIMIT :limit
-           OFFSET :offset
-        """
-        params["page_size"] = page_size
-        params["offset"] = (page - 1) * page_size
+    if page and page_size:
+        select_stmt = select_stmt.limit(page_size).offset((page - 1) * page_size)
 
-    user_achievements = await app.state.services.database.fetch_all(query, params)
-    return cast(list[UserAchievement], [dict(a._mapping) for a in user_achievements])
+    user_achievements = await app.state.services.database.fetch_all(select_stmt)
+    return cast(list[UserAchievement], user_achievements)
 
 
 # TODO: delete?

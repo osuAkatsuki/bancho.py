@@ -7,8 +7,6 @@ from enum import unique
 from app.utils import escape_enum
 from app.utils import pymysql_encode
 
-__all__ = ("Privileges", "ClientPrivileges", "ClanPrivileges")
-
 
 @unique
 @pymysql_encode(escape_enum)

@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import logging
 import re
-import string
 import struct
 import time
 from collections.abc import Callable
@@ -14,6 +15,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal
 from typing import TypedDict
+from zoneinfo import ZoneInfo
 
 import bcrypt
 import databases.core
@@ -38,12 +40,12 @@ from app.constants.privileges import ClanPrivileges
 from app.constants.privileges import ClientPrivileges
 from app.constants.privileges import Privileges
 from app.logging import Ansi
+from app.logging import get_timestamp
 from app.logging import log
 from app.logging import magnitude_fmt_time
 from app.objects.beatmap import Beatmap
 from app.objects.beatmap import ensure_osu_file_is_available
 from app.objects.channel import Channel
-from app.objects.clan import Clan
 from app.objects.match import MAX_MATCH_NAME_LENGTH
 from app.objects.match import Match
 from app.objects.match import MatchTeams
@@ -64,13 +66,14 @@ from app.packets import LoginFailureReason
 from app.repositories import client_hashes as client_hashes_repo
 from app.repositories import ingame_logins as logins_repo
 from app.repositories import mail as mail_repo
-from app.repositories import players as players_repo
+from app.repositories import users as users_repo
 from app.state import services
 from app.usecases.performance import ScoreParams
 
 OSU_API_V2_CHANGELOG_URL = "https://osu.ppy.sh/api/v2/changelog"
 
 BEATMAPS_PATH = Path.cwd() / ".data/osu"
+DISK_CHAT_LOG_FILE = ".data/logs/chat.log"
 
 BASE_DOMAIN = app.settings.DOMAIN
 
@@ -188,13 +191,11 @@ async def bancho_handler(
 
     if osu_token is None:
         # the client is performing a login
-        async with app.state.services.database.connection() as db_conn:
-            login_data = await handle_osu_login_request(
-                request.headers,
-                await request.body(),
-                ip,
-                db_conn,
-            )
+        login_data = await handle_osu_login_request(
+            request.headers,
+            await request.body(),
+            ip,
+        )
 
         return Response(
             content=login_data["response_body"],
@@ -428,7 +429,13 @@ class SendMessage(BasePacket):
             t_chan.send(msg, sender=player)
 
         player.update_latest_activity_soon()
-        log(f"{player} @ {t_chan}: {msg}", Ansi.LCYAN, file=".data/logs/chat.log")
+
+        log(f"{player} @ {t_chan}: {msg}", Ansi.LCYAN)
+
+        with open(DISK_CHAT_LOG_FILE, "a+") as f:
+            f.write(
+                f"[{get_timestamp(full=True, tz=ZoneInfo('GMT'))}] {player} @ {t_chan}: {msg}\n",
+            )
 
 
 @register(ClientPackets.LOGOUT, restricted=True)
@@ -600,8 +607,8 @@ def parse_adapters_string(adapters_string: str) -> tuple[list[str], bool]:
 async def authenticate(
     username: str,
     untrusted_password: bytes,
-) -> players_repo.Player | None:
-    user_info = await players_repo.fetch_one(
+) -> users_repo.User | None:
+    user_info = await users_repo.fetch_one(
         name=username,
         fetch_all_fields=True,
     )
@@ -627,7 +634,6 @@ async def handle_osu_login_request(
     headers: Mapping[str, str],
     body: bytes,
     ip: IPAddress,
-    db_conn: databases.core.Connection,
 ) -> LoginResponse:
     """\
     Login has no specific packet, but happens when the osu!
@@ -754,12 +760,23 @@ async def handle_osu_login_request(
 
     # TODO: store adapters individually
 
+    # Some disk manufacturers set constant/shared ids for their products.
+    # In these cases, there's not a whole lot we can do -- we'll allow them thru.
+    INACTIONABLE_DISK_SIGNATURE_MD5S: list[str] = [
+        hashlib.md5(b"0").hexdigest(),  # "0" is likely the most common variant
+    ]
+
+    if login_data["disk_signature_md5"] not in INACTIONABLE_DISK_SIGNATURE_MD5S:
+        disk_signature_md5 = login_data["disk_signature_md5"]
+    else:
+        disk_signature_md5 = None
+
     hw_matches = await client_hashes_repo.fetch_any_hardware_matches_for_user(
         userid=user_info["id"],
         running_under_wine=running_under_wine,
         adapters=login_data["adapters_md5"],
         uninstall_id=login_data["uninstall_md5"],
-        disk_serial=login_data["disk_signature_md5"],
+        disk_serial=disk_signature_md5,
     )
 
     if hw_matches:
@@ -792,10 +809,10 @@ async def handle_osu_login_request(
     """ All checks passed, player is safe to login """
 
     # get clan & clan priv if we're in a clan
-    clan: Clan | None = None
+    clan_id: int | None = None
     clan_priv: ClanPrivileges | None = None
     if user_info["clan_id"] != 0:
-        clan = app.state.sessions.clans.get(id=user_info["clan_id"])
+        clan_id = user_info["clan_id"]
         clan_priv = ClanPrivileges(user_info["clan_priv"])
 
     db_country = user_info["country"]
@@ -818,7 +835,7 @@ async def handle_osu_login_request(
         # country wasn't stored on registration.
         log(f"Fixing {login_data['username']}'s country.", Ansi.LGREEN)
 
-        await players_repo.update(
+        await users_repo.partial_update(
             id=user_info["id"],
             country=geoloc["country"]["acronym"],
         )
@@ -836,9 +853,10 @@ async def handle_osu_login_request(
     player = Player(
         id=user_info["id"],
         name=user_info["name"],
-        priv=user_info["priv"],
+        priv=Privileges(user_info["priv"]),
         pw_bcrypt=user_info["pw_bcrypt"].encode(),
-        clan=clan,
+        token=Player.generate_token(),
+        clan_id=clan_id,
         clan_priv=clan_priv,
         geoloc=geoloc,
         utc_offset=login_data["utc_offset"],
@@ -896,8 +914,8 @@ async def handle_osu_login_request(
 
     # fetch some of the player's
     # information from sql to be cached.
-    await player.stats_from_sql_full(db_conn)
-    await player.relationships_from_sql(db_conn)
+    await player.stats_from_sql_full()
+    await player.relationships_from_sql()
 
     # TODO: fetch player.recent_scores from sql
 
@@ -1302,7 +1320,12 @@ class SendPrivateMessage(BasePacket):
                     player.send(resp_msg, sender=target)
 
         player.update_latest_activity_soon()
-        log(f"{player} @ {target}: {msg}", Ansi.LCYAN, file=".data/logs/chat.log")
+
+        log(f"{player} @ {target}: {msg}", Ansi.LCYAN)
+        with open(DISK_CHAT_LOG_FILE, "a+") as f:
+            f.write(
+                f"[{get_timestamp(full=True, tz=ZoneInfo('GMT'))}] {player} @ {target}: {msg}\n",
+            )
 
 
 @register(ClientPackets.PART_LOBBY)
@@ -1391,7 +1414,8 @@ class MatchCreate(BasePacket):
         match = Match(
             id=match_id,
             name=self.match_data.name,
-            password=self.match_data.passwd,
+            password=self.match_data.passwd.removesuffix("//private"),
+            has_public_history=not self.match_data.passwd.endswith("//private"),
             map_name=self.match_data.map_name,
             map_id=self.match_data.map_id,
             map_md5=self.match_data.map_md5,
@@ -1973,7 +1997,7 @@ class TourneyMatchLeaveChannel(BasePacket):
             return  # insufficient privs
 
         match = app.state.sessions.matches[self.match_id]
-        if not match:
+        if not (match and player.id in match.tourney_clients):
             return  # match not found
 
         # attempt to join match chan

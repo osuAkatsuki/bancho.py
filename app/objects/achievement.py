@@ -6,8 +6,6 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from app.objects.score import Score
 
-__all__ = ("Achievement",)
-
 
 class Achievement:
     """A class to represent a single osu! achievement."""

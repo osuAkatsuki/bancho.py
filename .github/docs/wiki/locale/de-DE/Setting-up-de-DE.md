@@ -17,15 +17,23 @@ sudo apt install -y docker docker-compose
 ## configuring bancho.py
 
 all configuration for the osu! server (bancho.py) itself can be done from the
-`.env` file. we provide an example `.env.example` file which you can use as a base.
+`.env` and `logging.yaml` files. we will provide example files for each, which
+you can use as a base and modify as you'd like.
 
 ```sh
 # create a configuration file from the sample provided
 cp .env.example .env
 
+# create a logging configuration file from the sample provided
+cp logging.yaml.example logging.yaml
+
 # configure the application to your needs
 # this is required to move onto the next steps
 nano .env
+
+# you can additionally configure the logging if you'd like,
+# but the default should work fine for most users.
+nano logging.yaml
 ```
 
 ## configuring a reverse proxy (we'll use nginx)

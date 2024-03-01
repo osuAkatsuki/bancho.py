@@ -6,8 +6,6 @@ from enum import unique
 from app.utils import escape_enum
 from app.utils import pymysql_encode
 
-__all__ = ("ClientFlags",)
-
 
 @unique
 @pymysql_encode(escape_enum)

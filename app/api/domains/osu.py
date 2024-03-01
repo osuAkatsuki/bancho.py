@@ -6,7 +6,6 @@ import copy
 import hashlib
 import random
 import secrets
-from base64 import b64decode
 from collections import defaultdict
 from collections.abc import Awaitable
 from collections.abc import Callable
@@ -52,7 +51,6 @@ from app.constants.mods import Mods
 from app.constants.privileges import Privileges
 from app.logging import Ansi
 from app.logging import log
-from app.logging import printc
 from app.objects import models
 from app.objects.beatmap import Beatmap
 from app.objects.beatmap import RankedStatus
@@ -61,14 +59,15 @@ from app.objects.player import Player
 from app.objects.score import Grade
 from app.objects.score import Score
 from app.objects.score import SubmissionStatus
+from app.repositories import clans as clans_repo
 from app.repositories import comments as comments_repo
 from app.repositories import favourites as favourites_repo
 from app.repositories import mail as mail_repo
 from app.repositories import maps as maps_repo
-from app.repositories import players as players_repo
 from app.repositories import ratings as ratings_repo
 from app.repositories import scores as scores_repo
 from app.repositories import stats as stats_repo
+from app.repositories import users as users_repo
 from app.repositories.achievements import Achievement
 from app.usecases import achievements as achievements_usecases
 from app.usecases import user_achievements as user_achievements_usecases
@@ -468,19 +467,17 @@ async def osuSearchSetHandler(
         return Response(b"")  # invalid args
 
     # Get all set data.
-    rec = await app.state.services.database.fetch_one(
+    bmapset = await app.state.services.database.fetch_one(
         "SELECT DISTINCT set_id, artist, "
         "title, status, creator, last_update "
         f"FROM maps WHERE {k} = :v",
         {"v": v},
     )
-
-    if rec is None:
+    if bmapset is None:
         # TODO: get from osu!
         return Response(b"")
 
     rating = 10.0  # TODO: real data
-    bmapset = dict(rec._mapping)
 
     return Response(
         (
@@ -928,7 +925,7 @@ async def osuSubmitModularSelector(
             # update global & country ranking
             stats.rank = await score.player.update_rank(score.mode)
 
-    await stats_repo.update(
+    await stats_repo.partial_update(
         score.player.id,
         score.mode.value,
         plays=stats_updates.get("plays", UNSET),
@@ -979,7 +976,7 @@ async def osuSubmitModularSelector(
 
             server_achievements = await achievements_usecases.fetch_many()
             player_achievements = await user_achievements_usecases.fetch_many(
-                score.player.id,
+                user_id=score.player.id,
             )
 
             for server_achievement in server_achievements:
@@ -1184,17 +1181,14 @@ async def get_leaderboard_scores(
     # TODO: customizability of the number of scores
     query.append("ORDER BY _score DESC LIMIT 50")
 
-    score_rows = [
-        dict(r._mapping)
-        for r in await app.state.services.database.fetch_all(
-            " ".join(query),
-            params,
-        )
-    ]
+    score_rows = await app.state.services.database.fetch_all(
+        " ".join(query),
+        params,
+    )
 
     if score_rows:  # None or []
         # fetch player's personal best score
-        personal_best_score_rec = await app.state.services.database.fetch_one(
+        personal_best_score_row = await app.state.services.database.fetch_one(
             f"SELECT id, {scoring_metric} AS _score, "
             "max_combo, n50, n100, n300, "
             "nmiss, nkatu, ngeki, perfect, mods, "
@@ -1206,9 +1200,7 @@ async def get_leaderboard_scores(
             {"map_md5": map_md5, "mode": mode, "user_id": player.id},
         )
 
-        if personal_best_score_rec is not None:
-            personal_best_score_row = dict(personal_best_score_rec._mapping)
-
+        if personal_best_score_row is not None:
             # calculate the rank of the score.
             p_best_rank = 1 + await app.state.services.database.fetch_val(
                 "SELECT COUNT(*) FROM scores s "
@@ -1226,8 +1218,6 @@ async def get_leaderboard_scores(
 
             # attach rank to personal best row
             personal_best_score_row["rank"] = p_best_rank
-        else:
-            personal_best_score_row = None
     else:
         score_rows = []
         personal_best_score_row = None
@@ -1388,12 +1378,22 @@ async def getScores(
         return Response("\n".join(response_lines).encode())
 
     if personal_best_score_row is not None:
+        user_clan = (
+            await clans_repo.fetch_one(id=player.clan_id)
+            if player.clan_id is not None
+            else None
+        )
+        display_name = (
+            f"[{user_clan['tag']}] {player.name}"
+            if user_clan is not None
+            else player.name
+        )
         response_lines.append(
             SCORE_LISTING_FMTSTR.format(
                 **personal_best_score_row,
-                name=player.full_name,
+                name=display_name,
                 userid=player.id,
-                score=int(personal_best_score_row["_score"]),
+                score=int(round(personal_best_score_row["_score"])),
                 has_replay="1",
             ),
         )
@@ -1404,7 +1404,7 @@ async def getScores(
         [
             SCORE_LISTING_FMTSTR.format(
                 **s,
-                score=int(s["_score"]),
+                score=int(round(s["_score"])),
                 has_replay="1",
                 rank=idx + 1,
             )
@@ -1593,9 +1593,16 @@ async def get_screenshot(
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
+    if extension in ("jpg", "jpeg"):
+        media_type = "image/jpeg"
+    elif extension == "png":
+        media_type = "image/png"
+    else:
+        media_type = None
+
     return FileResponse(
         path=screenshot_path,
-        media_type=app.utils.get_media_type(extension),
+        media_type=media_type,
     )
 
 
@@ -1644,6 +1651,16 @@ async def peppyDMHandler() -> Response:
 
 """ ingame registration """
 
+INGAME_REGISTRATION_DISALLOWED_ERROR = {
+    "form_error": {
+        "user": {
+            "password": [
+                "In-game registration is disabled. Please register on the website.",
+            ],
+        },
+    },
+}
+
 
 @router.post("/users")
 async def register_account(
@@ -1660,6 +1677,13 @@ async def register_account(
     if not all((username, email, pw_plaintext)):
         return Response(
             content=b"Missing required params",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # Disable in-game registration if enabled
+    if app.settings.DISALLOW_INGAME_REGISTRATION:
+        return ORJSONResponse(
+            content=INGAME_REGISTRATION_DISALLOWED_ERROR,
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
@@ -1682,7 +1706,7 @@ async def register_account(
         errors["username"].append("Disallowed username; pick another.")
 
     if "username" not in errors:
-        if await players_repo.fetch_one(name=username):
+        if await users_repo.fetch_one(name=username):
             errors["username"].append("Username already taken by another player.")
 
     # Emails must:
@@ -1691,7 +1715,7 @@ async def register_account(
     if not regexes.EMAIL.match(email):
         errors["user_email"].append("Invalid email syntax.")
     else:
-        if await players_repo.fetch_one(email=email):
+        if await users_repo.fetch_one(email=email):
             errors["user_email"].append("Email already taken by another player.")
 
     # Passwords must:
@@ -1731,7 +1755,7 @@ async def register_account(
 
         async with app.state.services.database.transaction():
             # add to `users` table.
-            player = await players_repo.create(
+            player = await users_repo.create(
                 name=username,
                 email=email,
                 pw_bcrypt=pw_bcrypt,

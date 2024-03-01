@@ -277,38 +277,56 @@ class Beatmap:
         # XXX: This is set when a map's status is manually changed.
     """
 
-    def __init__(self, map_set: BeatmapSet, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        map_set: BeatmapSet,
+        md5: str = "",
+        id: int = 0,
+        set_id: int = 0,
+        artist: str = "",
+        title: str = "",
+        version: str = "",
+        creator: str = "",
+        last_update: datetime = DEFAULT_LAST_UPDATE,
+        total_length: int = 0,
+        max_combo: int = 0,
+        status: RankedStatus = RankedStatus.Pending,
+        frozen: bool = False,
+        plays: int = 0,
+        passes: int = 0,
+        mode: GameMode = GameMode.VANILLA_OSU,
+        bpm: float = 0.0,
+        cs: float = 0.0,
+        od: float = 0.0,
+        ar: float = 0.0,
+        hp: float = 0.0,
+        diff: float = 0.0,
+        filename: str = "",
+    ) -> None:
         self.set = map_set
 
-        self.md5 = kwargs.get("md5", "")
-        self.id = kwargs.get("id", 0)
-        self.set_id = kwargs.get("set_id", 0)
-
-        self.artist = kwargs.get("artist", "")
-        self.title = kwargs.get("title", "")
-        self.version = kwargs.get("version", "")  # diff name
-        self.creator = kwargs.get("creator", "")
-
-        self.last_update = kwargs.get("last_update", DEFAULT_LAST_UPDATE)
-        self.total_length = kwargs.get("total_length", 0)
-        self.max_combo = kwargs.get("max_combo", 0)
-
-        self.status = RankedStatus(kwargs.get("status", 0))
-        self.frozen = kwargs.get("frozen", False) == 1
-
-        self.plays = kwargs.get("plays", 0)
-        self.passes = kwargs.get("passes", 0)
-        self.mode = GameMode(kwargs.get("mode", 0))
-        self.bpm = kwargs.get("bpm", 0.0)
-
-        self.cs = kwargs.get("cs", 0.0)
-        self.od = kwargs.get("od", 0.0)
-        self.ar = kwargs.get("ar", 0.0)
-        self.hp = kwargs.get("hp", 0.0)
-
-        self.diff = kwargs.get("diff", 0.0)
-
-        self.filename = kwargs.get("filename", "")
+        self.md5 = md5
+        self.id = id
+        self.set_id = set_id
+        self.artist = artist
+        self.title = title
+        self.version = version
+        self.creator = creator
+        self.last_update = last_update
+        self.total_length = total_length
+        self.max_combo = max_combo
+        self.status = status
+        self.frozen = frozen
+        self.plays = plays
+        self.passes = passes
+        self.mode = mode
+        self.bpm = bpm
+        self.cs = cs
+        self.od = od
+        self.ar = ar
+        self.hp = hp
+        self.diff = diff
+        self.filename = filename
 
     def __repr__(self) -> str:
         return self.full_name
@@ -607,6 +625,9 @@ class BeatmapSet:
         expired and needs an update from the osu!api."""
         current_datetime = datetime.now()
 
+        if not self.maps:
+            return True
+
         # the delta between cache invalidations will increase depending
         # on how long it's been since the map was last updated on osu!
         last_map_update = max(bmap.last_update for bmap in self.maps)
@@ -740,19 +761,20 @@ class BeatmapSet:
             # TODO: a couple of open questions here:
             # - should we delete the beatmap from the database if it's not in the osu!api?
             # - are 404 and 200 the only cases where we should delete the beatmap?
-            map_md5s_to_delete = {bmap.md5 for bmap in self.maps}
+            if self.maps:
+                map_md5s_to_delete = {bmap.md5 for bmap in self.maps}
 
-            # delete maps
-            await app.state.services.database.execute(
-                "DELETE FROM maps WHERE md5 IN :map_md5s",
-                {"map_md5s": map_md5s_to_delete},
-            )
+                # delete maps
+                await app.state.services.database.execute(
+                    "DELETE FROM maps WHERE md5 IN :map_md5s",
+                    {"map_md5s": map_md5s_to_delete},
+                )
 
-            # delete scores on the maps
-            await app.state.services.database.execute(
-                "DELETE FROM scores WHERE map_md5 IN :map_md5s",
-                {"map_md5s": map_md5s_to_delete},
-            )
+                # delete scores on the maps
+                await app.state.services.database.execute(
+                    "DELETE FROM scores WHERE map_md5 IN :map_md5s",
+                    {"map_md5s": map_md5s_to_delete},
+                )
 
             # delete set
             await app.state.services.database.execute(
@@ -816,62 +838,60 @@ class BeatmapSet:
     @classmethod
     async def _from_bsid_sql(cls, bsid: int) -> BeatmapSet | None:
         """Fetch a mapset from the database by set id."""
-        async with app.state.services.database.connection() as db_conn:
-            last_osuapi_check = await db_conn.fetch_val(
-                "SELECT last_osuapi_check FROM mapsets WHERE id = :set_id",
-                {"set_id": bsid},
-                column=0,  # last_osuapi_check
+        last_osuapi_check = await app.state.services.database.fetch_val(
+            "SELECT last_osuapi_check FROM mapsets WHERE id = :set_id",
+            {"set_id": bsid},
+            column=0,  # last_osuapi_check
+        )
+
+        if last_osuapi_check is None:
+            return None
+
+        bmap_set = cls(id=bsid, last_osuapi_check=last_osuapi_check)
+
+        for row in await maps_repo.fetch_many(set_id=bsid):
+            bmap = Beatmap(
+                md5=row["md5"],
+                id=row["id"],
+                set_id=row["set_id"],
+                artist=row["artist"],
+                title=row["title"],
+                version=row["version"],
+                creator=row["creator"],
+                last_update=row["last_update"],
+                total_length=row["total_length"],
+                max_combo=row["max_combo"],
+                status=RankedStatus(row["status"]),
+                frozen=row["frozen"],
+                plays=row["plays"],
+                passes=row["passes"],
+                mode=GameMode(row["mode"]),
+                bpm=row["bpm"],
+                cs=row["cs"],
+                od=row["od"],
+                ar=row["ar"],
+                hp=row["hp"],
+                diff=row["diff"],
+                filename=row["filename"],
+                map_set=bmap_set,
             )
 
-            if last_osuapi_check is None:
-                return None
-
-            bmap_set = cls(id=bsid, last_osuapi_check=last_osuapi_check)
-
-            for row in await maps_repo.fetch_many(set_id=bsid):
-                bmap = Beatmap(
-                    md5=row["md5"],
-                    id=row["id"],
-                    set_id=row["set_id"],
-                    artist=row["artist"],
-                    title=row["title"],
-                    version=row["version"],
-                    creator=row["creator"],
-                    last_update=row["last_update"],
-                    total_length=row["total_length"],
-                    max_combo=row["max_combo"],
-                    status=row["status"],
-                    frozen=row["frozen"],
-                    plays=row["plays"],
-                    passes=row["passes"],
-                    mode=row["mode"],
-                    bpm=row["bpm"],
-                    cs=row["cs"],
-                    od=row["od"],
-                    ar=row["ar"],
-                    hp=row["hp"],
-                    diff=row["diff"],
-                    filename=row["filename"],
-                    map_set=bmap_set,
-                )
-
-                # XXX: tempfix for bancho.py <v3.4.1,
-                # where filenames weren't stored.
-                if not bmap.filename:
-                    bmap.filename = (
-                        ("{artist} - {title} ({creator}) [{version}].osu")
-                        .format(
-                            artist=row["artist"],
-                            title=row["title"],
-                            creator=row["creator"],
-                            version=row["version"],
-                        )
-                        .translate(IGNORED_BEATMAP_CHARS)
+            # XXX: tempfix for bancho.py <v3.4.1,
+            # where filenames weren't stored.
+            if not bmap.filename:
+                bmap.filename = (
+                    ("{artist} - {title} ({creator}) [{version}].osu")
+                    .format(
+                        artist=row["artist"],
+                        title=row["title"],
+                        creator=row["creator"],
+                        version=row["version"],
                     )
+                    .translate(IGNORED_BEATMAP_CHARS)
+                )
+                await maps_repo.partial_update(bmap.id, filename=bmap.filename)
 
-                    await maps_repo.update(bmap.id, filename=bmap.filename)
-
-                bmap_set.maps.append(bmap)
+            bmap_set.maps.append(bmap)
 
         return bmap_set
 

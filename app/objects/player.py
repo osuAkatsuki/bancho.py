@@ -10,7 +10,6 @@ from enum import StrEnum
 from enum import unique
 from functools import cached_property
 from typing import TYPE_CHECKING
-from typing import Any
 from typing import TypedDict
 from typing import cast
 
@@ -35,20 +34,19 @@ from app.objects.match import Slot
 from app.objects.match import SlotStatus
 from app.objects.score import Grade
 from app.objects.score import Score
+from app.repositories import clans as clans_repo
 from app.repositories import logs as logs_repo
 from app.repositories import stats as stats_repo
+from app.repositories import users as users_repo
+from app.state.services import Geolocation
 from app.utils import escape_enum
 from app.utils import make_safe_name
 from app.utils import pymysql_encode
 
 if TYPE_CHECKING:
     from app.constants.privileges import ClanPrivileges
-    from app.objects.achievement import Achievement
     from app.objects.beatmap import Beatmap
-    from app.objects.clan import Clan
     from app.objects.score import Score
-
-__all__ = ("ModeData", "Status", "Player")
 
 
 @unique
@@ -213,27 +211,58 @@ class Player:
         self,
         id: int,
         name: str,
-        priv: int | Privileges,
-        **extras: Any,
+        priv: Privileges,
+        pw_bcrypt: bytes | None,
+        token: str,
+        clan_id: int | None = None,
+        clan_priv: ClanPrivileges | None = None,
+        geoloc: Geolocation | None = None,
+        utc_offset: int = 0,
+        pm_private: bool = False,
+        silence_end: int = 0,
+        donor_end: int = 0,
+        client_details: ClientDetails | None = None,
+        login_time: float = 0.0,
+        is_bot_client: bool = False,
+        is_tourney_client: bool = False,
+        api_key: str | None = None,
     ) -> None:
+        if geoloc is None:
+            geoloc = {
+                "latitude": 0.0,
+                "longitude": 0.0,
+                "country": {"acronym": "xx", "numeric": 0},
+            }
+
         self.id = id
         self.name = name
-        self.safe_name = self.make_safe(self.name)
+        self.priv = priv
+        self.pw_bcrypt = pw_bcrypt
+        self.token = token
+        self.clan_id = clan_id
+        self.clan_priv = clan_priv
+        self.geoloc = geoloc
+        self.utc_offset = utc_offset
+        self.pm_private = pm_private
+        self.silence_end = silence_end
+        self.donor_end = donor_end
+        self.client_details = client_details
+        self.login_time = login_time
+        self.last_recv_time = login_time
+        self.is_bot_client = is_bot_client
+        self.is_tourney_client = is_tourney_client
+        self.api_key = api_key
 
-        if "pw_bcrypt" in extras:
-            self.pw_bcrypt: bytes | None = extras["pw_bcrypt"]
-        else:
-            self.pw_bcrypt = None
+        # avoid enqueuing packets to bot accounts.
+        if self.is_bot_client:
 
-        # generate a token if not given
-        token = extras.get("token", None)
-        if token is not None and isinstance(token, str):
-            self.token = token
-        else:
-            self.token = self.generate_token()
+            def _noop_enqueue(data: bytes) -> None:
+                pass
 
-        # ensure priv is of type Privileges
-        self.priv = priv if isinstance(priv, Privileges) else Privileges(priv)
+            self.enqueue = _noop_enqueue  # type: ignore[method-assign]
+
+        self.away_msg: str | None = None
+        self.in_lobby = False
 
         self.stats: dict[GameMode, ModeData] = {}
         self.status = Status()
@@ -248,33 +277,7 @@ class Player:
         self.match: Match | None = None
         self.stealth = False
 
-        self.clan: Clan | None = extras.get("clan")
-        self.clan_priv: ClanPrivileges | None = extras.get("clan_priv")
-
-        self.geoloc: app.state.services.Geolocation = extras.get(
-            "geoloc",
-            {
-                "latitude": 0.0,
-                "longitude": 0.0,
-                "country": {"acronym": "xx", "numeric": 0},
-            },
-        )
-
-        self.utc_offset = extras.get("utc_offset", 0)
-        self.pm_private = extras.get("pm_private", False)
-        self.away_msg: str | None = None
-        self.silence_end = extras.get("silence_end", 0)
-        self.donor_end = extras.get("donor_end", 0)
-        self.in_lobby = False
-
-        self.client_details: ClientDetails | None = extras.get("client_details")
         self.pres_filter = PresenceFilter.Nil
-
-        login_time = extras.get("login_time", 0.0)
-        self.login_time = login_time
-        self.last_recv_time = login_time
-
-        # XXX: below is mostly implementation-specific & internal stuff
 
         # store most recent score for each gamemode.
         self.recent_scores: dict[GameMode, Score | None] = {
@@ -284,21 +287,14 @@ class Player:
         # store the last beatmap /np'ed by the user.
         self.last_np: LastNp | None = None
 
-        # subject to possible change in the future,
-        # although if anything, bot accounts will
-        # probably just use the /api/ routes?
-        self.is_bot_client = extras.get("is_bot_client", False)
-        if self.is_bot_client:
-            self.enqueue = lambda data: None  # type: ignore
-
-        self.is_tourney_client = extras.get("is_tourney_client", False)
-
-        self.api_key = extras.get("api_key", None)
-
         self._packet_queue = bytearray()
 
     def __repr__(self) -> str:
         return f"<{self.name} ({self.id})>"
+
+    @property
+    def safe_name(self) -> str:
+        return make_safe_name(self.name)
 
     @property
     def is_online(self) -> bool:
@@ -318,14 +314,6 @@ class Player:
     def avatar_url(self) -> str:
         """The url to the player's avatar."""
         return f"https://a.{app.settings.DOMAIN}/{self.id}"
-
-    @property
-    def full_name(self) -> str:
-        """The user's "full" name; including their clan tag."""
-        if self.clan:
-            return f"[{self.clan.tag}] {self.name}"
-        else:
-            return self.name
 
     # TODO: chat embed with clan tag hyperlinked?
 
@@ -387,11 +375,6 @@ class Player:
         """Generate a random uuid as a token."""
         return str(uuid.uuid4())
 
-    @staticmethod
-    def make_safe(name: str) -> str:
-        """Return a name safe for usage in sql."""
-        return make_safe_name(name)
-
     def logout(self) -> None:
         """Log `self` out of the server."""
         # invalidate the user's token.
@@ -420,31 +403,31 @@ class Player:
 
             app.state.sessions.players.enqueue(app.packets.logout(self.id))
 
-        log(f"{self} logged out.", Ansi.LYELLOW)
+        log(f"{self} logged out.")
 
     async def update_privs(self, new: Privileges) -> None:
         """Update `self`'s privileges to `new`."""
+
         self.priv = new
-
-        await app.state.services.database.execute(
-            "UPDATE users SET priv = :priv WHERE id = :user_id",
-            {"priv": self.priv, "user_id": self.id},
-        )
-
-        if "bancho_priv" in self.__dict__:
+        if "bancho_priv" in vars(self):
             del self.bancho_priv  # wipe cached_property
+
+        await users_repo.partial_update(
+            id=self.id,
+            priv=self.priv,
+        )
 
     async def add_privs(self, bits: Privileges) -> None:
         """Update `self`'s privileges, adding `bits`."""
+
         self.priv |= bits
-
-        await app.state.services.database.execute(
-            "UPDATE users SET priv = :priv WHERE id = :user_id",
-            {"priv": self.priv, "user_id": self.id},
-        )
-
-        if "bancho_priv" in self.__dict__:
+        if "bancho_priv" in vars(self):
             del self.bancho_priv  # wipe cached_property
+
+        await users_repo.partial_update(
+            id=self.id,
+            priv=self.priv,
+        )
 
         if self.is_online:
             # if they're online, send a packet
@@ -453,15 +436,15 @@ class Player:
 
     async def remove_privs(self, bits: Privileges) -> None:
         """Update `self`'s privileges, removing `bits`."""
+
         self.priv &= ~bits
-
-        await app.state.services.database.execute(
-            "UPDATE users SET priv = :priv WHERE id = :user_id",
-            {"priv": self.priv, "user_id": self.id},
-        )
-
-        if "bancho_priv" in self.__dict__:
+        if "bancho_priv" in vars(self):
             del self.bancho_priv  # wipe cached_property
+
+        await users_repo.partial_update(
+            id=self.id,
+            priv=self.priv,
+        )
 
         if self.is_online:
             # if they're online, send a packet
@@ -514,8 +497,7 @@ class Player:
         )
 
         if not self.is_online:
-            async with app.state.services.database.connection() as db_conn:
-                await self.stats_from_sql_full(db_conn)
+            await self.stats_from_sql_full()
 
         for mode, stats in self.stats.items():
             await app.state.services.redis.zadd(
@@ -545,9 +527,9 @@ class Player:
         """Silence `self` for `duration` seconds, and log to sql."""
         self.silence_end = int(time.time() + duration)
 
-        await app.state.services.database.execute(
-            "UPDATE users SET silence_end = :silence_end WHERE id = :user_id",
-            {"silence_end": self.silence_end, "user_id": self.id},
+        await users_repo.partial_update(
+            id=self.id,
+            silence_end=self.silence_end,
         )
 
         await logs_repo.create(
@@ -573,9 +555,9 @@ class Player:
         """Unsilence `self`, and log to sql."""
         self.silence_end = int(time.time())
 
-        await app.state.services.database.execute(
-            "UPDATE users SET silence_end = :silence_end WHERE id = :user_id",
-            {"silence_end": self.silence_end, "user_id": self.id},
+        await users_repo.partial_update(
+            id=self.id,
+            silence_end=self.silence_end,
         )
 
         await logs_repo.create(
@@ -701,24 +683,6 @@ class Player:
             self.match.enqueue_state()
 
         self.match = None
-
-    async def join_clan(self, clan: Clan) -> bool:
-        """Attempt to add `self` to `clan`."""
-        if self.id in clan.member_ids:
-            return False
-
-        if not "invited":  # TODO
-            return False
-
-        await clan.add_member(self)
-        return True
-
-    async def leave_clan(self) -> None:
-        """Attempt to remove `self` from `c`."""
-        if not self.clan:
-            return
-
-        await self.clan.remove_member(self)
 
     def join_channel(self, channel: Channel) -> bool:
         """Attempt to add `self` to `channel`."""
@@ -929,9 +893,9 @@ class Player:
 
         log(f"{self} unblocked {player}.")
 
-    async def relationships_from_sql(self, db_conn: databases.core.Connection) -> None:
+    async def relationships_from_sql(self) -> None:
         """Retrieve `self`'s relationships from sql."""
-        for row in await db_conn.fetch_all(
+        for row in await app.state.services.database.fetch_all(
             "SELECT user2, type FROM relationships WHERE user1 = :user1",
             {"user1": self.id},
         ):
@@ -984,7 +948,7 @@ class Player:
 
         return await self.get_global_rank(mode)
 
-    async def stats_from_sql_full(self, db_conn: databases.core.Connection) -> None:
+    async def stats_from_sql_full(self) -> None:
         """Retrieve `self`'s stats (all modes) from sql."""
         for row in await stats_repo.fetch_many(player_id=self.id):
             game_mode = GameMode(row["mode"])
@@ -1009,9 +973,9 @@ class Player:
 
     def update_latest_activity_soon(self) -> None:
         """Update the player's latest activity in the database."""
-        task = app.state.services.database.execute(
-            "UPDATE users SET latest_activity = UNIX_TIMESTAMP() WHERE id = :user_id",
-            {"user_id": self.id},
+        task = users_repo.partial_update(
+            id=self.id,
+            latest_activity=int(time.time()),
         )
         app.state.loop.create_task(task)
 

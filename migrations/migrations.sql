@@ -409,3 +409,69 @@ alter table maps drop primary key;
 alter table maps add primary key (id);
 alter table maps modify column server enum('osu!', 'private') not null default 'osu!' after id;
 unlock tables;
+
+# v5.0.1
+create index channels_auto_join_index
+	on channels (auto_join);
+
+create index maps_set_id_index
+	on maps (set_id);
+create index maps_status_index
+	on maps (status);
+create index maps_filename_index
+	on maps (filename);
+create index maps_plays_index
+	on maps (plays);
+create index maps_mode_index
+	on maps (mode);
+create index maps_frozen_index
+	on maps (frozen);
+
+create index scores_map_md5_index
+	on scores (map_md5);
+create index scores_score_index
+	on scores (score);
+create index scores_pp_index
+	on scores (pp);
+create index scores_mods_index
+	on scores (mods);
+create index scores_status_index
+	on scores (status);
+create index scores_mode_index
+	on scores (mode);
+create index scores_play_time_index
+	on scores (play_time);
+create index scores_userid_index
+	on scores (userid);
+create index scores_online_checksum_index
+	on scores (online_checksum);
+
+create index stats_mode_index
+	on stats (mode);
+create index stats_pp_index
+	on stats (pp);
+create index stats_tscore_index
+	on stats (tscore);
+create index stats_rscore_index
+	on stats (rscore);
+
+create index tourney_pool_maps_mods_slot_index
+	on tourney_pool_maps (mods, slot);
+
+create index user_achievements_achid_index
+	on user_achievements (achid);
+create index user_achievements_userid_index
+	on user_achievements (userid);
+
+create index users_priv_index
+	on users (priv);
+create index users_clan_id_index
+	on users (clan_id);
+create index users_clan_priv_index
+	on users (clan_priv);
+create index users_country_index
+	on users (country);
+
+# v5.2.2
+create index scores_fetch_leaderboard_generic_index
+	on scores (map_md5, status, mode);
