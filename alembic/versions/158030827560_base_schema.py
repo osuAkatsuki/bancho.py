@@ -357,6 +357,12 @@ def upgrade() -> None:
     op.create_index("scores_score_index", "scores", ["score"], unique=False)
     op.create_index("scores_status_index", "scores", ["status"], unique=False)
     op.create_index("scores_userid_index", "scores", ["userid"], unique=False)
+    op.create_index(
+        "scores_fetch_leaderboard_generic_index",
+        "scores",
+        ["map_md5", "status", "mode"],
+        unique=False,
+    )
     op.create_table(
         "stats",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
@@ -521,6 +527,7 @@ def downgrade() -> None:
     op.drop_index("stats_pp_index", table_name="stats")
     op.drop_index("stats_mode_index", table_name="stats")
     op.drop_table("stats")
+    op.drop_index("scores_fetch_leaderboard_generic_index", table_name="scores")
     op.drop_index("scores_userid_index", table_name="scores")
     op.drop_index("scores_status_index", table_name="scores")
     op.drop_index("scores_score_index", table_name="scores")
