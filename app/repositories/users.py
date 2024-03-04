@@ -11,7 +11,10 @@ from sqlalchemy import func
 from sqlalchemy import insert
 from sqlalchemy import select
 from sqlalchemy import update
+from sqlalchemy.dialects.mysql import CHAR
+from sqlalchemy.dialects.mysql import MEDIUMTEXT
 from sqlalchemy.dialects.mysql import TINYINT
+from sqlalchemy.dialects.mysql import VARCHAR
 
 import app.state.services
 from app._typing import UNSET
@@ -24,12 +27,12 @@ class UsersTable(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, nullable=False, autoincrement=True)
-    name = Column(String(32, collation="utf8"), nullable=False)
-    safe_name = Column(String(32, collation="utf8"), nullable=False)
+    name = Column(MEDIUMTEXT, nullable=False)
+    safe_name = Column(MEDIUMTEXT, nullable=False)
     email = Column(String(254), nullable=False)
     priv = Column(Integer, nullable=False, server_default="1")
-    pw_bcrypt = Column(String(60), nullable=False)
-    country = Column(String(2), nullable=False, server_default="xx")
+    pw_bcrypt = Column(CHAR(length=60), nullable=False)
+    country = Column(CHAR(length=2), nullable=False, server_default="xx")
     silence_end = Column(Integer, nullable=False, server_default="0")
     donor_end = Column(Integer, nullable=False, server_default="0")
     creation_time = Column(Integer, nullable=False, server_default="0")
@@ -38,10 +41,14 @@ class UsersTable(Base):
     clan_priv = Column(TINYINT, nullable=False, server_default="0")
     preferred_mode = Column(Integer, nullable=False, server_default="0")
     play_style = Column(Integer, nullable=False, server_default="0")
-    custom_badge_name = Column(String(16, collation="utf8"))
+    custom_badge_name = Column(
+        VARCHAR(charset="utf8mb3", collation="utf8mb3_general_ci", length=16),
+    )
     custom_badge_icon = Column(String(64))
-    userpage_content = Column(String(2048, collation="utf8"))
-    api_key = Column(String(36))
+    userpage_content = Column(
+        VARCHAR(charset="utf8mb3", collation="utf8mb3_general_ci", length=2048),
+    )
+    api_key = Column(CHAR(length=36))
 
     __table_args__ = (
         Index("users_priv_index", priv),
