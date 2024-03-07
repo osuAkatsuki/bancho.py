@@ -663,7 +663,7 @@ async def osuSubmitModularSelector(
         score.player.status.mods = score.mods
         score.player.status.mode = score.mode
 
-        if not score.player.restricted:
+        if not score.player.is_restricted:
             app.state.sessions.players.enqueue(app.packets.user_stats(score.player))
 
     # hold a lock around (check if submitted, submission) to ensure no duplicates
@@ -726,7 +726,7 @@ async def osuSubmitModularSelector(
                     ),
                 )
 
-                if score.rank == 1 and not score.player.restricted:
+                if score.rank == 1 and not score.player.is_restricted:
                     announce_chan = app.state.sessions.channels.get_by_name("#announce")
 
                     ann = [
@@ -823,7 +823,7 @@ async def osuSubmitModularSelector(
         else:
             log(f"{score.player} submitted a score without a replay!", Ansi.LRED)
 
-            if not score.player.restricted:
+            if not score.player.is_restricted:
                 await score.player.restrict(
                     admin=app.state.sessions.bot,
                     reason="submitted score with no replay",
@@ -943,7 +943,7 @@ async def osuSubmitModularSelector(
         pp=stats_updates.get("pp", UNSET),
     )
 
-    if not score.player.restricted:
+    if not score.player.is_restricted:
         # enqueue new stats info to all other users
         app.state.sessions.players.enqueue(app.packets.user_stats(score.player))
 
@@ -971,7 +971,7 @@ async def osuSubmitModularSelector(
         response = b"error: no"
     else:
         # construct and send achievements & ranking charts to the client
-        if score.bmap.awards_ranked_pp and not score.player.restricted:
+        if score.bmap.awards_ranked_pp and not score.player.is_restricted:
             unlocked_achievements: list[Achievement] = []
 
             server_achievements = await achievements_usecases.fetch_many()
@@ -1277,7 +1277,7 @@ async def getScores(
         player.status.mods = mods
         player.status.mode = mode
 
-        if not player.restricted:
+        if not player.is_restricted:
             app.state.sessions.players.enqueue(app.packets.user_stats(player))
 
     scoring_metric: Literal["pp", "score"] = (
