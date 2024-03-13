@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 
-
+# NOTE: https://osu.ppy.sh/wiki/en/Gameplay/Score/Total_score
 def get_required_score_for_level(level: int) -> int:
     if level <= 1:
         return 0
