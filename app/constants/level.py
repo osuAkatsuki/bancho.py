@@ -4,7 +4,7 @@ import math
 
 
 def get_required_score_for_level(level: int) -> int:
-    if level < 1:
+    if level <= 1:
         return 0
 
     if level <= 100:
