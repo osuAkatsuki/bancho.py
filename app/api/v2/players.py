@@ -13,7 +13,8 @@ from app.api.v2.common.responses import Success
 from app.api.v2.models.players import Player
 from app.api.v2.models.players import PlayerStats
 from app.api.v2.models.players import PlayerStatus
-from app.constants.level import get_level, get_level_precise
+from app.constants.level import get_level
+from app.constants.level import get_level_precise
 from app.repositories import stats as stats_repo
 from app.repositories import users as users_repo
 
@@ -111,8 +112,10 @@ async def get_player_mode_stats(
     response = PlayerStats.from_mapping(data)
 
     # NOTE: kinda cursed, but that should do it
-    response["level"] = get_level_precise(int(data["tscore"]));
-    response["level_progress"] = int((get_level_precise(data["tscore"]) - get_level(data["tscore"])) * 100)
+    response["level"] = get_level_precise(int(data["tscore"]))
+    response["level_progress"] = int(
+        (get_level_precise(data["tscore"]) - get_level(data["tscore"])) * 100,
+    )
 
     return responses.success(response)
 

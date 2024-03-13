@@ -21,7 +21,8 @@ import app.state
 import app.usecases.performance
 from app.constants import regexes
 from app.constants.gamemodes import GameMode
-from app.constants.level import get_level, get_level_precise
+from app.constants.level import get_level
+from app.constants.level import get_level_precise
 from app.constants.mods import Mods
 from app.objects.beatmap import Beatmap
 from app.objects.beatmap import ensure_osu_file_is_available
@@ -265,7 +266,13 @@ async def api_get_player_info(
                 "rank": rank + 1 if rank is not None else 0,
                 "country_rank": country_rank + 1 if country_rank is not None else 0,
                 "level": get_level(int(mode_stats["tscore"])),
-                "level_progress": int((get_level_precise(mode_stats["tscore"]) - get_level(mode_stats["tscore"])) * 100)
+                "level_progress": int(
+                    (
+                        get_level_precise(mode_stats["tscore"])
+                        - get_level(mode_stats["tscore"])
+                    )
+                    * 100,
+                ),
             }
 
     return ORJSONResponse({"status": "success", "player": api_data})
