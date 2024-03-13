@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 
+
 # NOTE: https://osu.ppy.sh/wiki/en/Gameplay/Score/Total_score
 def get_required_score_for_level(level: int) -> int:
     if level <= 1:
@@ -10,7 +11,7 @@ def get_required_score_for_level(level: int) -> int:
     if level <= 100:
         return math.ceil(
             (5000 / 3) * (4 * level**3 - 3 * level**2 - level)
-            + 1.25 * 1.8 ** (level - 60)
+            + 1.25 * 1.8 ** (level - 60),
         )
     else:
         return math.ceil(26931190827 + 99999999999 * (level - 100) + 2)
