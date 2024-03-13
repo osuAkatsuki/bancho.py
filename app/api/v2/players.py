@@ -116,7 +116,6 @@ async def get_player_mode_stats(
     response.level_progress = int(
         (get_level_precise(data["tscore"]) - get_level(data["tscore"])) * 100,
     )
-    response.level_precise = get_level_precise(data["tscore"])
 
     return responses.success(response)
 

@@ -273,7 +273,6 @@ async def api_get_player_info(
                     )
                     * 100,
                 ),
-                "level_precise": get_level_precise(mode_stats["tscore"]),
             }
 
     return ORJSONResponse({"status": "success", "player": api_data})

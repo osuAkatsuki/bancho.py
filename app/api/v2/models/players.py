@@ -60,4 +60,3 @@ class PlayerStats(BaseModel):
     a_count: int
     level: int
     level_progress: int
-    level_precise: float
