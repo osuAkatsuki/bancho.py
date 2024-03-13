@@ -106,15 +106,15 @@ LEVEL_GRAPH = [
 ]
 
 
-def get_required_score_for_level(level):
+def get_required_score_for_level(level: int) -> int:
     if level <= 0:
-        return
+        return 0
     if level <= 100:
         return LEVEL_GRAPH[level - 1]
     return LEVEL_GRAPH[99] + 100000000000 * int(level - 100)
 
 
-def get_level(score) -> int:
+def get_level(score: int) -> int:
     if score <= 0:
         return 1
 
@@ -128,7 +128,7 @@ def get_level(score) -> int:
     return 1
 
 
-def get_level_precise(score) -> float:
+def get_level_precise(score: int) -> float:
     baseLevel = get_level(score)
     baseLevelScore = get_required_score_for_level(baseLevel)
     scoreProgress = score - baseLevelScore

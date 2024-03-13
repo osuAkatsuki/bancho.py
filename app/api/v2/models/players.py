@@ -58,3 +58,5 @@ class PlayerStats(BaseModel):
     sh_count: int
     s_count: int
     a_count: int
+    level: int
+    level_progress: int

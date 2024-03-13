@@ -112,8 +112,8 @@ async def get_player_mode_stats(
     response = PlayerStats.from_mapping(data)
 
     # NOTE: kinda cursed, but that should do it
-    response["level"] = get_level_precise(int(data["tscore"]))
-    response["level_progress"] = int(
+    response.level = get_level(int(data["tscore"]))
+    response.level_progress = int(
         (get_level_precise(data["tscore"]) - get_level(data["tscore"])) * 100,
     )
 
