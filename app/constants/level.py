@@ -14,7 +14,7 @@ def get_required_score_for_level(level: int) -> int:
             + 1.25 * 1.8 ** (level - 60),
         )
     else:
-        return math.ceil(26931190827 + 99999999999 * (level - 100) + 2)
+        return math.ceil(26931190827 + 99999999999 * (level - 100))
 
 
 def get_level(score: int) -> int:
