@@ -21,8 +21,8 @@ import app.state
 import app.usecases.performance
 from app.constants import regexes
 from app.constants.gamemodes import GameMode
-from app.constants.mods import Mods
 from app.constants.level import get_level, get_level_precise
+from app.constants.mods import Mods
 from app.objects.beatmap import Beatmap
 from app.objects.beatmap import ensure_osu_file_is_available
 from app.repositories import clans as clans_repo
