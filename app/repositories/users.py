@@ -155,7 +155,7 @@ async def fetch_count(
     play_style: int | None = None,
 ) -> int:
     """Fetch the number of users in the database."""
-    select_stmt = select(func.count().label("count"))
+    select_stmt = select(func.count().label("count")).select_from(UsersTable)
     if priv is not None:
         select_stmt = select_stmt.where(UsersTable.priv == priv)
     if country is not None:
