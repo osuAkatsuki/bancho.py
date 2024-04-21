@@ -454,15 +454,19 @@ async def osuSearchSetHandler(
     player: Player = Depends(authenticate_player_session(Query, "u", "h")),
     map_set_id: int | None = Query(None, alias="s"),
     map_id: int | None = Query(None, alias="b"),
+    checksum: str | None = Query(None, alias="c"),
 ) -> Response:
     # Since we only need set-specific data, we can basically
     # just do same query with either bid or bsid.
 
+    v: int | str
     if map_set_id is not None:
         # this is just a normal request
         k, v = ("set_id", map_set_id)
     elif map_id is not None:
         k, v = ("id", map_id)
+    elif checksum is not None:
+        k, v = ("md5", checksum)
     else:
         return Response(b"")  # invalid args
 
