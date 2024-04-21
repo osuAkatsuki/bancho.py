@@ -459,6 +459,7 @@ async def osuSearchSetHandler(
     # Since we only need set-specific data, we can basically
     # just do same query with either bid or bsid.
 
+    v: int | str
     if map_set_id is not None:
         # this is just a normal request
         k, v = ("set_id", map_set_id)
