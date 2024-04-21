@@ -58,7 +58,7 @@ jobs:
         run: docker build -t bancho:latest .
 
       - name: Start containers
-        run: docker-compose -f docker-compose.test.yml up -d bancho-test mysql-test redis-test
+        run: docker-compose -f docker-compose.test.yml up -d --wait --wait-timeout 30 bancho-test mysql-test redis-test
 
       - name: Run tests
         run: docker-compose -f docker-compose.test.yml exec -T bancho-test /srv/root/scripts/run-tests.sh
