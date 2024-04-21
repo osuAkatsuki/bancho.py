@@ -27,6 +27,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
+          platforms: linux/amd64, linux/arm64
           outputs: type=docker,dest=/tmp/docker.tar
           tags: bancho.py:${{ github.sha }}
           cache-from: type=gha
@@ -50,7 +51,7 @@ jobs:
         if: ${{ github.ref == 'refs/heads/master' }}
         with:
           context: .
-          platforms: linux/amd64
+          platforms: linux/amd64, linux/arm64
           push: true
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/bancho.py:latest
