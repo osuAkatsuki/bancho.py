@@ -7,6 +7,8 @@ from dotenv import load_dotenv
 
 from app.settings_utils import read_bool
 from app.settings_utils import read_list
+from urllib.parse import quote
+
 
 load_dotenv()
 
@@ -16,14 +18,14 @@ APP_PORT = int(os.environ["APP_PORT"])
 DB_HOST = os.environ["DB_HOST"]
 DB_PORT = int(os.environ["DB_PORT"])
 DB_USER = os.environ["DB_USER"]
-DB_PASS = os.environ["DB_PASS"]
+DB_PASS = quote(os.environ["DB_PASS"])
 DB_NAME = os.environ["DB_NAME"]
 DB_DSN = f"mysql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
 REDIS_HOST = os.environ["REDIS_HOST"]
 REDIS_PORT = int(os.environ["REDIS_PORT"])
 REDIS_USER = os.environ["REDIS_USER"]
-REDIS_PASS = os.environ["REDIS_PASS"]
+REDIS_PASS = quote(os.environ["REDIS_PASS"])
 REDIS_DB = int(os.environ["REDIS_DB"])
 
 REDIS_AUTH_STRING = f"{REDIS_USER}:{REDIS_PASS}@" if REDIS_USER and REDIS_PASS else ""
