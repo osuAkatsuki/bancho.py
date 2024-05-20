@@ -2,13 +2,12 @@ from __future__ import annotations
 
 import os
 import tomllib
+from urllib.parse import quote
 
 from dotenv import load_dotenv
 
 from app.settings_utils import read_bool
 from app.settings_utils import read_list
-from urllib.parse import quote
-
 
 load_dotenv()
 
