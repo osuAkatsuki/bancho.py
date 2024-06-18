@@ -11,6 +11,7 @@ from sqlalchemy import String
 from sqlalchemy import func
 from sqlalchemy import insert
 from sqlalchemy import select
+from sqlalchemy.dialects.mysql import VARCHAR
 
 import app.state.services
 from app.repositories import Base
@@ -23,7 +24,11 @@ class LogTable(Base):
     _from = Column("from", Integer, nullable=False)
     to = Column("to", Integer, nullable=False)
     action = Column("action", String(32), nullable=False)
-    msg = Column("msg", String(2048, collation="utf8"), nullable=True)
+    msg = Column(
+        "msg",
+        VARCHAR(charset="utf8mb3", collation="utf8mb3_general_ci", length=2048),
+        nullable=True,
+    )
     time = Column("time", DateTime, nullable=False, onupdate=func.now())
 
 

@@ -8,6 +8,7 @@ from sqlalchemy import Integer
 from sqlalchemy import String
 from sqlalchemy import insert
 from sqlalchemy import select
+from sqlalchemy.dialects.mysql import CHAR
 from sqlalchemy.dialects.mysql import TINYINT
 
 import app.state.services
@@ -18,7 +19,7 @@ class RatingsTable(Base):
     __tablename__ = "ratings"
 
     userid = Column("userid", Integer, nullable=False, primary_key=True)
-    map_md5 = Column("map_md5", String(32), nullable=False, primary_key=True)
+    map_md5 = Column("map_md5", CHAR(length=32), nullable=False, primary_key=True)
     rating = Column("rating", TINYINT(2), nullable=False)
 
 
