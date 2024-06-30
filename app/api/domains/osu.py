@@ -117,9 +117,9 @@ def authenticate_player_session(
 # Unhandled endpoints:
 # POST /web/osu-error.php
 # POST /web/osu-session.php
-# POST /web/osu-osz2-bmsubmit-post.php
-# POST /web/osu-osz2-bmsubmit-upload.php
-# GET /web/osu-osz2-bmsubmit-getid.php
+# POST /web/osu-osz-bmsubmit-post.php
+# POST /web/osu-osz-bmsubmit-upload.php
+# GET /web/osu-osz-bmsubmit-getid.php
 # GET /web/osu-get-beatmap-topic.php
 
 
@@ -1236,7 +1236,7 @@ SCORE_LISTING_FMTSTR = (
 )
 
 
-@router.get("/web/osu-osz2-getscores.php")
+@router.get("/web/osu-osz-getscores.php")
 async def getScores(
     player: Player = Depends(authenticate_player_session(Query, "us", "ha")),
     requesting_from_editor_song_select: bool = Query(..., alias="s"),
@@ -1370,7 +1370,7 @@ async def getScores(
 
     response_lines: list[str] = [
         # NOTE: fa stands for featured artist (for the ones that may not know)
-        # {ranked_status}|{serv_has_osz2}|{bid}|{bsid}|{len(scores)}|{fa_track_id}|{fa_license_text}
+        # {ranked_status}|{serv_has_osz}|{bid}|{bsid}|{len(scores)}|{fa_track_id}|{fa_license_text}
         f"{int(bmap.status)}|false|{bmap.id}|{bmap.set_id}|{len(score_rows)}|0|",
         # {offset}\n{beatmap_name}\n{rating}
         # TODO: server side beatmap offsets
