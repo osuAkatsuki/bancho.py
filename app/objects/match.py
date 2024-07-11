@@ -188,7 +188,7 @@ class Match:
         self.starting: StartingTimers | None = None
         self.seed = seed  # used for mania random mod
 
-        self.tourney_pool: TourneyPool | None = None
+        self.tourney_pool_id: int | None = None
 
         # scrimmage stuff
         self.is_scrimming = False
