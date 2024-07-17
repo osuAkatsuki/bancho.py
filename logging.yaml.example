@@ -9,6 +9,10 @@ loggers:
     level: WARNING
     handlers: [console]
     propagate: no
+  multipart.multipart:
+    level: ERROR
+    handlers: [console]
+    propagate: no
 handlers:
   console:
     class: logging.StreamHandler
