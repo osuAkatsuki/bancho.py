@@ -74,10 +74,10 @@ def calculate_performances(
 
     for score in scores:
         if score.acc and (
-            score.n300 or score.n100 or score.n50 or score.ngeki or score.nkatu
+            score.n100 or score.n50 or score.ngeki or score.nkatu
         ):
             raise ValueError(
-                "Must not specify accuracy AND 300/100/50/geki/katu. Only one or the other.",
+                "Must not specify accuracy AND 100/50/geki/katu. Only one or the other.",
             )
 
         # rosupp ignores NC and requires DT
