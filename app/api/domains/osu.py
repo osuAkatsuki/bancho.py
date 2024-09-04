@@ -68,6 +68,7 @@ from app.repositories import ratings as ratings_repo
 from app.repositories import scores as scores_repo
 from app.repositories import stats as stats_repo
 from app.repositories import users as users_repo
+from app.repositories import first_place_scores as first_place_scores_repo
 from app.repositories.achievements import Achievement
 from app.usecases import achievements as achievements_usecases
 from app.usecases import user_achievements as user_achievements_usecases
@@ -812,9 +813,12 @@ async def osuSubmitModularSelector(
                 "client_flags": score.client_flags,
                 "user_id": score.player.id,
                 "perfect": score.perfect,
-                "checksum": score.client_checksum,
+                "checksum": score.client_checksum
             },
         )
+
+    #if score.rank == 1 and not player.restricted:
+    await first_place_scores_repo.create_or_update(bmap.md5, score.mode, score.id)
 
     if score.passed:
         replay_data = await replay_file.read()

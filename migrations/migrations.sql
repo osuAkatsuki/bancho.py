@@ -475,3 +475,14 @@ create index users_country_index
 # v5.2.2
 create index scores_fetch_leaderboard_generic_index
 	on scores (map_md5, status, mode);
+
+# v5.2.3
+create table first_place_scores
+(
+    map_md5 char(32) not null,
+    mode tinyint not null,
+    score_id bigint not null,
+    primary key(map_md5, mode)
+);
+create index first_place_scores_map_md5_mode_index
+	on first_place_scores (map_md5, mode);

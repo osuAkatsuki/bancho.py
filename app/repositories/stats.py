@@ -225,6 +225,8 @@ async def partial_update(
 
     await app.state.services.database.execute(update_stmt)
 
+    print(update_stmt)
+
     select_stmt = (
         select(*READ_PARAMS)
         .where(StatsTable.id == player_id)
