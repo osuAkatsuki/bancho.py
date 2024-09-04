@@ -839,7 +839,7 @@ async def osuSubmitModularSelector(
 
     # get the current stats, and take a
     # shallow copy for the response charts.
-    stats = score.player.gm_stats
+    stats = score.player.stats[score.mode]
     prev_stats = copy.copy(stats)
 
     # stuff update for all submitted scores
