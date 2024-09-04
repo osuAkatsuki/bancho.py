@@ -11,6 +11,7 @@ from sqlalchemy.sql.expression import ClauseElement
 
 from app import settings
 from app.logging import log
+from app.timer import Timer
 
 
 class MySQLDialect(MySQLDialect_mysqldb):
@@ -49,11 +50,18 @@ class Database:
         if isinstance(query, ClauseElement):
             query, params = self._compile(query)
 
-        row = await self._database.fetch_one(query, params)
+        with Timer() as timer:
+            row = await self._database.fetch_one(query, params)
+
         if settings.DEBUG:
+            time_elapsed = timer.elapsed()
             log(
-                f"Executed SQL query: {query} {params}",
-                extra={"query": query, "params": params},
+                f"Executed SQL query: {query} {params} in {time_elapsed * 1000:.2f} msec.",
+                extra={
+                    "query": query,
+                    "params": params,
+                    "time_elapsed": time_elapsed,
+                },
             )
 
         return dict(row._mapping) if row is not None else None
@@ -66,7 +74,20 @@ class Database:
         if isinstance(query, ClauseElement):
             query, params = self._compile(query)
 
-        rows = await self._database.fetch_all(query, params)
+        with Timer() as timer:
+            rows = await self._database.fetch_all(query, params)
+
+        if settings.DEBUG:
+            time_elapsed = timer.elapsed()
+            log(
+                f"Executed SQL query: {query} {params} in {time_elapsed * 1000:.2f} msec.",
+                extra={
+                    "query": query,
+                    "params": params,
+                    "time_elapsed": time_elapsed,
+                },
+            )
+
         return [dict(row._mapping) for row in rows]
 
     async def fetch_val(
@@ -78,14 +99,40 @@ class Database:
         if isinstance(query, ClauseElement):
             query, params = self._compile(query)
 
-        val = await self._database.fetch_val(query, params, column)
+        with Timer() as timer:
+            val = await self._database.fetch_val(query, params, column)
+
+        if settings.DEBUG:
+            time_elapsed = timer.elapsed()
+            log(
+                f"Executed SQL query: {query} {params} in {time_elapsed * 1000:.2f} msec.",
+                extra={
+                    "query": query,
+                    "params": params,
+                    "time_elapsed": time_elapsed,
+                },
+            )
+
         return val
 
     async def execute(self, query: MySQLQuery, params: MySQLParams = None) -> int:
         if isinstance(query, ClauseElement):
             query, params = self._compile(query)
 
-        rec_id = await self._database.execute(query, params)
+        with Timer() as timer:
+            rec_id = await self._database.execute(query, params)
+
+        if settings.DEBUG:
+            time_elapsed = timer.elapsed()
+            log(
+                f"Executed SQL query: {query} {params} in {time_elapsed * 1000:.2f} msec.",
+                extra={
+                    "query": query,
+                    "params": params,
+                    "time_elapsed": time_elapsed,
+                },
+            )
+
         return cast(int, rec_id)
 
     # NOTE: this accepts str since current execute_many uses are not using alchemy.
@@ -94,7 +141,19 @@ class Database:
         if isinstance(query, ClauseElement):
             query, _ = self._compile(query)
 
-        await self._database.execute_many(query, params)
+        with Timer() as timer:
+            await self._database.execute_many(query, params)
+
+        if settings.DEBUG:
+            time_elapsed = timer.elapsed()
+            log(
+                f"Executed SQL query: {query} {params} in {time_elapsed * 1000:.2f} msec.",
+                extra={
+                    "query": query,
+                    "params": params,
+                    "time_elapsed": time_elapsed,
+                },
+            )
 
     def transaction(
         self,

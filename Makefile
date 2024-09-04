@@ -1,26 +1,28 @@
+#!/usr/bin/env make
+
 build:
 	if [ -d ".dbdata" ]; then sudo chmod -R 755 .dbdata; fi
 	docker build -t bancho:latest .
 
 run:
-	docker-compose up bancho mysql redis
+	docker compose up bancho mysql redis
 
 run-bg:
-	docker-compose up -d bancho mysql redis
+	docker compose up -d bancho mysql redis
 
 run-caddy:
 	caddy run --envfile .env --config ext/Caddyfile
 
 last?=1
 logs:
-	docker-compose logs -f bancho mysql redis --tail ${last}
+	docker compose logs -f bancho mysql redis --tail ${last}
 
 shell:
 	poetry shell
 
 test:
-	docker-compose -f docker-compose.test.yml up -d bancho-test mysql-test redis-test
-	docker-compose -f docker-compose.test.yml exec -T bancho-test /srv/root/scripts/run-tests.sh
+	docker compose -f docker-compose.test.yml up -d bancho-test mysql-test redis-test
+	docker compose -f docker-compose.test.yml exec -T bancho-test /srv/root/scripts/run-tests.sh
 
 lint:
 	poetry run pre-commit run --all-files

@@ -10,8 +10,7 @@ git clone https://github.com/osuAkatsuki/bancho.py
 cd bancho.py
 
 # install docker for building the application image
-# install docker-compose for running the application & dependencies
-sudo apt install -y docker docker-compose
+sudo apt install -y docker
 ```
 
 ## configuring bancho.py

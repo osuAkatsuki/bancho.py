@@ -34,7 +34,7 @@ profile = "black"
 
 [tool.poetry]
 name = "bancho-py"
-version = "5.2.1"
+version = "5.2.2"
 description = "An osu! server implementation optimized for maintainability in modern python"
 authors = ["Akatsuki Team"]
 license = "MIT"
@@ -61,7 +61,7 @@ pytimeparse = "1.1.8"
 pydantic = "2.6.1"
 redis = { extras = ["hiredis"], version = "5.0.1" }
 sqlalchemy = ">=1.4.42,<1.5"
-akatsuki-pp-py = "1.0.0"
+akatsuki-pp-py = "1.0.5"
 cryptography = "42.0.2"
 tenacity = "8.2.3"
 httpx = "0.26.0"
@@ -72,7 +72,7 @@ asgi-lifespan = "2.1.0"
 respx = "0.20.2"
 tzdata = "2024.1"
 coverage = "^7.4.1"
-databases = {version = "^0.8.0", extras = ["mysql"]}
+databases = { version = "^0.8.0", extras = ["mysql"] }
 python-json-logger = "^2.0.7"
 
 [tool.poetry.group.dev.dependencies]
