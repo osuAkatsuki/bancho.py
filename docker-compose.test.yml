@@ -9,7 +9,7 @@ services:
       MYSQL_USER: ${DB_USER}
       MYSQL_PASSWORD: ${DB_PASS}
       MYSQL_DATABASE: ${DB_NAME}
-      NYSQL_HOST: ${DB_HOST}
+      MYSQL_HOST: ${DB_HOST}
       MYSQL_PORT: ${DB_PORT}
       MYSQL_ROOT_PASSWORD: ${DB_PASS}
     volumes:
