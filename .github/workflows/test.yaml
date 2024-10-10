@@ -52,23 +52,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Build application image
         run: docker build -t bancho:latest .
 
       - name: Start containers
-        run: docker-compose -f docker-compose.test.yml up -d bancho-test mysql-test redis-test
+        run: docker compose -f docker-compose.test.yml up --detach --wait --wait-timeout 30 bancho-test mysql-test redis-test
 
       - name: Run tests
-        run: docker-compose -f docker-compose.test.yml exec -T bancho-test /srv/root/scripts/run-tests.sh
+        run: docker compose -f docker-compose.test.yml exec -T bancho-test /srv/root/scripts/run-tests.sh
 
       - name: Stop containers
         if: always()
-        run: docker-compose down
+        run: docker compose down
 
       - name: Archive code coverage results
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: code-coverage-report
           path: coverage/
