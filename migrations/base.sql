@@ -210,6 +210,16 @@ create table ratings
 	primary key (userid, map_md5)
 );
 
+create table first_place_scores
+(
+    map_md5 char(32) not null,
+    mode tinyint not null,
+    score_id bigint not null,
+    primary key(map_md5, mode)
+);
+create index first_place_scores_map_md5_mode_index
+	on first_place_scores (map_md5, mode);
+
 create table scores
 (
 	id bigint unsigned auto_increment

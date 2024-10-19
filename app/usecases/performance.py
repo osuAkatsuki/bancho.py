@@ -17,11 +17,9 @@ class ScoreParams:
     mods: int | None = None
     combo: int | None = None
 
-    # caller may pass either acc OR 300/100/50/geki/katu/miss
-    # passing both will result in a value error being raised
+    # caller may pass either acc OR 100/50/geki/katu/miss
     acc: float | None = None
 
-    n300: int | None = None
     n100: int | None = None
     n50: int | None = None
     ngeki: int | None = None
@@ -76,10 +74,10 @@ def calculate_performances(
 
     for score in scores:
         if score.acc and (
-            score.n300 or score.n100 or score.n50 or score.ngeki or score.nkatu
+            score.n100 or score.n50 or score.ngeki or score.nkatu
         ):
             raise ValueError(
-                "Must not specify accuracy AND 300/100/50/geki/katu. Only one or the other.",
+                "Must not specify accuracy AND 100/50/geki/katu. Only one or the other.",
             )
 
         # rosupp ignores NC and requires DT
@@ -92,7 +90,6 @@ def calculate_performances(
             mods=score.mods or 0,
             combo=score.combo,
             acc=score.acc,
-            n300=score.n300,
             n100=score.n100,
             n50=score.n50,
             n_geki=score.ngeki,
