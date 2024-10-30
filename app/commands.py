@@ -402,7 +402,7 @@ async def top(ctx: Context) -> str | None:
     if not scores:
         return "No scores"
 
-    user_embed = f"[https://{app.settings.DOMAIN}/u/{user["id"]} {user["name"]}]"
+    user_embed = f"[https://{app.settings.DOMAIN}/u/{user['id']} {user['name']}]"
 
     return "\n".join(
         [f"Top 10 scores for {user_embed} ({ctx.args[0]})."]
