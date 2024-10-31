@@ -172,6 +172,17 @@ async def fetch_one(id: int) -> Score | None:
     return cast(Score | None, _score)
 
 
+async def fetch_recent(user_id: int) -> Score | None:
+    select_stmt = (
+        select(*READ_PARAMS)
+        .where(ScoresTable.userid == user_id)
+        .order_by(ScoresTable.id.desc())
+        .limit(1)
+    )
+    _score = await app.state.services.database.fetch_one(select_stmt)
+    return cast(Score | None, _score)
+
+
 async def fetch_count(
     map_md5: str | None = None,
     mods: int | None = None,
