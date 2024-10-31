@@ -60,9 +60,9 @@ from app.repositories import clans as clans_repo
 from app.repositories import logs as logs_repo
 from app.repositories import map_requests as map_requests_repo
 from app.repositories import maps as maps_repo
+from app.repositories import scores as scores_repo
 from app.repositories import tourney_pool_maps as tourney_pool_maps_repo
 from app.repositories import tourney_pools as tourney_pools_repo
-from app.repositories import scores as scores_repo
 from app.repositories import users as users_repo
 from app.usecases.performance import ScoreParams
 
