@@ -39,7 +39,7 @@ import app.state
 import app.usecases.performance
 import app.utils
 from app.constants import regexes
-from app.constants.gamemodes import GAMEMODE_REPR_LIST
+from app.constants.gamemodes import GAMEMODE_REPR_LIST, GameMode
 from app.constants.mods import SPEED_CHANGING_MODS
 from app.constants.mods import Mods
 from app.constants.privileges import ClanPrivileges
@@ -315,7 +315,7 @@ async def maplink(ctx: Context) -> str | None:
 async def recent(ctx: Context) -> str | None:
     """Show information about a player's most recent score."""
     if ctx.args:
-        target = await users_repo.fetch_one(name=ctx.args[1])
+        target = await users_repo.fetch_one(name=" ".join(ctx.args))
         if not target:
             return "Player not found."
         score = await scores_repo.fetch_recent(user_id=target["id"])
@@ -328,15 +328,19 @@ async def recent(ctx: Context) -> str | None:
     if beatmap is None:
         return "We don't have a beatmap on file for your recent score."
 
-    l = [f"[{score['mode']!r}] {beatmap.embed}", f"{score['acc']:.2f}%"]
+    l = [f"[{GameMode(score['mode'])!r}] {beatmap.embed}", f"{score['acc']:.2f}%"]
 
     if score["mods"]:
-        l.insert(1, f"+{score['mods']!r}")
+        l.insert(1, f"+{Mods(score['mods'])!r}")
 
     l = [" ".join(l)]
 
     if score["grade"] != "F":
-        rank = score["grade"] if score["status"] == SubmissionStatus.BEST else "NA"
+        rank = (
+            await scores_repo.calculate_placement(score)
+            if score["status"] == SubmissionStatus.BEST
+            else "NA"
+        )
         l.append(f"PASS {{{score['pp']:.2f}pp #{rank}}}")
     else:
         # XXX: prior to v3.2.0, bancho.py didn't parse total_length from
