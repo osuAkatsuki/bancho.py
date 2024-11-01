@@ -16,10 +16,10 @@ from sqlalchemy import update
 from sqlalchemy.dialects.mysql import FLOAT
 from sqlalchemy.dialects.mysql import TINYINT
 
-from app.constants.gamemodes import GameMode
 import app.state.services
 from app._typing import UNSET
 from app._typing import _UnsetSentinel
+from app.constants.gamemodes import GameMode
 from app.repositories import Base
 
 

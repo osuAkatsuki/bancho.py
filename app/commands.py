@@ -39,7 +39,8 @@ import app.state
 import app.usecases.performance
 import app.utils
 from app.constants import regexes
-from app.constants.gamemodes import GAMEMODE_REPR_LIST, GameMode
+from app.constants.gamemodes import GAMEMODE_REPR_LIST
+from app.constants.gamemodes import GameMode
 from app.constants.mods import SPEED_CHANGING_MODS
 from app.constants.mods import Mods
 from app.constants.privileges import ClanPrivileges
