@@ -382,7 +382,8 @@ async def top(ctx: Context) -> str | None:
     else:
         # no player provided, use self
         user = await users_repo.fetch_one(id=ctx.player.id)
-    if not user:
+
+    if user is None:
         return "Player not found."
 
     # !top rx!std
