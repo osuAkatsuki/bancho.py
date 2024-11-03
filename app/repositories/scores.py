@@ -237,8 +237,6 @@ async def fetch_many(
 
 
 async def calculate_placement(score: Score) -> int:
-    assert score["map_md5"] is not None
-
     if GameMode(score["mode"]) >= GameMode.RELAX_OSU:
         scoring_metric = "pp"
         scoring = score["pp"]
@@ -254,7 +252,7 @@ async def calculate_placement(score: Score) -> int:
         f"AND s.{scoring_metric} > :scoring",
         {
             "map_md5": score["map_md5"],
-            "mode": GameMode(score["mode"]),
+            "mode": score["mode"],
             "scoring": scoring,
         },
         column=0,  # COUNT(*)
