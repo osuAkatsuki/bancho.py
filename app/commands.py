@@ -1141,11 +1141,11 @@ async def givedonator(ctx: Context) -> str | None:
         return "Invalid timespan."
 
     if target.donor_end < time.time():
-        timespan += int(time.time())
+        timespan += time.time()
     else:
         timespan += target.donor_end
 
-    target.donor_end = timespan
+    target.donor_end = int(timespan)
     await app.state.services.database.execute(
         "UPDATE users SET donor_end = :end WHERE id = :user_id",
         {"end": timespan, "user_id": target.id},
