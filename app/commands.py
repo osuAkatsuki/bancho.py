@@ -2440,7 +2440,7 @@ async def clan_leave(ctx: Context) -> str | None:
 
 # TODO: !clan inv, !clan leave
 
-@clan_commands.add(Privileges.UNRESTRICTED, aliases=["J"])
+@clan_commands.add(Privileges.UNRESTRICTED, aliases=["j"])
 async def clan_join(ctx: Context) -> str | None:
     """Lets a user join a Clan."""
     if not ctx.args:
