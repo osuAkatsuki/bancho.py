@@ -1,4 +1,4 @@
-""" bancho.py's v2 apis for interacting with scores """
+"""bancho.py's v2 apis for interacting with scores"""
 
 from __future__ import annotations
 
