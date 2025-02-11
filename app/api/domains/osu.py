@@ -1,4 +1,4 @@
-""" osu: handle connections from web, api, and beyond? """
+"""osu: handle connections from web, api, and beyond?"""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-""" bancho.py's v2 apis for interacting with players """
+"""bancho.py's v2 apis for interacting with players"""
 
 from __future__ import annotations
 
