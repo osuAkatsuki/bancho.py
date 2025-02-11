@@ -2438,8 +2438,36 @@ async def clan_leave(ctx: Context) -> str | None:
     return f"You have successfully left {clan_display_name}."
 
 
-# TODO: !clan inv, !clan join, !clan leave
+# TODO: !clan inv, !clan leave
 
+@clan_commands.add(Privileges.UNRESTRICTED, aliases=["j"])
+async def clan_join(ctx: Context) -> str | None:
+    """Lets a user join a Clan."""
+    if not ctx.args:
+        return "Invalid syntax: !clan join <tag>"
+
+    clan = await clans_repo.fetch_one(tag=" ".join(ctx.args).upper())
+    if not clan:
+        return "Could not find a clan by that tag."
+
+    if ctx.player.clan_id:
+        clan = await clans_repo.fetch_one(id=ctx.player.clan_id)
+        if clan:
+            clan_display_name = f"[{clan['tag']}] {clan['name']}"
+            return f"You're already a member of {clan_display_name}!"
+
+    ctx.player.clan_id = clan["id"]
+    ctx.player.clan_priv = ClanPrivileges.Member
+
+    clan_display_name = f"[{clan['tag'}] {clan['name']}"
+
+    await users_repo.partial_update(
+        ctx.player.id,
+        clan_id=clan["id"],
+        clan_priv=ClanPrivileges.Member,
+    )
+
+    return f"You have successfully joined {clan_display_name}."
 
 @clan_commands.add(Privileges.UNRESTRICTED, aliases=["l"])
 async def clan_list(ctx: Context) -> str | None:
