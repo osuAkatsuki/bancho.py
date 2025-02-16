@@ -2291,7 +2291,7 @@ async def clan_create(ctx: Context) -> str | None:
     if len(ctx.args) < 2:
         return "Invalid syntax: !clan create <tag> <name>"
 
-    tag = ctx.args[0].upper()
+    tag = ctx.args[0]
     if not 1 <= len(tag) <= 6:
         return "Clan tag may be 1-6 characters long."
 
@@ -2308,7 +2308,7 @@ async def clan_create(ctx: Context) -> str | None:
     if await clans_repo.fetch_one(name=name):
         return "That name has already been claimed by another clan."
 
-    if await clans_repo.fetch_one(tag=tag):
+    if await clans_repo.fetch_one(tag=tag) and clans_repo.fetch_one(tag=tag).upper():
         return "That tag has already been claimed by another clan."
 
     # add clan to sql
