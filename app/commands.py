@@ -2308,7 +2308,10 @@ async def clan_create(ctx: Context) -> str | None:
     if await clans_repo.fetch_one(name=name):
         return "That name has already been claimed by another clan."
 
-    if await clans_repo.fetch_one(tag=tag) and clans_repo.fetch_one(tag=tag).upper():
+    if await clans_repo.fetch_one(tag=tag):
+        return "That tag has already been claimed by another clan."
+
+    if await clans_repo.fetch_one(tag=tag).upper():
         return "That tag has already been claimed by another clan."
 
     # add clan to sql
