@@ -874,14 +874,8 @@ def _user_stats(
 
 def user_stats(player: Player) -> bytes:
     gm_stats = player.gm_stats
-    if gm_stats.pp > 0xFFFF:
-        # HACK: if pp is over osu!'s ingame cap,
-        # we can instead display it as ranked score
-        rscore = gm_stats.pp
-        pp = 0
-    else:
-        rscore = gm_stats.rscore
-        pp = gm_stats.pp
+    rscore = gm_stats.rscore
+    pp = gm_stats.pp
 
     return write(
         ServerPackets.USER_STATS,
