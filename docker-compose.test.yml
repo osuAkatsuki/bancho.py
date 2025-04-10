@@ -10,7 +10,7 @@ services:
       MYSQL_PASSWORD: ${DB_PASS}
       MYSQL_DATABASE: ${DB_NAME}
       MYSQL_HOST: ${DB_HOST}
-      MYSQL_PORT: ${DB_PORT}
+      MYSQL_TCP_PORT: ${DB_PORT}
       MYSQL_ROOT_PASSWORD: ${DB_PASS}
     volumes:
       - ./migrations/base.sql:/docker-entrypoint-initdb.d/init.sql:ro
