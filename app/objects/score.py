@@ -325,7 +325,6 @@ class Score:
             mods=int(self.mods),
             combo=self.max_combo,
             ngeki=self.ngeki,
-            n300=self.n300,
             nkatu=self.nkatu,
             n100=self.n100,
             n50=self.n50,
