@@ -2,7 +2,7 @@
 plugins = ["pydantic.mypy"]
 strict = true
 disallow_untyped_calls = false
-exclude = ["tests", "scripts"]
+exclude = ["tests", "scripts", "venv"]
 
 [[tool.mypy.overrides]]
 module = "tests.*"
