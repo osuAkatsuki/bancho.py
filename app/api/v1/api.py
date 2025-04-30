@@ -39,7 +39,7 @@ SCREENSHOTS_PATH = SystemPath.cwd() / ".data/ss"
 
 
 router = APIRouter()
-oauth2_scheme = HTTPBearer(auto_error=False)
+http_bearer_scheme = HTTPBearer(auto_error=False)
 
 # NOTE: The V1 APIs should not be used if a V2 API is available.
 #       These APIs may be deprecated in the future.
@@ -59,18 +59,14 @@ oauth2_scheme = HTTPBearer(auto_error=False)
 # GET /get_leaderboard: return the top players for a given mode & sort condition
 
 # Authorized (requires valid api key, passed as 'Authorization' header)
-# NOTE: authenticated handlers may have privilege requirements.
-
-# [Normal]
 # GET /calculate_pp: calculate & return pp for a given beatmap.
-# POST/PUT /set_avatar: Update the tokenholder's avatar to a given file.
 
 DATETIME_OFFSET = 0x89F7FF5F7B58000
 
 
 @router.get("/calculate_pp")
 async def api_calculate_pp(
-    token: HTTPCredentials = Depends(oauth2_scheme),
+    token: HTTPCredentials = Depends(http_bearer_scheme),
     beatmap_id: int = Query(None, alias="id", min=0, max=2_147_483_647),
     nkatu: int = Query(None, max=2_147_483_647),
     ngeki: int = Query(None, max=2_147_483_647),
@@ -1027,53 +1023,3 @@ async def api_get_pool(
             },
         },
     )
-
-
-# def requires_api_key(f: Callable) -> Callable:
-#     @wraps(f)
-#     async def wrapper(conn: Connection) -> HTTPResponse:
-#         conn.resp_headers["Content-Type"] = "application/json"
-#         if "Authorization" not in conn.headers:
-#             return (400, JSON({"status": "Must provide authorization token."}))
-
-#         api_key = conn.headers["Authorization"]
-
-#         if api_key not in app.state.sessions.api_keys:
-#             return (401, JSON({"status": "Unknown authorization token."}))
-
-#         # get player from api token
-#         player_id = app.state.sessions.api_keys[api_key]
-#         player = await app.state.sessions.players.from_cache_or_sql(id=player_id)
-
-#         return await f(conn, player)
-
-#     return wrapper
-
-
-# NOTE: `Content-Type = application/json` is applied in the above decorator
-#                                         for the following api handlers.
-
-
-# @domain.route("/set_avatar", methods=["POST", "PUT"])
-# @requires_api_key
-# async def api_set_avatar(conn: Connection, player: Player) -> HTTPResponse:
-#     """Update the tokenholder's avatar to a given file."""
-#     if "avatar" not in conn.files:
-#         return (400, JSON({"status": "must provide avatar file."}))
-
-#     ava_file = conn.files["avatar"]
-
-#     # block files over 4MB
-#     if len(ava_file) > (4 * 1024 * 1024):
-#         return (400, JSON({"status": "avatar file too large (max 4MB)."}))
-
-#     if ava_file[6:10] in (b"JFIF", b"Exif"):
-#         ext = "jpeg"
-#     elif ava_file.startswith(b"\211PNG\r\n\032\n"):
-#         ext = "png"
-#     else:
-#         return (400, JSON({"status": "invalid file type."}))
-
-#     # write to the avatar file
-#     (AVATARS_PATH / f"{player.id}.{ext}").write_bytes(ava_file)
-#     return JSON({"status": "success."})

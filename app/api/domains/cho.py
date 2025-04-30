@@ -482,11 +482,6 @@ WELCOME_NOTIFICATION = app.packets.notification(
     f"Welcome back to {BASE_DOMAIN}!\nRunning bancho.py v{app.settings.VERSION}.",
 )
 
-OFFLINE_NOTIFICATION = app.packets.notification(
-    "The server is currently running in offline mode; "
-    "some features will be unavailable.",
-)
-
 
 class LoginResponse(TypedDict):
     osu_token: str
