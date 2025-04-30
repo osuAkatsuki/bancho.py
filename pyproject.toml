@@ -2,7 +2,7 @@
 plugins = ["pydantic.mypy"]
 strict = true
 disallow_untyped_calls = true
-exclude = ["tests", "scripts", "venv"]
+exclude = ["tests", "venv"]
 enable_error_code = [
     "truthy-bool",
     "truthy-iterable",
