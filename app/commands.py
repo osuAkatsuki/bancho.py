@@ -2504,30 +2504,35 @@ async def process_commands(
         commands = regular_commands
 
     for cmd in commands:
-        if trigger in cmd.triggers and player.priv & cmd.priv == cmd.priv:
-            # found matching trigger with sufficient privs
-            try:
-                res = await cmd.callback(
-                    Context(
-                        player=player,
-                        trigger=trigger,
-                        args=args,
-                        recipient=target,
-                    ),
-                )
-            except Exception:
-                # print exception info to the console,
-                # but do not break the player's session.
-                traceback.print_exc()
+        if trigger not in cmd.triggers:
+            continue
 
-                res = "An exception occurred when running the command."
+        if player.priv & cmd.priv != cmd.priv:
+            continue
 
-            if res is not None:
-                # we have a message to return, include elapsed time
-                elapsed = app.logging.magnitude_fmt_time(clock_ns() - start_time)
-                return {"resp": f"{res} | Elapsed: {elapsed}", "hidden": cmd.hidden}
-            else:
-                # no message to return
-                return {"resp": None, "hidden": False}
+        # found matching trigger with sufficient privs
+        try:
+            res = await cmd.callback(
+                Context(
+                    player=player,
+                    trigger=trigger,
+                    args=args,
+                    recipient=target,
+                ),
+            )
+        except Exception:
+            # print exception info to the console,
+            # but do not break the player's session.
+            traceback.print_exc()
+
+            res = "An exception occurred when running the command."
+
+        if res is not None:
+            # we have a message to return, include elapsed time
+            elapsed = app.logging.magnitude_fmt_time(clock_ns() - start_time)
+            return {"resp": f"{res} | Elapsed: {elapsed}", "hidden": cmd.hidden}
+        else:
+            # no message to return
+            return {"resp": None, "hidden": False}
 
     return None
