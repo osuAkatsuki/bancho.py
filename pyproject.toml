@@ -1,13 +1,8 @@
 [tool.mypy]
 plugins = ["pydantic.mypy"]
 strict = true
-disallow_untyped_calls = false
+disallow_untyped_calls = true
 exclude = ["tests", "scripts", "venv"]
-
-[[tool.mypy.overrides]]
-module = "tests.*"
-disable_error_code = ["var-annotated", "has-type"]
-disallow_untyped_defs = true
 enable_error_code = [
     "truthy-bool",
     "truthy-iterable",
