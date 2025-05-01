@@ -66,7 +66,7 @@ DATETIME_OFFSET = 0x89F7FF5F7B58000
 
 @router.get("/calculate_pp")
 async def api_calculate_pp(
-    token: HTTPCredentials = Depends(http_bearer_scheme),
+    token: HTTPCredentials | None = Depends(http_bearer_scheme),
     beatmap_id: int = Query(None, alias="id", min=0, max=2_147_483_647),
     nkatu: int = Query(None, max=2_147_483_647),
     ngeki: int = Query(None, max=2_147_483_647),
