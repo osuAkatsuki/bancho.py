@@ -296,7 +296,7 @@ class ChangeAction(BasePacket):
             app.state.sessions.players.enqueue(app.packets.user_stats(player))
 
 
-IGNORED_CHANNELS = ["#highlight", "#userlog"]
+IGNORED_CHANNELS: list[str] = ["#highlight", "#userlog"]
 
 
 @register(ClientPackets.SEND_PUBLIC_MESSAGE)
@@ -948,29 +948,28 @@ async def handle_osu_login_request(
             read=False,
         )
 
-        if mail_rows:
-            sent_to: set[int] = set()
+        sent_to: set[int] = set()
 
-            for msg in mail_rows:
-                # Add "Unread messages" header as the first message
-                # for any given sender, to make it clear that the
-                # messages are coming from the mail system.
-                if msg["from_id"] not in sent_to:
-                    data += app.packets.send_message(
-                        sender=msg["from_name"],
-                        msg="Unread messages",
-                        recipient=msg["to_name"],
-                        sender_id=msg["from_id"],
-                    )
-                    sent_to.add(msg["from_id"])
-
-                msg_time = datetime.fromtimestamp(msg["time"])
+        for msg in mail_rows:
+            # Add "Unread messages" header as the first message
+            # for any given sender, to make it clear that the
+            # messages are coming from the mail system.
+            if msg["from_id"] not in sent_to:
                 data += app.packets.send_message(
                     sender=msg["from_name"],
-                    msg=f'[{msg_time:%a %b %d @ %H:%M%p}] {msg["msg"]}',
+                    msg="Unread messages",
                     recipient=msg["to_name"],
                     sender_id=msg["from_id"],
                 )
+                sent_to.add(msg["from_id"])
+
+            msg_time = datetime.fromtimestamp(msg["time"])
+            data += app.packets.send_message(
+                sender=msg["from_name"],
+                msg=f'[{msg_time:%a %b %d @ %H:%M%p}] {msg["msg"]}',
+                recipient=msg["to_name"],
+                sender_id=msg["from_id"],
+            )
 
         if not player.priv & Privileges.VERIFIED:
             # this is the player's first login, verify their
@@ -2109,7 +2108,9 @@ class StatsRequest(BasePacket):
 
     async def handle(self, player: Player) -> None:
         unrestrcted_ids = [p.id for p in app.state.sessions.players.unrestricted]
-        is_online = lambda o: o in unrestrcted_ids and o != player.id
+
+        def is_online(o: int) -> bool:
+            return o in unrestrcted_ids and o != player.id
 
         for online in filter(is_online, self.user_ids):
             target = app.state.sessions.players.get(id=online)
