@@ -399,7 +399,7 @@ class Player:
 
         if not self.restricted:
             if app.state.services.datadog:
-                app.state.services.datadog.decrement("bancho.online_players")
+                app.state.services.datadog.decrement("bancho.online_players")  # type: ignore[no-untyped-call]
 
             app.state.sessions.players.enqueue(app.packets.logout(self.id))
 
@@ -675,8 +675,8 @@ class Player:
                         self.match.host.enqueue(app.packets.match_transfer_host())
                         break
 
-            if self in self.match._refs:
-                self.match._refs.remove(self)
+            if self in self.match.referees:
+                self.match.referees.remove(self)
                 self.match.chat.send_bot(f"{self.name} removed from match referees.")
 
             # notify others of our deprature
@@ -689,7 +689,7 @@ class Player:
         if (
             self in channel
             or not channel.can_read(self.priv)  # player already in channel
-            or channel._name == "#lobby"  # no read privs
+            or channel.real_name == "#lobby"  # no read privs
             and not self.in_lobby  # not in mp lobby
         ):
             return False

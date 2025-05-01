@@ -886,14 +886,14 @@ async def handle_osu_login_request(
         if (
             not channel.auto_join
             or not channel.can_read(player.priv)
-            or channel._name == "#lobby"  # (can't be in mp lobby @ login)
+            or channel.real_name == "#lobby"  # (can't be in mp lobby @ login)
         ):
             continue
 
         # send chan info to all players who can see
         # the channel (to update their playercounts)
         chan_info_packet = app.packets.channel_info(
-            channel._name,
+            channel.real_name,
             channel.topic,
             len(channel.players),
         )
@@ -1025,10 +1025,10 @@ async def handle_osu_login_request(
 
     if app.state.services.datadog:
         if not player.restricted:
-            app.state.services.datadog.increment("bancho.online_players")
+            app.state.services.datadog.increment("bancho.online_players")  # type: ignore[no-untyped-call]
 
         time_taken = time.time() - login_time
-        app.state.services.datadog.histogram("bancho.login_time", time_taken)
+        app.state.services.datadog.histogram("bancho.login_time", time_taken)  # type: ignore[no-untyped-call]
 
     user_os = "unix (wine)" if running_under_wine else "win32"
     country_code = player.geoloc["country"]["acronym"].upper()
