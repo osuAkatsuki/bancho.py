@@ -16,7 +16,7 @@ class Channel:
 
     Possibly confusing attributes
     -----------
-    _name: `str`
+    real_name: `str`
         A name string of the channel.
         The cls.`name` property wraps handling for '#multiplayer' and
         '#spectator' when communicating with the osu! client; only use
