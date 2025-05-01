@@ -1,5 +1,4 @@
 [tool.mypy]
-plugins = ["pydantic.mypy"]
 strict = true
 exclude = ["tests", "venv"]
 disallow_untyped_calls = true
@@ -11,6 +10,7 @@ enable_error_code = [
     "redundant-expr",
     "possibly-undefined"
 ]
+plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
 module = [
@@ -38,6 +38,7 @@ profile = "black"
 
 [tool.poetry]
 package-mode = false
+name = "bancho-py"
 version = "5.3.0"
 description = "An osu! server implementation optimized for maintainability in modern python"
 authors = ["Akatsuki Team"]

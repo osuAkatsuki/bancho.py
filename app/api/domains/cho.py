@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import logging
 import re
 import struct
 import time
@@ -18,7 +17,6 @@ from typing import TypedDict
 from zoneinfo import ZoneInfo
 
 import bcrypt
-import databases.core
 from fastapi import APIRouter
 from fastapi import Response
 from fastapi.param_functions import Header
