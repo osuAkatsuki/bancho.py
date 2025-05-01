@@ -37,13 +37,12 @@ force_single_line = true
 profile = "black"
 
 [tool.poetry]
-name = "bancho-py"
+package-mode = false
 version = "5.3.0"
 description = "An osu! server implementation optimized for maintainability in modern python"
 authors = ["Akatsuki Team"]
 license = "MIT"
 readme = "README.md"
-packages = [{ include = "bancho" }]
 
 [tool.poetry.dependencies]
 python = "^3.11"
