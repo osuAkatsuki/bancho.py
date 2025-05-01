@@ -1764,7 +1764,7 @@ class MatchComplete(BasePacket):
         if player.match.is_scrimming:
             # determine winner, update match points & inform players.
             asyncio.create_task(  # type: ignore[unused-awaitable]
-                player.match.update_matchpoints(was_playing)
+                player.match.update_matchpoints(was_playing),
             )
 
 
