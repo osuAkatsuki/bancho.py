@@ -399,7 +399,7 @@ class Player:
 
         if not self.restricted:
             if app.state.services.datadog:
-                app.state.services.datadog.decrement("bancho.online_players")
+                app.state.services.datadog.decrement("bancho.online_players")  # type: ignore[no-untyped-call]
 
             app.state.sessions.players.enqueue(app.packets.logout(self.id))
 
@@ -479,7 +479,7 @@ class Player:
         webhook_url = app.settings.DISCORD_AUDIT_LOG_WEBHOOK
         if webhook_url:
             webhook = Webhook(webhook_url, content=log_msg)
-            asyncio.create_task(webhook.post())
+            asyncio.create_task(webhook.post())  # type: ignore[unused-awaitable]
 
         # refresh their client state
         if self.is_online:
@@ -516,7 +516,7 @@ class Player:
         webhook_url = app.settings.DISCORD_AUDIT_LOG_WEBHOOK
         if webhook_url:
             webhook = Webhook(webhook_url, content=log_msg)
-            asyncio.create_task(webhook.post())
+            asyncio.create_task(webhook.post())  # type: ignore[unused-awaitable]
 
         if self.is_online:
             # log the user out if they're offline, this
@@ -675,8 +675,8 @@ class Player:
                         self.match.host.enqueue(app.packets.match_transfer_host())
                         break
 
-            if self in self.match._refs:
-                self.match._refs.remove(self)
+            if self in self.match.referees:
+                self.match.referees.remove(self)
                 self.match.chat.send_bot(f"{self.name} removed from match referees.")
 
             # notify others of our deprature
@@ -689,7 +689,7 @@ class Player:
         if (
             self in channel
             or not channel.can_read(self.priv)  # player already in channel
-            or channel._name == "#lobby"  # no read privs
+            or channel.real_name == "#lobby"  # no read privs
             and not self.in_lobby  # not in mp lobby
         ):
             return False
@@ -977,7 +977,7 @@ class Player:
             id=self.id,
             latest_activity=int(time.time()),
         )
-        app.state.loop.create_task(task)
+        app.state.loop.create_task(task)  # type: ignore[unused-awaitable]
 
     def enqueue(self, data: bytes) -> None:
         """Add data to be sent to the client."""

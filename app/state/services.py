@@ -39,7 +39,7 @@ database = Database(
         password=app.settings.DB_PASS,
     ),
 )
-redis: aioredis.Redis = aioredis.from_url(app.settings.REDIS_DSN)
+redis: aioredis.Redis = aioredis.from_url(app.settings.REDIS_DSN)  # type: ignore[no-untyped-call]
 
 datadog: datadog_client.ThreadStats | None = None
 if str(app.settings.DATADOG_API_KEY) and str(app.settings.DATADOG_APP_KEY):
@@ -47,7 +47,7 @@ if str(app.settings.DATADOG_API_KEY) and str(app.settings.DATADOG_APP_KEY):
         api_key=str(app.settings.DATADOG_API_KEY),
         app_key=str(app.settings.DATADOG_APP_KEY),
     )
-    datadog = datadog_client.ThreadStats()
+    datadog = datadog_client.ThreadStats()  # type: ignore[no-untyped-call]
 
 ip_resolver: IPResolver
 

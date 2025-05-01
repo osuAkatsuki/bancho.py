@@ -83,14 +83,14 @@ async def lifespan(asgi_app: BanchoAPI) -> AsyncIterator[None]:
         )
 
     await app.state.services.database.connect()
-    await app.state.services.redis.initialize()
+    await app.state.services.redis.initialize()  # type: ignore[unused-awaitable]
 
     if app.state.services.datadog is not None:
-        app.state.services.datadog.start(
+        app.state.services.datadog.start(  # type: ignore[no-untyped-call]
             flush_in_thread=True,
             flush_interval=15,
         )
-        app.state.services.datadog.gauge("bancho.online_players", 0)
+        app.state.services.datadog.gauge("bancho.online_players", 0)  # type: ignore[no-untyped-call]
 
     app.state.services.ip_resolver = app.state.services.IPResolver()
 
@@ -117,8 +117,8 @@ async def lifespan(asgi_app: BanchoAPI) -> AsyncIterator[None]:
     await app.state.services.redis.aclose()
 
     if app.state.services.datadog is not None:
-        app.state.services.datadog.stop()
-        app.state.services.datadog.flush()
+        app.state.services.datadog.stop()  # type: ignore[no-untyped-call]
+        app.state.services.datadog.flush()  # type: ignore[no-untyped-call]
 
 
 def init_exception_handlers(asgi_app: BanchoAPI) -> None:
