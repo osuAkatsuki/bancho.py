@@ -83,7 +83,7 @@ async def lifespan(asgi_app: BanchoAPI) -> AsyncIterator[None]:
         )
 
     await app.state.services.database.connect()
-    await app.state.services.redis.initialize()
+    await app.state.services.redis.initialize()  # type: ignore[unused-awaitable]
 
     if app.state.services.datadog is not None:
         app.state.services.datadog.start(

@@ -1093,7 +1093,7 @@ async def getReplay(
 
     # increment replay views for this score
     if score.player is not None and player.id != score.player.id:
-        app.state.loop.create_task(score.increment_replay_views())
+        app.state.loop.create_task(score.increment_replay_views())  # type: ignore[unused-awaitable]
 
     return FileResponse(file)
 
@@ -1302,6 +1302,7 @@ async def getScores(
 
         map_filename = unquote_plus(map_filename)  # TODO: is unquote needed?
 
+        map_exists = False
         if has_set_id:
             # we can look it up in the specific set from cache
             for bmap in app.state.cache.beatmapset[map_set_id].maps:

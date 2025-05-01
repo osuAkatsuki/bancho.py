@@ -479,7 +479,7 @@ class Player:
         webhook_url = app.settings.DISCORD_AUDIT_LOG_WEBHOOK
         if webhook_url:
             webhook = Webhook(webhook_url, content=log_msg)
-            asyncio.create_task(webhook.post())
+            asyncio.create_task(webhook.post())  # type: ignore[unused-awaitable]
 
         # refresh their client state
         if self.is_online:
@@ -516,7 +516,7 @@ class Player:
         webhook_url = app.settings.DISCORD_AUDIT_LOG_WEBHOOK
         if webhook_url:
             webhook = Webhook(webhook_url, content=log_msg)
-            asyncio.create_task(webhook.post())
+            asyncio.create_task(webhook.post())  # type: ignore[unused-awaitable]
 
         if self.is_online:
             # log the user out if they're offline, this
@@ -977,7 +977,7 @@ class Player:
             id=self.id,
             latest_activity=int(time.time()),
         )
-        app.state.loop.create_task(task)
+        app.state.loop.create_task(task)  # type: ignore[unused-awaitable]
 
     def enqueue(self, data: bytes) -> None:
         """Add data to be sent to the client."""

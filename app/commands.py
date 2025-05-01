@@ -2487,6 +2487,7 @@ async def process_commands(
     trigger = trigger.lower()
 
     # check if any command sets match.
+    commands: list[Command] = []
     for cmd_set in command_sets:
         if trigger == cmd_set.trigger:
             if not args:
