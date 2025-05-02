@@ -5,7 +5,7 @@ from fastapi import APIRouter
 from . import beatmaps
 from . import screenshots
 
-web_router = APIRouter()
+static_router = APIRouter()
 
-web_router.include_router(beatmaps.router, prefix="/d")
-web_router.include_router(screenshots.router, prefix="/ss")
+static_router.include_router(beatmaps.router, prefix="/d")
+static_router.include_router(screenshots.router, prefix="/ss")
