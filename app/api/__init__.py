@@ -3,13 +3,16 @@
 
 from fastapi import APIRouter
 
-from .v1 import apiv1_router
-from .v2 import apiv2_router
+from .rest.v1 import apiv1_router
+from .rest.v2 import apiv2_router
+from .web import web_router
 
-api_router = APIRouter()
+router = APIRouter()
 
-api_router.include_router(apiv1_router)
-api_router.include_router(apiv2_router)
+router.include_router(web_router)
+
+router.include_router(apiv1_router)
+router.include_router(apiv2_router)
 
 from . import domains
 from . import init_api

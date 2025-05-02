@@ -25,9 +25,9 @@ import app.bg_loops
 import app.settings
 import app.state
 import app.utils
-from app.api import api_router  # type: ignore[attr-defined]
 from app.api import domains
 from app.api import middlewares
+from app.api import router  # type: ignore[attr-defined]
 from app.logging import Ansi
 from app.logging import log
 from app.objects import collections
@@ -175,11 +175,11 @@ def init_routes(asgi_app: BanchoAPI) -> None:
         for subdomain in ("c", "ce", "c4", "c5", "c6"):
             asgi_app.host(f"{subdomain}.{domain}", domains.cho.router)
 
-        asgi_app.host(f"osu.{domain}", domains.osu.router)
+        asgi_app.host(f"osu.{domain}", router)
         asgi_app.host(f"b.{domain}", domains.map.router)
 
         # bancho.py's developer-facing api
-        asgi_app.host(f"api.{domain}", api_router)
+        asgi_app.host(f"api.{domain}", router)
 
 
 def init_api() -> BanchoAPI:
