@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from sqlalchemy import Column
 from sqlalchemy import DateTime
-from sqlalchemy.dialects.mysql import TINYINT
 from sqlalchemy.dialects.mysql import INTEGER
+from sqlalchemy.dialects.mysql import TINYINT
 
 from app.repositories import Base
 

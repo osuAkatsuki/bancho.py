@@ -4,9 +4,9 @@ from sqlalchemy import Column
 from sqlalchemy import Index
 from sqlalchemy.dialects.mysql import BIGINT
 from sqlalchemy.dialects.mysql import ENUM
+from sqlalchemy.dialects.mysql import INTEGER
 from sqlalchemy.dialects.mysql import TINYINT
 from sqlalchemy.dialects.mysql import VARCHAR
-from sqlalchemy.dialects.mysql import INTEGER
 
 from app.repositories import Base
 
