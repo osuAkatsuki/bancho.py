@@ -27,16 +27,15 @@ from app.repositories import Base
 
 
 class Server(StrEnum):
-    replay = "replay"
-    map = "map"
-    song = "song"
+    osu = "osu!"
+    private = "private"
 
 
 class MapsTable(Base):
     __tablename__ = "maps"
 
     server = Column(
-        ENUM(Server),
+        ENUM(Server, values_callable=lambda enum: [e.value for e in enum]),
         nullable=False,
         server_default="osu!",
         primary_key=True,

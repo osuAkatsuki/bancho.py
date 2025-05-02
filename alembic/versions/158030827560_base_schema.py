@@ -110,7 +110,12 @@ def upgrade() -> None:
     op.create_table(
         "comments",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column("target_id", sa.Integer(), nullable=False),
+        sa.Column(
+            "target_id",
+            sa.Integer(),
+            nullable=False,
+            comment="replay, map, or set id",
+        ),
         sa.Column("target_type", mysql.ENUM("replay", "map", "song"), nullable=False),
         sa.Column("userid", sa.Integer(), nullable=False),
         sa.Column("time", sa.Integer(), nullable=False),
@@ -119,7 +124,7 @@ def upgrade() -> None:
             mysql.VARCHAR(charset="utf8mb3", collation="utf8mb3_general_ci", length=80),
             nullable=False,
         ),
-        sa.Column("colour", sa.CHAR(length=6), nullable=True),
+        sa.Column("colour", sa.CHAR(length=6), nullable=True, comment="rgb hex string"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_table(
@@ -133,7 +138,12 @@ def upgrade() -> None:
         "ingame_logins",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("userid", sa.Integer(), nullable=False),
-        sa.Column("ip", sa.String(length=45), nullable=False),
+        sa.Column(
+            "ip",
+            sa.String(length=45),
+            nullable=False,
+            comment="maxlen for ipv6",
+        ),
         sa.Column("osu_ver", sa.Date(), nullable=False),
         sa.Column("osu_stream", sa.String(length=11), nullable=False),
         sa.Column("datetime", sa.DateTime(), nullable=False),
@@ -142,7 +152,12 @@ def upgrade() -> None:
     op.create_table(
         "logs",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column("from", sa.Integer(), nullable=False),
+        sa.Column(
+            "from",
+            sa.Integer(),
+            nullable=False,
+            comment="both from and to are playerids",
+        ),
         sa.Column("to", sa.Integer(), nullable=False),
         sa.Column("action", sa.String(length=32), nullable=False),
         sa.Column(
@@ -193,7 +208,7 @@ def upgrade() -> None:
         "maps",
         sa.Column(
             "server",
-            mysql.ENUM("replay", "map", "song"),
+            mysql.ENUM("osu!", "private"),
             server_default="osu!",
             nullable=False,
         ),
@@ -343,6 +358,12 @@ def upgrade() -> None:
         sa.Column("online_checksum", mysql.CHAR(length=32), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )
+    op.create_index(
+        "scores_fetch_leaderboard_generic_index",
+        "scores",
+        ["map_md5", "status", "mode"],
+        unique=False,
+    )
     op.create_index("scores_map_md5_index", "scores", ["map_md5"], unique=False)
     op.create_index("scores_mode_index", "scores", ["mode"], unique=False)
     op.create_index("scores_mods_index", "scores", ["mods"], unique=False)
@@ -357,12 +378,6 @@ def upgrade() -> None:
     op.create_index("scores_score_index", "scores", ["score"], unique=False)
     op.create_index("scores_status_index", "scores", ["status"], unique=False)
     op.create_index("scores_userid_index", "scores", ["userid"], unique=False)
-    op.create_index(
-        "scores_fetch_leaderboard_generic_index",
-        "scores",
-        ["map_md5", "status", "mode"],
-        unique=False,
-    )
     op.create_table(
         "stats",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
@@ -406,7 +421,7 @@ def upgrade() -> None:
         "tourney_pool_maps",
         sa.Column("map_id", sa.Integer(), nullable=False),
         sa.Column("pool_id", sa.Integer(), nullable=False),
-        sa.Column("mods", mysql.BIGINT(), nullable=False),
+        sa.Column("mods", sa.Integer(), nullable=False),
         sa.Column("slot", mysql.TINYINT(), nullable=False),
         sa.PrimaryKeyConstraint("map_id", "pool_id"),
     )
@@ -425,7 +440,7 @@ def upgrade() -> None:
     op.create_table(
         "tourney_pools",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column("name", mysql.VARCHAR(length=64), nullable=False),
+        sa.Column("name", mysql.VARCHAR(length=16), nullable=False),
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.Column("created_by", sa.Integer(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
@@ -457,8 +472,8 @@ def upgrade() -> None:
     op.create_table(
         "users",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column("name", mysql.MEDIUMTEXT(), nullable=False),
-        sa.Column("safe_name", mysql.MEDIUMTEXT(), nullable=False),
+        sa.Column("name", mysql.VARCHAR(length=32), nullable=False),
+        sa.Column("safe_name", mysql.VARCHAR(length=32), nullable=False),
         sa.Column("email", sa.String(length=254), nullable=False),
         sa.Column("priv", sa.Integer(), server_default="1", nullable=False),
         sa.Column("pw_bcrypt", mysql.CHAR(length=60), nullable=False),
@@ -527,7 +542,6 @@ def downgrade() -> None:
     op.drop_index("stats_pp_index", table_name="stats")
     op.drop_index("stats_mode_index", table_name="stats")
     op.drop_table("stats")
-    op.drop_index("scores_fetch_leaderboard_generic_index", table_name="scores")
     op.drop_index("scores_userid_index", table_name="scores")
     op.drop_index("scores_status_index", table_name="scores")
     op.drop_index("scores_score_index", table_name="scores")
@@ -537,6 +551,7 @@ def downgrade() -> None:
     op.drop_index("scores_mods_index", table_name="scores")
     op.drop_index("scores_mode_index", table_name="scores")
     op.drop_index("scores_map_md5_index", table_name="scores")
+    op.drop_index("scores_fetch_leaderboard_generic_index", table_name="scores")
     op.drop_table("scores")
     op.drop_table("ratings")
     op.drop_index("maps_status_index", table_name="maps")

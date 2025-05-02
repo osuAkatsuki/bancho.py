@@ -21,7 +21,12 @@ class LogTable(Base):
     __tablename__ = "logs"
 
     id = Column("id", Integer, nullable=False, primary_key=True, autoincrement=True)
-    _from = Column("from", Integer, nullable=False)
+    _from = Column(
+        "from",
+        Integer,
+        nullable=False,
+        comment="both from and to are playerids",
+    )
     to = Column("to", Integer, nullable=False)
     action = Column("action", String(32), nullable=False)
     msg = Column(

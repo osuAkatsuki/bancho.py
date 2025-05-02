@@ -9,7 +9,6 @@ from sqlalchemy import Integer
 from sqlalchemy import delete
 from sqlalchemy import insert
 from sqlalchemy import select
-from sqlalchemy.dialects.mysql import BIGINT
 from sqlalchemy.dialects.mysql import TINYINT
 
 import app.state.services
@@ -21,7 +20,7 @@ class TourneyPoolMapsTable(Base):
 
     map_id = Column("map_id", Integer, nullable=False, primary_key=True)
     pool_id = Column("pool_id", Integer, nullable=False, primary_key=True)
-    mods = Column("mods", BIGINT, nullable=False)
+    mods = Column("mods", Integer, nullable=False)
     slot = Column("slot", TINYINT, nullable=False)
 
     __table_args__ = (
