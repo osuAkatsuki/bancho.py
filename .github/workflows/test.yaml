@@ -21,7 +21,7 @@ env:
   LOG_WITH_COLORS: "False"
   COMMAND_PREFIX: "!"
   DATA_DIRECTORY: "not relevant"
-  DB_HOST: "mysql"
+  DB_HOST: "mysql-test"
   DB_NAME: "bancho"
   DB_PASS: "lol123"
   DB_PORT: "3306"

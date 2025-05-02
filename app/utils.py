@@ -35,10 +35,6 @@ def make_safe_name(name: str) -> str:
     return name.lower().replace(" ", "_")
 
 
-def determine_highest_ranking_clan_member(members: list[User]) -> User:
-    return next(iter(sorted(members, key=lambda m: m["clan_priv"], reverse=True)))
-
-
 def _download_achievement_images_osu(achievements_path: Path) -> bool:
     """Download all used achievement images (one by one, from osu!)."""
     achs: list[str] = []
