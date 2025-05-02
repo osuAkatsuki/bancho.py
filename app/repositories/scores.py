@@ -20,6 +20,7 @@ import app.state.services
 from app._typing import UNSET
 from app._typing import _UnsetSentinel
 from app.repositories import Base
+from app.repositories.maps import MapsTable
 
 
 class ScoresTable(Base):
@@ -174,6 +175,7 @@ async def fetch_one(id: int) -> Score | None:
 
 async def fetch_count(
     map_md5: str | None = None,
+    map_id: int | None = None,
     mods: int | None = None,
     status: int | None = None,
     mode: int | None = None,
@@ -182,6 +184,8 @@ async def fetch_count(
     select_stmt = select(func.count().label("count")).select_from(ScoresTable)
     if map_md5 is not None:
         select_stmt = select_stmt.where(ScoresTable.map_md5 == map_md5)
+    if map_id is not None:
+        select_stmt = select_stmt.join(MapsTable).where(MapsTable.id == map_id)
     if mods is not None:
         select_stmt = select_stmt.where(ScoresTable.mods == mods)
     if status is not None:
@@ -198,6 +202,7 @@ async def fetch_count(
 
 async def fetch_many(
     map_md5: str | None = None,
+    map_id: int | None = None,
     mods: int | None = None,
     status: int | None = None,
     mode: int | None = None,
@@ -208,6 +213,8 @@ async def fetch_many(
     select_stmt = select(*READ_PARAMS)
     if map_md5 is not None:
         select_stmt = select_stmt.where(ScoresTable.map_md5 == map_md5)
+    if map_id is not None:
+        select_stmt = select_stmt.join(MapsTable).where(MapsTable.id == map_id)
     if mods is not None:
         select_stmt = select_stmt.where(ScoresTable.mods == mods)
     if status is not None:

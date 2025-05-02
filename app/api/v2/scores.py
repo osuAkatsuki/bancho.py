@@ -65,3 +65,40 @@ async def get_score(score_id: int) -> Success[Score] | Failure:
 
     response = Score.from_mapping(data)
     return responses.success(response)
+
+
+@router.get("/maps/{map_id}/scores")
+async def get_map_scores(
+    map_id: int,
+    mods: int | None = None,
+    status: int | None = None,
+    mode: int | None = None,
+    # TODO: sort parameter for pp vs. created_at, etc.
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
+) -> Success[list[Score]] | Failure:
+    scores = await scores_repo.fetch_many(
+        map_id=map_id,
+        mods=mods,
+        status=status,
+        mode=mode,
+        page=page,
+        page_size=page_size,
+    )
+    total_scores = await scores_repo.fetch_count(
+        map_id=map_id,
+        mods=mods,
+        status=status,
+        mode=mode,
+    )
+
+    response = [Score.from_mapping(rec) for rec in scores]
+
+    return responses.success(
+        content=response,
+        meta={
+            "total": total_scores,
+            "page": page,
+            "page_size": page_size,
+        },
+    )
