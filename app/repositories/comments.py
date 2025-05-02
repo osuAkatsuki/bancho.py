@@ -29,7 +29,12 @@ class CommentsTable(Base):
     __tablename__ = "comments"
 
     id = Column("id", Integer, nullable=False, primary_key=True, autoincrement=True)
-    target_id = Column("target_id", Integer, nullable=False)
+    target_id = Column(
+        "target_id",
+        Integer,
+        nullable=False,
+        comment="replay, map, or set id",
+    )
     target_type = Column(ENUM(TargetType), nullable=False)
     userid = Column("userid", Integer, nullable=False)
     time = Column("time", Integer, nullable=False)
@@ -38,7 +43,7 @@ class CommentsTable(Base):
         VARCHAR(charset="utf8mb3", collation="utf8mb3_general_ci", length=80),
         nullable=False,
     )
-    colour = Column("colour", CHAR(6), nullable=True)
+    colour = Column("colour", CHAR(6), nullable=True, comment="rgb hex string")
 
 
 READ_PARAMS = (

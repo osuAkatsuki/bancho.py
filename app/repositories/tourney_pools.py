@@ -22,7 +22,7 @@ class TourneyPoolsTable(Base):
     __tablename__ = "tourney_pools"
 
     id = Column("id", Integer, nullable=False, primary_key=True, autoincrement=True)
-    name = Column("name", VARCHAR(length=64), nullable=False)
+    name = Column("name", VARCHAR(length=16), nullable=False)
     created_at = Column("created_at", DateTime, nullable=False)
     created_by = Column("created_by", Integer, nullable=False)
 

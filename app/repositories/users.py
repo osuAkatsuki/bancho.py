@@ -27,8 +27,8 @@ class UsersTable(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, nullable=False, autoincrement=True)
-    name = Column(MEDIUMTEXT, nullable=False)
-    safe_name = Column(MEDIUMTEXT, nullable=False)
+    name = Column(VARCHAR(length=32), nullable=False)
+    safe_name = Column(VARCHAR(length=32), nullable=False)
     email = Column(String(254), nullable=False)
     priv = Column(Integer, nullable=False, server_default="1")
     pw_bcrypt = Column(CHAR(length=60), nullable=False)
