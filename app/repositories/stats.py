@@ -128,11 +128,7 @@ async def create_all_modes(player_id: int) -> list[Stat]:
 
 async def fetch_one(player_id: int, mode: int) -> Stat | None:
     """Fetch a player stats entry from the database."""
-    select_stmt = (
-        select(*READ_PARAMS)
-        .where(StatsTable.id == player_id)
-        .where(StatsTable.mode == mode)
-    )
+    select_stmt = select(*READ_PARAMS).where(StatsTable.id == player_id).where(StatsTable.mode == mode)
     stat = await app.state.services.database.fetch_one(select_stmt)
     return cast(Stat | None, stat)
 
@@ -189,11 +185,7 @@ async def partial_update(
     a_count: int | _UnsetSentinel = UNSET,
 ) -> Stat | None:
     """Update a player stats entry in the database."""
-    update_stmt = (
-        update(StatsTable)
-        .where(StatsTable.id == player_id)
-        .where(StatsTable.mode == mode)
-    )
+    update_stmt = update(StatsTable).where(StatsTable.id == player_id).where(StatsTable.mode == mode)
     if not isinstance(tscore, _UnsetSentinel):
         update_stmt = update_stmt.values(tscore=tscore)
     if not isinstance(rscore, _UnsetSentinel):
@@ -225,11 +217,7 @@ async def partial_update(
 
     await app.state.services.database.execute(update_stmt)
 
-    select_stmt = (
-        select(*READ_PARAMS)
-        .where(StatsTable.id == player_id)
-        .where(StatsTable.mode == mode)
-    )
+    select_stmt = select(*READ_PARAMS).where(StatsTable.id == player_id).where(StatsTable.mode == mode)
     stat = await app.state.services.database.fetch_one(select_stmt)
     return cast(Stat | None, stat)
 
@@ -291,7 +279,7 @@ async def sql_recalculate_mode(player_id: int, mode: int) -> None:
             SUM(s2.score) AS total_score,
             SUM(IF(s2.status IN (2, 3), s2.score, 0)) AS ranked_score,
             SUM(s2.n300 + s2.n100 + s2.n50 + (IF(s2.mode IN (1, 3, 5), s2.ngeki + s2.nkatu, 0))) AS total_hits,
-            SUM(s2.time_elapsed) AS play_time,
+            SUM(s2.time_elapsed) / 1000 AS play_time,
             SUM(s2.grade = "XH") AS xh_count,
             MAX(s2.max_combo) AS max_combo,  
             SUM(s2.grade = "X") AS x_count,
@@ -322,9 +310,7 @@ SET
 WHERE s.id = :user_id AND s.mode = :mode
     """
 
-    _ = await app.state.services.database.execute(
-        sql, {"user_id": player_id, "mode": mode}
-    )
+    _ = await app.state.services.database.execute(sql, {"user_id": player_id, "mode": mode})
 
 
 # TODO: delete?
