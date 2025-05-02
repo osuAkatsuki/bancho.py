@@ -3,10 +3,10 @@
 
 from fastapi import APIRouter
 
-from .rest.v1 import apiv1_router
-from .rest.v2 import apiv2_router
 from .bancho import bancho_router
 from .redirect import redirect_router
+from .rest.v1 import apiv1_router
+from .rest.v2 import apiv2_router
 from .static import static_router
 from .web import web_router
 
