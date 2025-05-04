@@ -16,6 +16,6 @@
   "postCreateCommand": "make install-dev",
   "forwardPorts": ["${localEnv:APP_PORT}"],
   "mounts": [
-    "source=bancho_data,target=/srv/root/.data,type=volume"
+    "source=data,target=/srv/root/.data,type=volume"
   ]
 }
