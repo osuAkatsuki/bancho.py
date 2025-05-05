@@ -280,9 +280,10 @@ async def sql_recalculate_mode(player_id: int, mode: int) -> None:
             SUM(IF(s2.status IN (2, 3), s2.score, 0)) AS ranked_score,
             SUM(s2.n300 + s2.n100 + s2.n50 + (IF(s2.mode IN (1, 3, 5), s2.ngeki + s2.nkatu, 0))) AS total_hits,
             SUM(s2.time_elapsed) / 1000 AS play_time,
-            SUM(s2.grade = "XH") AS xh_count,
             MAX(s2.max_combo) AS max_combo,  
+            SUM(s2.grade = "XH") AS xh_count,
             SUM(s2.grade = "X") AS x_count,
+            SUM(s2.grade = "SH") AS sh_count,
             SUM(s2.grade = "S") AS s_count,
             SUM(s2.grade = "A") AS a_count
         FROM
@@ -305,7 +306,8 @@ SET
     s.total_hits = cs.total_hits,
     s.xh_count = cs.xh_count,
     s.x_count = cs.x_count,
-    s.sh_count = cs.s_count,
+    s.sh_count = cs.sh_count,
+    s.s_count = cs.s_count,
     s.s_count = cs.a_count
 WHERE s.id = :user_id AND s.mode = :mode
     """
