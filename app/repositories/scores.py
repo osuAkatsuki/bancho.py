@@ -19,6 +19,7 @@ from sqlalchemy.dialects.mysql import TINYINT
 import app.state.services
 from app._typing import UNSET
 from app._typing import _UnsetSentinel
+from app.constants.gamemodes import GameMode
 from app.repositories import Base
 
 
@@ -172,6 +173,17 @@ async def fetch_one(id: int) -> Score | None:
     return cast(Score | None, _score)
 
 
+async def fetch_recent(user_id: int) -> Score | None:
+    select_stmt = (
+        select(*READ_PARAMS)
+        .where(ScoresTable.userid == user_id)
+        .order_by(ScoresTable.id.desc())
+        .limit(1)
+    )
+    _score = await app.state.services.database.fetch_one(select_stmt)
+    return cast(Score | None, _score)
+
+
 async def fetch_count(
     map_md5: str | None = None,
     mods: int | None = None,
@@ -222,6 +234,31 @@ async def fetch_many(
 
     scores = await app.state.services.database.fetch_all(select_stmt)
     return cast(list[Score], scores)
+
+
+async def calculate_placement(score: Score) -> int:
+    if GameMode(score["mode"]) >= GameMode.RELAX_OSU:
+        scoring_metric = "pp"
+        scoring = score["pp"]
+    else:
+        scoring_metric = "score"
+        scoring = score["score"]
+
+    num_better_scores: int | None = await app.state.services.database.fetch_val(
+        "SELECT COUNT(*) AS c FROM scores s "
+        "INNER JOIN users u ON u.id = s.userid "
+        "WHERE s.map_md5 = :map_md5 AND s.mode = :mode "
+        "AND s.status = 2 AND u.priv & 1 "
+        f"AND s.{scoring_metric} > :scoring",
+        {
+            "map_md5": score["map_md5"],
+            "mode": score["mode"],
+            "scoring": scoring,
+        },
+        column=0,  # COUNT(*)
+    )
+    assert num_better_scores is not None
+    return num_better_scores + 1
 
 
 async def partial_update(
