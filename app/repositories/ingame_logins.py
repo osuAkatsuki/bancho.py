@@ -23,7 +23,7 @@ class IngameLoginsTable(Base):
 
     id = Column("id", Integer, nullable=False, primary_key=True, autoincrement=True)
     userid = Column("userid", Integer, nullable=False)
-    ip = Column("ip", String(45), nullable=False)
+    ip = Column("ip", String(45), nullable=False, comment="maxlen for ipv6")
     osu_ver = Column("osu_ver", Date, nullable=False)
     osu_stream = Column("osu_stream", String(11), nullable=False)
     datetime = Column("datetime", DateTime, nullable=False)
