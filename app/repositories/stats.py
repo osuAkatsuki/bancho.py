@@ -260,7 +260,6 @@ async def sql_recalculate_mode(player_id: int, mode: int) -> None:
     ),
     user_calc AS (
         SELECT
-            COUNT(*) AS count,
             SUM(POW (0.95, global_rank - 1) * pp) AS weightedPP,
             (1 - POW (0.9994, COUNT(*))) * 416.6667 AS bnsPP,
             SUM(POW (0.95, global_rank - 1) * acc) / SUM(POW (0.95, global_rank - 1)) AS acc
@@ -276,6 +275,7 @@ async def sql_recalculate_mode(player_id: int, mode: int) -> None:
     ), 
     concrete_stats AS (
         SELECT
+            COUNT(*) AS count,
             SUM(s2.score) AS total_score,
             SUM(IF(s2.status IN (2, 3), s2.score, 0)) AS ranked_score,
             SUM(s2.n300 + s2.n100 + s2.n50 + (IF(s2.mode IN (1, 3, 5), s2.ngeki + s2.nkatu, 0))) AS total_hits,
@@ -300,7 +300,7 @@ SET
     s.rscore = cs.ranked_score,
     s.pp = c.pp,
     s.acc = c.acc,
-    s.plays = c.count,
+    s.plays = cs.count,
     s.playtime = cs.play_time,
     s.max_combo = cs.max_combo,
     s.total_hits = cs.total_hits,
