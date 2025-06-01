@@ -5,12 +5,12 @@ from typing import cast
 
 from sqlalchemy import Column
 from sqlalchemy import Integer
-from sqlalchemy import String
 from sqlalchemy import func
 from sqlalchemy import insert
 from sqlalchemy import select
 from sqlalchemy import update
 from sqlalchemy.dialects.mysql import TINYINT
+from sqlalchemy.dialects.mysql import VARCHAR
 
 import app.state.services
 from app.repositories import Base
@@ -22,7 +22,11 @@ class MailTable(Base):
     id = Column("id", Integer, nullable=False, primary_key=True, autoincrement=True)
     from_id = Column("from_id", Integer, nullable=False)
     to_id = Column("to_id", Integer, nullable=False)
-    msg = Column("msg", String(2048, collation="utf8"), nullable=False)
+    msg = Column(
+        "msg",
+        VARCHAR(charset="utf8mb3", collation="utf8mb3_general_ci", length=2048),
+        nullable=False,
+    )
     time = Column("time", Integer, nullable=True)
     read = Column("read", TINYINT(1), nullable=False, server_default="0")
 
