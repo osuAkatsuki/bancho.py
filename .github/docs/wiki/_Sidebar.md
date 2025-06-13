@@ -1,5 +1,5 @@
-| [![en-US](https://raw.githubusercontent.com/hjnilsson/country-flags/master/png100px/us.png)](https://github.com/osuAkatsuki/bancho.py/wiki/Home) | [![de-DE](https://raw.githubusercontent.com/hjnilsson/country-flags/master/png100px/de.png)](https://github.com/osuAkatsuki/bancho.py/wiki/Home-de-DE) | [![es-ES](https://raw.githubusercontent.com/hjnilsson/country-flags/master/png100px/cn.png)](https://github.com/osuAkatsuki/bancho.py/wiki/Home-zh-CN) |
-| --- | --- | --- |
+| [![en-US](https://raw.githubusercontent.com/hjnilsson/country-flags/master/png100px/us.png)](https://github.com/osuAkatsuki/bancho.py/wiki/Home) | [![de-DE](https://raw.githubusercontent.com/hjnilsson/country-flags/master/png100px/de.png)](https://github.com/osuAkatsuki/bancho.py/wiki/Home-de-DE) | [![es-ES](https://raw.githubusercontent.com/hjnilsson/country-flags/master/png100px/cn.png)](https://github.com/osuAkatsuki/bancho.py/wiki/Home-zh-CN) | [![it-IT](https://raw.githubusercontent.com/hjnilsson/country-flags/master/png100px/it.png)](https://github.com/osuAkatsuki/bancho.py/wiki/Home-it-IT) |
+| --- | --- | --- | --- |
 
 ***
 
