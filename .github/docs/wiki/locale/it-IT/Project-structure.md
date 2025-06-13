@@ -52,4 +52,3 @@
     ├── migrations            # migrazioni del database - aggiornamenti dello schema
     ├── tools                 # vari strumenti creati nella storia di bancho.py
     └── main.py               # un punto di ingresso (script) per eseguire il server
-

@@ -7,4 +7,3 @@ Il progetto è sviluppato principalmente dal team [Akatsuki](https://akatsuki.pw
 e il nostro obiettivo è creare l'implementazione del server osu! più facile da mantenere, affidabile e ricca di funzionalità disponibile.
 
 ## Si prega di controllare la barra laterale per le guide sulla configurazione
-
