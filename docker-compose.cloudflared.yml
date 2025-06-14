@@ -31,7 +31,7 @@ services:
     environment:
       - ALLOW_EMPTY_PASSWORD=yes
       - REDIS_PASSWORD=${REDIS_PASS}
-      
+
   cloudflared:
     container_name: cloudflared
     image: cloudflare/cloudflared
