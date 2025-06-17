@@ -7,17 +7,18 @@ from typing import cast
 
 from sqlalchemy import Column
 from sqlalchemy import DateTime
-from sqlalchemy import Enum
 from sqlalchemy import Index
 from sqlalchemy import Integer
-from sqlalchemy import String
 from sqlalchemy import delete
 from sqlalchemy import func
 from sqlalchemy import insert
 from sqlalchemy import select
 from sqlalchemy import update
+from sqlalchemy.dialects.mysql import CHAR
+from sqlalchemy.dialects.mysql import ENUM
 from sqlalchemy.dialects.mysql import FLOAT
 from sqlalchemy.dialects.mysql import TINYINT
+from sqlalchemy.dialects.mysql import VARCHAR
 
 import app.state.services
 from app._typing import UNSET
@@ -25,16 +26,16 @@ from app._typing import _UnsetSentinel
 from app.repositories import Base
 
 
-class MapServer(StrEnum):
-    OSU = "osu!"
-    PRIVATE = "private"
+class Server(StrEnum):
+    osu = "osu!"
+    private = "private"
 
 
 class MapsTable(Base):
     __tablename__ = "maps"
 
     server = Column(
-        Enum(MapServer, name="server"),
+        ENUM(Server, values_callable=lambda enum: [e.value for e in enum]),
         nullable=False,
         server_default="osu!",
         primary_key=True,
@@ -42,12 +43,27 @@ class MapsTable(Base):
     id = Column(Integer, nullable=False, primary_key=True)
     set_id = Column(Integer, nullable=False)
     status = Column(Integer, nullable=False)
-    md5 = Column(String(32), nullable=False)
-    artist = Column(String(128, collation="utf8"), nullable=False)
-    title = Column(String(128, collation="utf8"), nullable=False)
-    version = Column(String(128, collation="utf8"), nullable=False)
-    creator = Column(String(19, collation="utf8"), nullable=False)
-    filename = Column(String(256, collation="utf8"), nullable=False)
+    md5 = Column(CHAR(length=32), nullable=False)
+    artist = Column(
+        VARCHAR(charset="utf8mb3", collation="utf8mb3_general_ci", length=128),
+        nullable=False,
+    )
+    title = Column(
+        VARCHAR(charset="utf8mb3", collation="utf8mb3_general_ci", length=128),
+        nullable=False,
+    )
+    version = Column(
+        VARCHAR(charset="utf8mb3", collation="utf8mb3_general_ci", length=128),
+        nullable=False,
+    )
+    creator = Column(
+        VARCHAR(charset="utf8mb3", collation="utf8mb3_general_ci", length=19),
+        nullable=False,
+    )
+    filename = Column(
+        VARCHAR(charset="utf8mb3", collation="utf8mb3_general_ci", length=256),
+        nullable=False,
+    )
     last_update = Column(DateTime, nullable=False)
     total_length = Column(Integer, nullable=False)
     max_combo = Column(Integer, nullable=False)
