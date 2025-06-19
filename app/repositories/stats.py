@@ -235,6 +235,8 @@ async def partial_update(
 
 
 async def sql_recalculate_mode(player_id: int, mode: int) -> None:
+    # https://osu.ppy.sh/wiki/en/Gameplay/Score/Ranked_score
+    # The ranked score is the total sum of the *best scores* for all ranked, loved, and approved difficulties played online.
     sql = f"""
     WITH 
     ordered_pp AS (
@@ -289,7 +291,7 @@ async def sql_recalculate_mode(player_id: int, mode: int) -> None:
         SELECT
             COUNT(*) AS count,
             SUM(s2.score) AS total_score,
-            SUM(IF(s2.status IN (2, 3), s2.score, 0)) AS ranked_score,
+            SUM(IF(m2.status IN (2, 3) AND s2.status = 2, s2.score, 0)) AS ranked_score,
             SUM(s2.n300 + s2.n100 + s2.n50 + (IF(s2.mode IN (1, 3, 5), s2.ngeki + s2.nkatu, 0))) AS total_hits,
             SUM(s2.time_elapsed) / 1000 AS play_time,
             MAX(s2.max_combo) AS max_combo,  
