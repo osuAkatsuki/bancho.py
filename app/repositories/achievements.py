@@ -22,6 +22,7 @@ from sqlalchemy import func
 from sqlalchemy import insert
 from sqlalchemy import select
 from sqlalchemy import update
+from sqlalchemy.dialects.mysql import VARCHAR
 
 
 class AchievementsTable(Base):
@@ -29,8 +30,16 @@ class AchievementsTable(Base):
 
     id = Column("id", Integer, primary_key=True, nullable=False, autoincrement=True)
     file = Column("file", String(128), nullable=False)
-    name = Column("name", String(128, collation="utf8"), nullable=False)
-    desc = Column("desc", String(256, collation="utf8"), nullable=False)
+    name = Column(
+        "name",
+        VARCHAR(charset="utf8mb3", collation="utf8mb3_general_ci", length=128),
+        nullable=False,
+    )
+    desc = Column(
+        "desc",
+        VARCHAR(charset="utf8mb3", collation="utf8mb3_general_ci", length=256),
+        nullable=False,
+    )
     cond = Column("cond", String(64), nullable=False)
 
     __table_args__ = (

@@ -10,6 +10,7 @@ from sqlalchemy import func
 from sqlalchemy import insert
 from sqlalchemy import select
 from sqlalchemy import update
+from sqlalchemy.dialects.mysql import BIGINT
 from sqlalchemy.dialects.mysql import FLOAT
 from sqlalchemy.dialects.mysql import TINYINT
 
@@ -24,8 +25,8 @@ class StatsTable(Base):
 
     id = Column("id", Integer, nullable=False, primary_key=True, autoincrement=True)
     mode = Column("mode", TINYINT(1), primary_key=True)
-    tscore = Column("tscore", Integer, nullable=False, server_default="0")
-    rscore = Column("rscore", Integer, nullable=False, server_default="0")
+    tscore = Column("tscore", BIGINT(unsigned=True), nullable=False, server_default="0")
+    rscore = Column("rscore", BIGINT(unsigned=True), nullable=False, server_default="0")
     pp = Column("pp", Integer, nullable=False, server_default="0")
     plays = Column("plays", Integer, nullable=False, server_default="0")
     playtime = Column("playtime", Integer, nullable=False, server_default="0")
