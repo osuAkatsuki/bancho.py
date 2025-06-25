@@ -302,7 +302,7 @@ async def sql_recalculate_mode(player_id: int, mode: int) -> None:
             SUM(s2.grade = "A") AS a_count
         FROM
             scores s2
-        INNER JOIN maps m2 ON s2.map_md5 = m2.md5
+        LEFT JOIN maps m2 ON s2.map_md5 = m2.md5
         WHERE s2.mode = :mode
         AND s2.userid = :user_id
     )
