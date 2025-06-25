@@ -310,19 +310,19 @@ UPDATE stats s
 INNER JOIN concrete_stats cs ON 1
 INNER JOIN calculated c ON 1
 SET
-    s.tscore = cs.total_score,
-    s.rscore = cs.ranked_score,
-    s.pp = c.pp,
-    s.acc = c.acc,
-    s.plays = cs.count,
-    s.playtime = cs.play_time,
-    s.max_combo = cs.max_combo,
-    s.total_hits = cs.total_hits,
-    s.xh_count = cs.xh_count,
-    s.x_count = cs.x_count,
-    s.sh_count = cs.sh_count,
-    s.s_count = cs.s_count,
-    s.s_count = cs.a_count
+    s.tscore = COALESCE(cs.total_score, 0),
+    s.rscore = COALESCE(cs.ranked_score, 0),
+    s.pp = COALESCE(c.pp, 0),
+    s.acc = COALESCE(c.acc, 0),
+    s.plays = COALESCE(cs.count, 0),
+    s.playtime = COALESCE(cs.play_time, 0),
+    s.max_combo = COALESCE(cs.max_combo, 0),
+    s.total_hits = COALESCE(cs.total_hits, 0),
+    s.xh_count = COALESCE(cs.xh_count, 0),
+    s.x_count = COALESCE(cs.x_count, 0),
+    s.sh_count = COALESCE(cs.sh_count, 0),
+    s.s_count = COALESCE(cs.s_count, 0),
+    s.a_count = COALESCE(cs.a_count, 0)
 WHERE s.id = :user_id AND s.mode = :mode
     """
 
