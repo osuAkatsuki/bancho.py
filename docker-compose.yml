@@ -15,7 +15,7 @@ services:
     volumes:
       - db-data:/var/lib/mysql
     healthcheck:
-      test: "/usr/bin/mysql --user=$$MYSQL_USER --password=$$MYSQL_PASSWORD --execute \"SHOW DATABASES;\""
+      test: '/usr/bin/mysql --user=$$MYSQL_USER --password=$$MYSQL_PASSWORD --execute "SHOW DATABASES;"'
       interval: 2s
       timeout: 20s
       retries: 10
@@ -30,6 +30,15 @@ services:
     environment:
       - ALLOW_EMPTY_PASSWORD=yes
       - REDIS_PASSWORD=${REDIS_PASS}
+
+  # Cloudflare tunneling via Zero-Trust
+  # cloudflared:
+  #   container_name: cloudflared
+  #   image: cloudflare/cloudflared
+  #   restart: unless-stopped
+  #   command: tunnel run
+  #   environment:
+  #     - TUNNEL_TOKEN=${TUNNEL_TOKEN}
 
   ## application services
 
