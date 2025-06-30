@@ -13,7 +13,6 @@ services:
       MYSQL_TCP_PORT: ${DB_PORT}
       MYSQL_RANDOM_ROOT_PASSWORD: "true"
     volumes:
-      - ./migrations/base.sql:/docker-entrypoint-initdb.d/init.sql:ro
       - db-data:/var/lib/mysql
     healthcheck:
       test: '/usr/bin/mysql --user=$$MYSQL_USER --password=$$MYSQL_PASSWORD --execute "SHOW DATABASES;"'
