@@ -567,6 +567,9 @@ async def get_allowed_client_versions(osu_stream: OsuStream) -> set[date] | None
     osu_stream_str = osu_stream.value
     if osu_stream in (OsuStream.STABLE, OsuStream.BETA):
         osu_stream_str += "40"  # i wonder why this exists
+    elif osu_stream in (OsuStream.TOURNEY):
+        osu_stream_str = "stable40" # osu!tourneys use stable40 stream
+    
 
     response = await services.http_client.get(
         OSU_API_V2_CHANGELOG_URL,
