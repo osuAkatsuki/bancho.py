@@ -209,8 +209,8 @@ async def bancho_handler(
         return Response(
             content=(
                 app.packets.notification("Server has restarted.")
-                + app.packets.restart_server(0)  # ms until reconnection
-            ),
+                + app.packets.restart_server(0)
+            ),  # ms until reconnection
         )
 
     if player.restricted:
@@ -564,32 +564,35 @@ async def get_allowed_client_versions(osu_stream: OsuStream) -> set[date] | None
 
     Returns None if the connection to the osu! api fails.
     """
-    osu_stream_str = osu_stream.value
-    if osu_stream in (OsuStream.STABLE, OsuStream.BETA):
-        osu_stream_str += "40"  # i wonder why this exists
-    elif osu_stream in (OsuStream.TOURNEY):
-        osu_stream_str = "stable40" # osu!tourneys use stable40 stream
-    
-
-    response = await services.http_client.get(
-        OSU_API_V2_CHANGELOG_URL,
-        params={"stream": osu_stream_str},
-    )
-    if not response.is_success:
-        return None
-
+    osu_stream_strs = []
     allowed_client_versions: set[date] = set()
-    for build in response.json()["builds"]:
-        version = date(
-            int(build["version"][0:4]),
-            int(build["version"][4:6]),
-            int(build["version"][6:8]),
+
+    if osu_stream == OsuStream.STABLE:
+        osu_stream_strs.append(osu_stream.value + "40")  # i wonder why this exists
+    elif osu_stream == OsuStream.TOURNEY:
+        # osu!tourney clients are allowed to connect with any version
+        osu_stream_strs.append("stable40")
+        osu_stream_strs.append("cuttingedge")
+
+    for osu_stream_str in osu_stream_strs:
+        response = await services.http_client.get(
+            OSU_API_V2_CHANGELOG_URL,
+            params={"stream": osu_stream_str},
         )
-        allowed_client_versions.add(version)
-        if any(entry["major"] for entry in build["changelog_entries"]):
-            # this build is a major iteration to the client
-            # don't allow anything older than this
-            break
+        if not response.is_success:
+            return None
+
+        for build in response.json()["builds"]:
+            version = date(
+                int(build["version"][0:4]),
+                int(build["version"][4:6]),
+                int(build["version"][6:8]),
+            )
+            allowed_client_versions.add(version)
+            if any(entry["major"] for entry in build["changelog_entries"]):
+                # this build is a major iteration to the client
+                # don't allow anything older than this
+                break
 
     return allowed_client_versions
 
@@ -887,8 +890,8 @@ async def handle_osu_login_request(
         if (
             not channel.auto_join
             or not channel.can_read(player.priv)
-            or channel.real_name == "#lobby"  # (can't be in mp lobby @ login)
-        ):
+            or channel.real_name == "#lobby"
+        ):  # (can't be in mp lobby @ login)
             continue
 
         # send chan info to all players who can see
