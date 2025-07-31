@@ -728,17 +728,16 @@ async def handle_osu_login_request(
             ),
         }
 
-    if osu_version.stream is OsuStream.TOURNEY and not (
-        user_info["priv"] & Privileges.DONATOR
-        and user_info["priv"] & Privileges.UNRESTRICTED
-    ):
-        # trying to use tourney client with insufficient privileges.
-        return {
-            "osu_token": "no",
-            "response_body": app.packets.login_reply(
-                LoginFailureReason.AUTHENTICATION_FAILED,
-            ),
-        }
+    if osu_version.stream is OsuStream.TOURNEY:
+        allowed_priv = Privileges.DONATOR | Privileges.TOURNEY_MANAGER | Privileges.UNRESTRICTED
+        if user_info["priv"] & allowed_priv <= Privileges.UNRESTRICTED:
+            # trying to use tourney client with insufficient privileges.
+            return {
+                "osu_token": "no",
+                "response_body": app.packets.login_reply(
+                    LoginFailureReason.AUTHENTICATION_FAILED,
+                ),
+            }
 
     """ login credentials verified """
 
