@@ -54,11 +54,32 @@ async def api_get_beatmaps(**params: Any) -> BeatmapApiResponse:
         # https://github.com/ppy/osu-api/wiki#apiget_beatmaps
         url = "https://old.ppy.sh/api/get_beatmaps"
         params["k"] = str(app.settings.OSU_API_KEY)
+        return unwrap_bancho_api_response(await app.state.services.http_client.get(url, params=params))
     else:
         # https://osu.direct/doc
         url = "https://osu.direct/api/get_beatmaps"
+        return unwrap_osu_direct_api_response(await app.state.services.http_client.get(url, params=params))
 
-    response = await app.state.services.http_client.get(url, params=params)
+
+def unwrap_osu_direct_api_response(response: httpx.Response) -> BeatmapApiResponse:
+    if not response.is_success:
+        return {"data": None, "status_code": response.status_code}
+
+    response_data = response.json()
+
+    match response_data:
+        case list(l):
+            return {"data": l, "status_code": response.status_code}
+
+        # {code: int, message: str}
+        case {"code": code, "message": message}:
+            return {"data": None, "status_code": code}
+
+        case _:
+            return {"data": None, "status_code": response.status_code}
+
+
+def unwrap_bancho_api_response(response: httpx.Response) -> BeatmapApiResponse:
     response_data = response.json()
     if response.status_code == 200 and response_data:  # (data may be [])
         return {"data": response_data, "status_code": response.status_code}
