@@ -25,6 +25,26 @@ MySQLParams = dict[str, Any] | None
 MySQLQuery = ClauseElement | str
 
 
+def make_dsn(
+    dialect: str,
+    user: str,
+    host: str,
+    port: int,
+    database: str,
+    driver: str | None = None,
+    password: str | None = None,
+) -> str:
+    scheme = dialect
+    if driver:
+        scheme += f"+{driver}"
+    if password:
+        password = f":{password}"
+    else:
+        password = ""
+
+    return f"{scheme}://{user}{password}@{host}:{port}/{database}"
+
+
 class Database:
     def __init__(self, url: str) -> None:
         self._database = _Database(url)

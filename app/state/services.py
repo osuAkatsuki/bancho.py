@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 import ipaddress
-import logging
 import pickle
 import re
 import secrets
-from collections.abc import AsyncGenerator
 from collections.abc import Mapping
 from collections.abc import MutableMapping
 from pathlib import Path
@@ -14,9 +12,9 @@ from typing import TypedDict
 import datadog as datadog_module
 import datadog.threadstats.base as datadog_client
 import httpx
-import pymysql
 from redis import asyncio as aioredis
 
+import app.adapters.database
 import app.settings
 import app.state
 from app._typing import IPAddress
@@ -26,14 +24,21 @@ from app.logging import log
 
 STRANGE_LOG_DIR = Path.cwd() / ".data/logs"
 
-VERSION_RGX = re.compile(r"^# v(?P<ver>\d+\.\d+\.\d+)$")
-SQL_UPDATES_FILE = Path.cwd() / "migrations/migrations.sql"
-
 
 """ session objects """
 
 http_client = httpx.AsyncClient()
-database = Database(app.settings.DB_DSN)
+database = Database(
+    url=app.adapters.database.make_dsn(
+        dialect="mysql",
+        user=app.settings.DB_USER,
+        host=app.settings.DB_HOST,
+        port=app.settings.DB_PORT,
+        database=app.settings.DB_NAME,
+        driver="aiomysql",
+        password=app.settings.DB_PASS,
+    ),
+)
 redis: aioredis.Redis = aioredis.from_url(app.settings.REDIS_DSN)  # type: ignore[no-untyped-call]
 
 datadog: datadog_client.ThreadStats | None = None
@@ -272,220 +277,4 @@ async def log_strange_occurrence(obj: object) -> None:
             "It would be greatly appreciated if you could forward this to the "
             "bancho.py development team. To do so, please email josh@akatsuki.gg",
             Ansi.LYELLOW,
-        )
-
-
-# dependency management
-
-
-class Version:
-    def __init__(self, major: int, minor: int, micro: int) -> None:
-        self.major = major
-        self.minor = minor
-        self.micro = micro
-
-    def __repr__(self) -> str:
-        return f"{self.major}.{self.minor}.{self.micro}"
-
-    def __hash__(self) -> int:
-        return self.as_tuple.__hash__()
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, Version):
-            return NotImplemented
-
-        return self.as_tuple == other.as_tuple
-
-    def __lt__(self, other: Version) -> bool:
-        return self.as_tuple < other.as_tuple
-
-    def __le__(self, other: Version) -> bool:
-        return self.as_tuple <= other.as_tuple
-
-    def __gt__(self, other: Version) -> bool:
-        return self.as_tuple > other.as_tuple
-
-    def __ge__(self, other: Version) -> bool:
-        return self.as_tuple >= other.as_tuple
-
-    @property
-    def as_tuple(self) -> tuple[int, int, int]:
-        return (self.major, self.minor, self.micro)
-
-    @classmethod
-    def from_str(cls, s: str) -> Version | None:
-        split = s.split(".")
-        if len(split) == 3:
-            return cls(
-                major=int(split[0]),
-                minor=int(split[1]),
-                micro=int(split[2]),
-            )
-
-        return None
-
-
-async def _get_latest_dependency_versions() -> AsyncGenerator[
-    tuple[str, Version, Version],
-    None,
-]:
-    """Return the current installed & latest version for each dependency."""
-    with open("requirements.txt") as f:
-        dependencies = f.read().splitlines(keepends=False)
-
-    # TODO: use asyncio.gather() to do all requests at once? or chunk them
-
-    for dependency in dependencies:
-        dependency_name, _, dependency_ver = dependency.partition("==")
-        current_ver = Version.from_str(dependency_ver)
-
-        if not current_ver:
-            # the module uses some more advanced (and often hard to parse)
-            # versioning system, so we won't be able to report updates.
-            continue
-
-        # TODO: split up and do the requests asynchronously
-        url = f"https://pypi.org/pypi/{dependency_name}/json"
-        response = await http_client.get(url)
-        json = response.json()
-
-        if response.status_code == 200 and json:
-            latest_ver = Version.from_str(json["info"]["version"])
-
-            if not latest_ver:
-                # they've started using a more advanced versioning system.
-                continue
-
-            yield (dependency_name, latest_ver, current_ver)
-        else:
-            yield (dependency_name, current_ver, current_ver)
-
-
-async def check_for_dependency_updates() -> None:
-    """Notify the developer of any dependency updates available."""
-    updates_available = False
-
-    async for module, current_ver, latest_ver in _get_latest_dependency_versions():
-        if latest_ver > current_ver:
-            updates_available = True
-            log(
-                f"{module} has an update available "
-                f"[{current_ver!r} -> {latest_ver!r}]",
-                Ansi.LMAGENTA,
-            )
-
-    if updates_available:
-        log(
-            "Python modules can be updated with "
-            "`python3.11 -m pip install -U <modules>`.",
-            Ansi.LMAGENTA,
-        )
-
-
-# sql migrations
-
-
-async def _get_current_sql_structure_version() -> Version | None:
-    """Get the last launched version of the server."""
-    res = await app.state.services.database.fetch_one(
-        "SELECT ver_major, ver_minor, ver_micro "
-        "FROM startups ORDER BY datetime DESC LIMIT 1",
-    )
-
-    if res:
-        return Version(res["ver_major"], res["ver_minor"], res["ver_micro"])
-
-    return None
-
-
-async def run_sql_migrations() -> None:
-    """Update the sql structure, if it has changed."""
-    software_version = Version.from_str(app.settings.VERSION)
-    if software_version is None:
-        raise RuntimeError(f"Invalid bancho.py version '{app.settings.VERSION}'")
-
-    last_run_migration_version = await _get_current_sql_structure_version()
-    if not last_run_migration_version:
-        # Migrations have never run before - this is the first time starting the server.
-        # We'll insert the current version into the database, so future versions know to migrate.
-        await app.state.services.database.execute(
-            "INSERT INTO startups (ver_major, ver_minor, ver_micro, datetime) "
-            "VALUES (:major, :minor, :micro, NOW())",
-            {
-                "major": software_version.major,
-                "minor": software_version.minor,
-                "micro": software_version.micro,
-            },
-        )
-        return  # already up to date (server has never run before)
-
-    if software_version == last_run_migration_version:
-        return  # already up to date
-
-    # version changed; there may be sql changes.
-    content = SQL_UPDATES_FILE.read_text()
-
-    queries: list[str] = []
-    q_lines: list[str] = []
-
-    update_ver = None
-
-    for line in content.splitlines():
-        if not line:
-            continue
-
-        if line.startswith("#"):
-            # may be normal comment or new version
-            r_match = VERSION_RGX.fullmatch(line)
-            if r_match:
-                update_ver = Version.from_str(r_match["ver"])
-
-            continue
-        elif not update_ver:
-            continue
-
-        # we only need the updates between the
-        # previous and new version of the server.
-        if last_run_migration_version < update_ver <= software_version:
-            if line.endswith(";"):
-                if q_lines:
-                    q_lines.append(line)
-                    queries.append(" ".join(q_lines))
-                    q_lines = []
-                else:
-                    queries.append(line)
-            else:
-                q_lines.append(line)
-
-    if queries:
-        log(
-            f"Updating mysql structure (v{last_run_migration_version!r} -> v{software_version!r}).",
-            Ansi.LMAGENTA,
-        )
-
-    # XXX: we can't use a transaction here with mysql as structural changes to
-    # tables implicitly commit: https://dev.mysql.com/doc/refman/5.7/en/implicit-commit.html
-    for query in queries:
-        try:
-            await app.state.services.database.execute(query)
-        except pymysql.err.MySQLError as exc:
-            log(f"Failed: {query}", Ansi.GRAY)
-            log(repr(exc))
-            log(
-                "SQL failed to update - unless you've been "
-                "modifying sql and know what caused this, "
-                "please contact @cmyui on Discord.",
-                Ansi.LRED,
-            )
-            raise KeyboardInterrupt from exc
-    else:
-        # all queries executed successfully
-        await app.state.services.database.execute(
-            "INSERT INTO startups (ver_major, ver_minor, ver_micro, datetime) "
-            "VALUES (:major, :minor, :micro, NOW())",
-            {
-                "major": software_version.major,
-                "minor": software_version.minor,
-                "micro": software_version.micro,
-            },
         )

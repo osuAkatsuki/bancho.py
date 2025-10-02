@@ -13,7 +13,6 @@ services:
       MYSQL_TCP_PORT: ${DB_PORT}
       MYSQL_ROOT_PASSWORD: ${DB_PASS}
     volumes:
-      - ./migrations/base.sql:/docker-entrypoint-initdb.d/init.sql:ro
       - test-db-data:/var/lib/mysql
     networks:
       - test-network

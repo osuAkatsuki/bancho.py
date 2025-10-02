@@ -19,7 +19,6 @@ DB_PORT = int(os.environ["DB_PORT"])
 DB_USER = os.environ["DB_USER"]
 DB_PASS = quote(os.environ["DB_PASS"])
 DB_NAME = os.environ["DB_NAME"]
-DB_DSN = f"mysql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
 REDIS_HOST = os.environ["REDIS_HOST"]
 REDIS_PORT = int(os.environ["REDIS_PORT"])
