@@ -22,15 +22,21 @@ services:
       retries: 10
 
   redis:
-    image: bitnami/redis:latest
+    image: redis:8.2.2
     # ports:
     #   - ${REDIS_PORT}:${REDIS_PORT}
     user: root
     volumes:
-      - redis-data:/bitnami/redis/data
-    environment:
-      - ALLOW_EMPTY_PASSWORD=yes
-      - REDIS_PASSWORD=${REDIS_PASS}
+      - redis-data:/data
+    command:
+      - sh
+      - -c
+      - |
+        if [ -n "$${REDIS_PASS}" ]; then
+          redis-server --requirepass "$${REDIS_PASS}"
+        else
+          redis-server
+        fi
 
   # Cloudflare tunneling via Zero-Trust
   # cloudflared:
