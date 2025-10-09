@@ -9,7 +9,7 @@ initDB() {
   if [[ "$DB_USE_SSL" == "true" ]]; then
     EXTRA_PARAMS="--ssl"
   else
-    EXTRA_PARAMS=""
+    EXTRA_PARAMS="--ssl-mode=DISABLED"
   fi
 
   DB_QUERIES=(
@@ -36,7 +36,7 @@ execDBStatement() {
   if [[ "$DB_USE_SSL" == "true" ]]; then
     EXTRA_PARAMS="--ssl"
   else
-    EXTRA_PARAMS=""
+    EXTRA_PARAMS="--ssl-mode=DISABLED"
   fi
 
   mysql \

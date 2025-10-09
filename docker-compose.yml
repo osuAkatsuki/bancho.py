@@ -94,6 +94,7 @@ services:
       - SSL_CERT_PATH=${SSL_CERT_PATH}
       - SSL_KEY_PATH=${SSL_KEY_PATH}
       - DEVELOPER_MODE=${DEVELOPER_MODE}
+      - DB_USE_SSL=${DB_USE_SSL}
 
 volumes:
   data:
