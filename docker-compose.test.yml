@@ -2,7 +2,7 @@ services:
   ## shared services
 
   mysql-test:
-    image: mysql:latest
+    image: mysql:9.4.0
     # ports:
     #   - ${DB_PORT}:${DB_PORT}
     environment:

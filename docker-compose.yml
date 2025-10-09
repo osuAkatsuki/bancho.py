@@ -2,7 +2,7 @@ services:
   ## shared services
 
   mysql:
-    image: mysql:latest
+    image: mysql:9.4.0
     # ports:
     #   - ${DB_PORT}:${DB_PORT}
     environment:
@@ -41,7 +41,7 @@ services:
   # Cloudflare tunneling via Zero-Trust
   # cloudflared:
   #   container_name: cloudflared
-  #   image: cloudflare/cloudflared
+  #   image: cloudflare/cloudflared:2025.9.1
   #   restart: unless-stopped
   #   command: tunnel run
   #   environment:
