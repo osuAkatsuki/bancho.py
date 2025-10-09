@@ -2105,4 +2105,4 @@ cython = "*"
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.11"
-content-hash = "4bb41f79b35f536a962e582a9aec83d0f4ec9941bf5d6cf8a3f77f8dd6a54e21"
+content-hash = "9cfc4dff7dfd46a3443483f7534fa58f85c5cede6c08c2c12a29ca2d333ce985"
