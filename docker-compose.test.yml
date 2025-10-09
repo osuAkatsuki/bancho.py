@@ -2,7 +2,7 @@ services:
   ## shared services
 
   mysql-test:
-    image: mysql:latest
+    image: mysql:9.4.0
     # ports:
     #   - ${DB_PORT}:${DB_PORT}
     environment:
@@ -24,17 +24,23 @@ services:
       retries: 10
 
   redis-test:
-    image: bitnami/redis:latest
+    image: redis:8.2.2
     # ports:
     #   - ${REDIS_PORT}:${REDIS_PORT}
     user: root
     volumes:
-      - test-redis-data:/bitnami/redis/data
+      - test-redis-data:/data
     networks:
       - test-network
-    environment:
-      - ALLOW_EMPTY_PASSWORD=yes
-      - REDIS_PASSWORD=${REDIS_PASS}
+    command:
+      - sh
+      - -c
+      - |
+        if [ -n "$${REDIS_PASS}" ]; then
+          redis-server --requirepass "$${REDIS_PASS}"
+        else
+          redis-server
+        fi
 
   ## application services
 
