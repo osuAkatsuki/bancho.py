@@ -132,6 +132,7 @@ class RankedStatus(IntEnum):
     Same as used in osu!'s /web/getscores.php.
     """
 
+    Inactive = -3  # used in beatmap submission
     NotSubmitted = -1
     Pending = 0
     UpdateAvailable = 1
