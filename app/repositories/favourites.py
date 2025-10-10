@@ -5,6 +5,7 @@ from typing import cast
 
 from sqlalchemy import Column
 from sqlalchemy import Integer
+from sqlalchemy import delete
 from sqlalchemy import func
 from sqlalchemy import insert
 from sqlalchemy import select
@@ -73,3 +74,25 @@ async def fetch_one(userid: int, setid: int) -> Favourite | None:
     )
     favourite = await app.state.services.database.fetch_one(select_stmt)
     return cast(Favourite | None, favourite)
+
+
+async def delete_favourite_from_player(userid: int, setid: int) -> Favourite | None:
+    """Delete a favourite from a player."""
+    select_stmt = (
+        select(*READ_PARAMS)
+        .where(FavouritesTable.userid == userid)
+        .where(FavouritesTable.setid == setid)
+    )
+
+    favourite = await app.state.services.database.fetch_one(select_stmt)
+    if favourite is None:
+        return None
+
+    delete_stmt = (
+        delete(FavouritesTable)
+        .where(FavouritesTable.userid == userid)
+        .where(FavouritesTable.setid == setid)
+    )
+
+    await app.state.services.database.execute(delete_stmt)
+    return cast(Favourite, favourite)
