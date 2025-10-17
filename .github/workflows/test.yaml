@@ -21,7 +21,7 @@ env:
   LOG_WITH_COLORS: "False"
   COMMAND_PREFIX: "!"
   DATA_DIRECTORY: "not relevant"
-  DB_HOST: "mysql"
+  DB_HOST: "mysql-test"
   DB_NAME: "bancho"
   DB_PASS: "lol123"
   DB_PORT: "3306"
@@ -46,6 +46,7 @@ env:
   SEASONAL_BGS: "https://akatsuki.pw/static/flower.png,https://i.cmyui.xyz/nrMT4V2RR3PR.jpeg"
   SSL_CERT_PATH: "not relevant"
   SSL_KEY_PATH: "not relevant"
+  DB_USE_SSL: "false"
 
 jobs:
   run-test-suite:

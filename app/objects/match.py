@@ -166,7 +166,7 @@ class Match:
         self.has_public_history = has_public_history
 
         self.host_id = host_id
-        self._refs: set[Player] = set()
+        self.referees: set[Player] = set()
 
         self.map_id = map_id
         self.map_md5 = map_md5
@@ -232,12 +232,7 @@ class Match:
     @property
     def refs(self) -> set[Player]:
         """Return all players with referee permissions."""
-        refs = self._refs
-
-        if self.host is not None:
-            refs.add(self.host)
-
-        return refs
+        return self.referees | {self.host}
 
     def __repr__(self) -> str:
         return f"<{self.name} ({self.id})>"
