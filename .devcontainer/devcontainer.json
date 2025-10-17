@@ -1,0 +1,21 @@
+{
+  "name": "bancho.py Dev container",
+  "dockerComposeFile": "../docker-compose.yml",
+  "service": "bancho",
+  "workspaceFolder": "/srv/root",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance"
+      ]
+    }
+  },
+  "remoteUser": "root",
+  "postCreateCommand": "make install-dev",
+  "forwardPorts": ["${localEnv:APP_PORT}"],
+  "mounts": [
+    "source=data,target=/srv/root/.data,type=volume"
+  ]
+}

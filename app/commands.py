@@ -430,7 +430,10 @@ def parse__with__command_args(
         return ParsingError("Invalid syntax: !with <acc/nmiss/combo/mods ...>")
 
     # !with 95% 1m 429x hddt
-    acc = mods = combo = nmiss = None
+    combo: int | None = None
+    nmiss: int | None = None
+    mods: Mods | None = None
+    acc: float | None = None
 
     # parse acc, misses, combo and mods from arguments.
     # tried to balance complexity vs correctness here
@@ -883,7 +886,7 @@ async def user(ctx: Context) -> str | None:
             f'[{"Bot" if player.is_bot_client else "Player"}] {display_name} ({player.id})',
             f"Privileges: {priv_list}",
             f"Donator: {donator_info}",
-            f"Channels: {[c._name for c in player.channels]}",
+            f"Channels: {[c.real_name for c in player.channels]}",
             f"Logged in: {timeago.format(player.login_time)}",
             f"Last server interaction: {timeago.format(player.last_recv_time)}",
             f"osu! build: {osu_version} | Tourney: {player.is_tourney_client}",
@@ -1147,11 +1150,11 @@ async def givedonator(ctx: Context) -> str | None:
         return "Invalid timespan."
 
     if target.donor_end < time.time():
-        timespan += int(time.time())
+        timespan += time.time()
     else:
         timespan += target.donor_end
 
-    target.donor_end = timespan
+    target.donor_end = int(timespan)
     await app.state.services.database.execute(
         "UPDATE users SET donor_end = :end WHERE id = :user_id",
         {"end": timespan, "user_id": target.id},
@@ -1645,7 +1648,7 @@ async def mp_addref(ctx: Context, match: Match) -> str | None:
     if target in match.refs:
         return f"{target} is already a match referee!"
 
-    match._refs.add(target)
+    match.referees.add(target)
     return f"{target.name} added to match referees."
 
 
@@ -1666,7 +1669,7 @@ async def mp_rmref(ctx: Context, match: Match) -> str | None:
     if target is match.host:
         return "The host is always a referee!"
 
-    match._refs.remove(target)
+    match.referees.remove(target)
     return f"{target.name} removed from match referees."
 
 
@@ -2493,6 +2496,7 @@ async def process_commands(
     trigger = trigger.lower()
 
     # check if any command sets match.
+    commands: list[Command] = []
     for cmd_set in command_sets:
         if trigger == cmd_set.trigger:
             if not args:

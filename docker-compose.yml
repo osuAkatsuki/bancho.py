@@ -2,7 +2,7 @@ services:
   ## shared services
 
   mysql:
-    image: mysql:latest
+    image: mysql:9.4.0
     # ports:
     #   - ${DB_PORT}:${DB_PORT}
     environment:
@@ -10,27 +10,42 @@ services:
       MYSQL_PASSWORD: ${DB_PASS}
       MYSQL_DATABASE: ${DB_NAME}
       MYSQL_HOST: ${DB_HOST}
-      MYSQL_PORT: ${DB_PORT}
+      MYSQL_TCP_PORT: ${DB_PORT}
       MYSQL_RANDOM_ROOT_PASSWORD: "true"
     volumes:
       - ./migrations/base.sql:/docker-entrypoint-initdb.d/init.sql:ro
       - db-data:/var/lib/mysql
     healthcheck:
-      test: "/usr/bin/mysql --user=$$MYSQL_USER --password=$$MYSQL_PASSWORD --execute \"SHOW DATABASES;\""
+      test: '/usr/bin/mysql --user=$$MYSQL_USER --password=$$MYSQL_PASSWORD --execute "SHOW DATABASES;"'
       interval: 2s
       timeout: 20s
       retries: 10
 
   redis:
-    image: bitnami/redis:latest
+    image: redis:8.2.2
     # ports:
     #   - ${REDIS_PORT}:${REDIS_PORT}
     user: root
     volumes:
-      - redis-data:/bitnami/redis/data
-    environment:
-      - ALLOW_EMPTY_PASSWORD=yes
-      - REDIS_PASSWORD=${REDIS_PASS}
+      - redis-data:/data
+    command:
+      - sh
+      - -c
+      - |
+        if [ -n "$${REDIS_PASS}" ]; then
+          redis-server --requirepass "$${REDIS_PASS}"
+        else
+          redis-server
+        fi
+
+  # Cloudflare tunneling via Zero-Trust
+  # cloudflared:
+  #   container_name: cloudflared
+  #   image: cloudflare/cloudflared:2025.9.1
+  #   restart: unless-stopped
+  #   command: tunnel run
+  #   environment:
+  #     - TUNNEL_TOKEN=${TUNNEL_TOKEN}
 
   ## application services
 
@@ -85,6 +100,7 @@ services:
       - SSL_CERT_PATH=${SSL_CERT_PATH}
       - SSL_KEY_PATH=${SSL_KEY_PATH}
       - DEVELOPER_MODE=${DEVELOPER_MODE}
+      - DB_USE_SSL=${DB_USE_SSL}
 
 volumes:
   data:

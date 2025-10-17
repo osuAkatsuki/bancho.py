@@ -2,7 +2,7 @@
 # See https://pre-commit.com/hooks.html for more hooks
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.6.0
+    rev: v6.0.0
     hooks:
       - id: check-added-large-files
       - id: check-ast
@@ -11,25 +11,25 @@ repos:
       - id: debug-statements
       - id: end-of-file-fixer
       - id: trailing-whitespace
-  - repo: https://github.com/psf/black
-    rev: 24.8.0
+  - repo: https://github.com/psf/black-pre-commit-mirror
+    rev: 25.9.0
     hooks:
       - id: black
   - repo: https://github.com/asottile/pyupgrade
-    rev: v3.17.0
+    rev: v3.20.0
     hooks:
       - id: pyupgrade
         args: [--py311-plus, --keep-runtime-typing]
   - repo: https://github.com/pycqa/isort
-    rev: 5.13.2
+    rev: 6.1.0
     hooks:
       - id: isort
   - repo: https://github.com/asottile/add-trailing-comma
-    rev: v3.1.0
+    rev: v3.2.0
     hooks:
       - id: add-trailing-comma
   - repo: https://github.com/asottile/blacken-docs
-    rev: 1.18.0
+    rev: 1.20.0
     hooks:
       - id: blacken-docs
 
