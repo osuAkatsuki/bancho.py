@@ -14,12 +14,16 @@ from sqlalchemy import select
 from sqlalchemy import update
 from sqlalchemy.dialects.mysql import FLOAT
 from sqlalchemy.dialects.mysql import TINYINT
+
 import app.state.services
 from app._typing import UNSET
 from app._typing import _UnsetSentinel
 from app.repositories import Base
+
+
 class StatsTable(Base):
     __tablename__ = "stats"
+
     id = Column("id", Integer, nullable=False, primary_key=True, autoincrement=True)
     mode = Column("mode", TINYINT(1), primary_key=True)
     tscore = Column("tscore", Integer, nullable=False, server_default="0")
@@ -43,14 +47,17 @@ class StatsTable(Base):
     sh_count = Column("sh_count", Integer, nullable=False, server_default="0")
     s_count = Column("s_count", Integer, nullable=False, server_default="0")
     a_count = Column("a_count", Integer, nullable=False, server_default="0")
+
     __table_args__ = (
         Index("stats_mode_index", mode),
         Index("stats_pp_index", pp),
-        Index("stats_total_pp_index", total_pp),
-        Index("stats_stddev_pp_index", stddev_pp),
+        Index("stats_total_pp_index", pp_total),
+        Index("stats_stddev_pp_index", pp_stddev),
         Index("stats_tscore_index", tscore),
         Index("stats_rscore_index", rscore),
     )
+
+
 READ_PARAMS = (
     StatsTable.id,
     StatsTable.mode,
@@ -71,6 +78,8 @@ READ_PARAMS = (
     StatsTable.s_count,
     StatsTable.a_count,
 )
+
+
 class Stat(TypedDict):
     id: int
     mode: int
@@ -90,71 +99,30 @@ class Stat(TypedDict):
     sh_count: int
     s_count: int
     a_count: int
-async def create(player_id: int, mode: int) -> Stat:
-    """Create a new player stats entry in the database."""
-    insert_stmt = insert(StatsTable).values(id=player_id, mode=mode)
-    rec_id = await app.state.services.database.execute(insert_stmt)
-    select_stmt = select(*READ_PARAMS).where(StatsTable.id == rec_id)
-    stat = await app.state.services.database.fetch_one(select_stmt)
-    assert stat is not None
-    return cast(Stat, stat)
-async def create_all_modes(player_id: int) -> list[Stat]:
-    """Create new player stats entries for each game mode in the database."""
-    insert_stmt = insert(StatsTable).values(
-        [
-            {"id": player_id, "mode": mode}
-            for mode in (
-                0,  # vn!std
-                1,  # vn!taiko
-                2,  # vn!catch
-                3,  # vn!mania
-                4,  # rx!std
-                5,  # rx!taiko
-                6,  # rx!catch
-                8,  # ap!std
-            )
-        ],
-    )
-    await app.state.services.database.execute(insert_stmt)
-    select_stmt = select(*READ_PARAMS).where(StatsTable.id == player_id)
-    stats = await app.state.services.database.fetch_all(select_stmt)
-    return cast(list[Stat], stats)
-async def fetch_one(player_id: int, mode: int) -> Stat | None:
-    """Fetch a player stats entry from the database."""
-    select_stmt = (
-        select(*READ_PARAMS)
-        .where(StatsTable.id == player_id)
-        .where(StatsTable.mode == mode)
-    )
-    stat = await app.state.services.database.fetch_one(select_stmt)
-    return cast(Stat | None, stat)
-async def fetch_count(
-    player_id: int | None = None,
-    mode: int | None = None,
-) -> int:
-    select_stmt = select(func.count().label("count")).select_from(StatsTable)
-    if player_id is not None:
-        select_stmt = select_stmt.where(StatsTable.id == player_id)
-    if mode is not None:
-        select_stmt = select_stmt.where(StatsTable.mode == mode)
-    rec = await app.state.services.database.fetch_one(select_stmt)
-    assert rec is not None
-    return cast(int, rec["count"])
+
+
 async def fetch_many(
     player_id: int | None = None,
     mode: int | None = None,
     page: int | None = None,
     page_size: int | None = None,
 ) -> list[Stat]:
+    """Fetch multiple player stats entries from the database."""
     select_stmt = select(*READ_PARAMS)
+
     if player_id is not None:
         select_stmt = select_stmt.where(StatsTable.id == player_id)
     if mode is not None:
         select_stmt = select_stmt.where(StatsTable.mode == mode)
+
     if page is not None and page_size is not None:
         select_stmt = select_stmt.limit(page_size).offset((page - 1) * page_size)
+
     stats = await app.state.services.database.fetch_all(select_stmt)
+
     return cast(list[Stat], stats)
+
+
 async def partial_update(
     player_id: int,
     mode: int,
@@ -181,6 +149,7 @@ async def partial_update(
         .where(StatsTable.id == player_id)
         .where(StatsTable.mode == mode)
     )
+
     if not isinstance(tscore, _UnsetSentinel):
         update_stmt = update_stmt.values(tscore=tscore)
     if not isinstance(rscore, _UnsetSentinel):
@@ -213,15 +182,47 @@ async def partial_update(
         update_stmt = update_stmt.values(s_count=s_count)
     if not isinstance(a_count, _UnsetSentinel):
         update_stmt = update_stmt.values(a_count=a_count)
+
     await app.state.services.database.execute(update_stmt)
+
     select_stmt = (
         select(*READ_PARAMS)
         .where(StatsTable.id == player_id)
         .where(StatsTable.mode == mode)
     )
     stat = await app.state.services.database.fetch_one(select_stmt)
+
     return cast(Stat | None, stat)
 
 
-
 # TODO: delete?
+async def update_rank(
+    player_id: int,
+    mode: int,
+    ranked_score_weighting: int,
+    total_score_weighting: int,
+    pp_weighting: int,
+) -> int:
+    """Update a player's stats rank in the database."""
+    pp_weighted = (pp_weighting * 0.01) ** 0.5
+    rscore_weighted = ranked_score_weighting * 0.01
+    tscore_weighted = total_score_weighting * 0.01
+
+    # TODO: this could pretty easily just be one query
+
+    ranking_score = (
+        int((StatsTable.pp * pp_weighted) + (StatsTable.rscore * rscore_weighted))
+        + int(StatsTable.tscore * tscore_weighted)
+    ) * 1000
+
+    # count number of other stats objects with higher rank
+
+    select_stmt = (
+        select(func.count())
+        .select_from(StatsTable)
+        .where(StatsTable.mode == mode)
+        .where(ranking_score > ranking_score)
+    )
+    rank = await app.state.services.database.fetch_val(select_stmt, column=0)
+
+    return cast(int, rank) + 1
