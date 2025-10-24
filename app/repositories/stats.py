@@ -25,10 +25,8 @@ class StatsTable(Base):
     tscore = Column("tscore", Integer, nullable=False, server_default="0")
     rscore = Column("rscore", Integer, nullable=False, server_default="0")
     pp = Column("pp", Integer, nullable=False, server_default="0")
-    total_pp = Column("pp", Integer, nullable=False, server_default="0")
-    pp = Column("pp", Integer, nullable=False, server_default="0")
-    total_pp = Column("total_pp", Integer, nullable=False, server_default="0")
-    stddev_pp = Column("stddev_pp", Integer, nullable=False, server_default="0")
+    pp_total = Column("pp_total", Integer, nullable=False, server_default="0")
+    pp_stddev = Column("pp_stddev", Integer, nullable=False, server_default="0")
     plays = Column("plays", Integer, nullable=False, server_default="0")
     playtime = Column("playtime", Integer, nullable=False, server_default="0")
     acc = Column(
@@ -59,8 +57,8 @@ READ_PARAMS = (
     StatsTable.tscore,
     StatsTable.rscore,
     StatsTable.pp,
-    StatsTable.total_pp,
-    StatsTable.stddev_pp,
+    StatsTable.pp_total,
+    StatsTable.pp_stddev,
     StatsTable.plays,
     StatsTable.playtime,
     StatsTable.acc,
@@ -79,8 +77,8 @@ class Stat(TypedDict):
     tscore: int
     rscore: int
     pp: int
-    total_pp: int
-    stddev_pp: int
+    pp_total: int
+    pp_stddev: int
     plays: int
     playtime: int
     acc: float
@@ -163,8 +161,8 @@ async def partial_update(
     tscore: int | _UnsetSentinel = UNSET,
     rscore: int | _UnsetSentinel = UNSET,
     pp: int | _UnsetSentinel = UNSET,
-    total_pp: int | _UnsetSentinel = UNSET,
-    stddev_pp: int | _UnsetSentinel = UNSET,
+    pp_total: int | _UnsetSentinel = UNSET,
+    pp_stddev: int | _UnsetSentinel = UNSET,
     plays: int | _UnsetSentinel = UNSET,
     playtime: int | _UnsetSentinel = UNSET,
     acc: float | _UnsetSentinel = UNSET,
@@ -189,10 +187,10 @@ async def partial_update(
         update_stmt = update_stmt.values(rscore=rscore)
     if not isinstance(pp, _UnsetSentinel):
         update_stmt = update_stmt.values(pp=pp)
-    if not isinstance(total_pp, _UnsetSentinel):
-        update_stmt = update_stmt.values(total_pp=total_pp)
-    if not isinstance(stddev_pp, _UnsetSentinel):
-        update_stmt = update_stmt.values(stddev_pp=stddev_pp)
+    if not isinstance(pp_total, _UnsetSentinel):
+        update_stmt = update_stmt.values(pp_total=pp_total)
+    if not isinstance(pp_stddev, _UnsetSentinel):
+        update_stmt = update_stmt.values(pp_stddev=pp_stddev)
     if not isinstance(plays, _UnsetSentinel):
         update_stmt = update_stmt.values(plays=plays)
     if not isinstance(playtime, _UnsetSentinel):
@@ -223,51 +221,6 @@ async def partial_update(
     )
     stat = await app.state.services.database.fetch_one(select_stmt)
     return cast(Stat | None, stat)
-
-
-async def recalculate_total_and_stddev_pp(player_id: int) -> None:
-    """Recalculate total_pp and stddev_pp for a player across all modes."""
-    # Fetch all 8 mode stats for the player
-    # Modes: 0=std, 1=taiko, 2=catch, 3=mania, 4=rx!std, 5=rx!taiko, 6=rx!catch, 8=ap!std
-    select_stmt = select(*READ_PARAMS).where(StatsTable.id == player_id)
-    stats = await app.state.services.database.fetch_all(select_stmt)
-
-    if not stats:
-        return
-
-    # Collect PP values from each mode
-    pp_values = []
-    stats_by_mode = {stat["mode"]: stat for stat in stats}
-
-    for mode in [0, 1, 2, 3, 4, 5, 6, 8]:
-        if mode in stats_by_mode:
-            pp_values.append(stats_by_mode[mode]["pp"])
-        else:
-            pp_values.append(0)
-
-    # Calculate total_pp (sum of all 8 modes)
-    total_pp = int(sum(pp_values))
-
-    # Calculate stddev_pp: total_pp - 2 * sqrt(variance/7)
-    # where variance = sum((x - mean)^2) for x in pp_values
-    # and mean = total_pp / 8
-    if total_pp == 0:
-        stddev_pp = 0
-    else:
-        mean_pp = total_pp / 8
-        variance = sum((x - mean_pp) ** 2 for x in pp_values)
-        stddev_pp = int(total_pp - 2 * math.sqrt(variance / 7))
-        stddev_pp = max(0, stddev_pp)  # Ensure non-negative
-
-    # Update all modes with the new total_pp and stddev_pp values
-    for mode in [0, 1, 2, 3, 4, 5, 6, 8]:
-        update_stmt = (
-            update(StatsTable)
-            .where(StatsTable.id == player_id)
-            .where(StatsTable.mode == mode)
-            .values(total_pp=total_pp, stddev_pp=stddev_pp)
-        )
-        await app.state.services.database.execute(update_stmt)
 
 
 
