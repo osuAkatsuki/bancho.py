@@ -475,3 +475,9 @@ create index users_country_index
 # v5.2.2
 create index scores_fetch_leaderboard_generic_index
 	on scores (map_md5, status, mode);
+
+# v5.2.X
+alter table stats add column total_pp int unsigned default 0 not null after pp;
+alter table stats add column stddev_pp int unsigned default 0 not null after total_pp;
+alter table stats add index stats_total_pp_index (total_pp);
+alter table stats add index stats_stddev_pp_index (stddev_pp);
