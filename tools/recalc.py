@@ -36,8 +36,8 @@ except ModuleNotFoundError:
 
 T = TypeVar("T")
 
-
 debug_mode_enabled = False
+
 BEATMAPS_PATH = Path.cwd() / ".data/osu"
 
 
@@ -74,9 +74,10 @@ async def recalculate_score(
         n50=score["n50"],
         n_misses=score["nmiss"],
     )
-    attrs = calculator.performance(beatmap)
 
+    attrs = calculator.performance(beatmap)
     new_pp: float = attrs.pp
+
     if math.isnan(new_pp) or math.isinf(new_pp):
         new_pp = 0.0
 
@@ -143,9 +144,20 @@ async def recalculate_user(
     bonus_pp = 416.6667 * (1 - 0.9994**total_scores)
     pp = round(weighted_pp + bonus_pp)
 
+    # calculate total pp (unweighted sum)
+    pp_total = round(sum(row["pp"] for row in best_scores))
+
+    # calculate standard deviation of pp values
+    if total_scores > 1:
+        pp_mean = sum(row["pp"] for row in best_scores) / total_scores
+        pp_variance = sum((row["pp"] - pp_mean) ** 2 for row in best_scores) / total_scores
+        pp_stddev = round(math.sqrt(pp_variance))
+    else:
+        pp_stddev = 0
+
     await ctx.database.execute(
-        "UPDATE stats SET pp = :pp, acc = :acc WHERE id = :id AND mode = :mode",
-        {"pp": pp, "acc": acc, "id": id, "mode": game_mode},
+        "UPDATE stats SET pp = :pp, acc = :acc, pp_total = :pp_total, pp_stddev = :pp_stddev WHERE id = :id AND mode = :mode",
+        {"pp": pp, "acc": acc, "pp_total": pp_total, "pp_stddev": pp_stddev, "id": id, "mode": game_mode},
     )
 
     user_info = await ctx.database.fetch_one(
@@ -160,7 +172,6 @@ async def recalculate_user(
             f"bancho:leaderboard:{game_mode.value}",
             {str(id): pp},
         )
-
         await ctx.redis.zadd(
             f"bancho:leaderboard:{game_mode.value}:{user_info['country']}",
             {str(id): pp},
@@ -220,7 +231,6 @@ async def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Recalculate performance for scores and/or stats",
     )
-
     parser.add_argument(
         "-d",
         "--debug",
@@ -237,7 +247,6 @@ async def main(argv: Sequence[str] | None = None) -> int:
         help="Disable recalculating user stats",
         action="store_true",
     )
-
     parser.add_argument(
         "-m",
         "--mode",
@@ -247,6 +256,7 @@ async def main(argv: Sequence[str] | None = None) -> int:
         # would love to do things like "vn!std", but "!" will break interpretation
         choices=["0", "1", "2", "3", "4", "5", "6", "8"],
     )
+
     args = parser.parse_args(argv)
 
     global debug_mode_enabled
@@ -261,10 +271,8 @@ async def main(argv: Sequence[str] | None = None) -> int:
 
     for mode in args.mode:
         mode = GameMode(int(mode))
-
         if not args.no_scores:
             await recalculate_mode_scores(mode, ctx)
-
         if not args.no_stats:
             await recalculate_mode_users(mode, ctx)
 
