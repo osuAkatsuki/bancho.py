@@ -47,6 +47,8 @@ class PlayerStats(BaseModel):
     tscore: int
     rscore: int
     pp: float
+    pp_total: float
+    pp_stddev: float
     plays: int
     playtime: int
     acc: float
