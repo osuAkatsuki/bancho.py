@@ -149,14 +149,23 @@ async def recalculate_user(
     # calculate standard deviation of pp values
     if total_scores > 1:
         pp_mean = sum(row["pp"] for row in best_scores) / total_scores
-        pp_variance = sum((row["pp"] - pp_mean) ** 2 for row in best_scores) / total_scores
+        pp_variance = (
+            sum((row["pp"] - pp_mean) ** 2 for row in best_scores) / total_scores
+        )
         pp_stddev = round(math.sqrt(pp_variance))
     else:
         pp_stddev = 0
 
     await ctx.database.execute(
         "UPDATE stats SET pp = :pp, acc = :acc, pp_total = :pp_total, pp_stddev = :pp_stddev WHERE id = :id AND mode = :mode",
-        {"pp": pp, "acc": acc, "pp_total": pp_total, "pp_stddev": pp_stddev, "id": id, "mode": game_mode},
+        {
+            "pp": pp,
+            "acc": acc,
+            "pp_total": pp_total,
+            "pp_stddev": pp_stddev,
+            "id": id,
+            "mode": game_mode,
+        },
     )
 
     user_info = await ctx.database.fetch_one(

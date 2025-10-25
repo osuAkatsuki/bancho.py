@@ -929,26 +929,25 @@ async def osuSubmitModularSelector(
             # update global & country ranking
             stats.rank = await score.player.update_rank(score.mode)
 
-
     all_stats = await stats_repo.fetch_many(player_id=score.player.id)
     updated_pp_by_mode = {stat["mode"]: stat["pp"] for stat in all_stats}
-    
+
     if "pp" in stats_updates:
         updated_pp_by_mode[score.mode.value] = stats_updates["pp"]
-    
+
     modes_pp = list(updated_pp_by_mode.values())
     pp_total = sum(modes_pp)
-    
+
     if len(modes_pp) > 1:
         mean = pp_total / len(modes_pp)
         square = sum((x - mean) ** 2 for x in modes_pp)
         pp_stddev = pp_total - 2 * math.sqrt(square / (len(modes_pp) - 1))
     else:
         pp_stddev = 0
-    
+
     pp_total = round(pp_total)
     pp_stddev = round(pp_stddev)
-    
+
     await stats_repo.partial_update(
         score.player.id,
         score.mode.value,
@@ -966,7 +965,7 @@ async def osuSubmitModularSelector(
         acc=stats_updates.get("acc", UNSET),
         pp=stats_updates.get("pp", UNSET),
         pp_total=pp_total,
-        pp_stddev=pp_stddev, 
+        pp_stddev=pp_stddev,
     )
 
     if not score.player.restricted:
