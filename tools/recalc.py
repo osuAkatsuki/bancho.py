@@ -37,7 +37,6 @@ except ModuleNotFoundError:
 T = TypeVar("T")
 
 debug_mode_enabled = False
-
 BEATMAPS_PATH = Path.cwd() / ".data/osu"
 
 
@@ -74,10 +73,9 @@ async def recalculate_score(
         n50=score["n50"],
         n_misses=score["nmiss"],
     )
-
     attrs = calculator.performance(beatmap)
-    new_pp: float = attrs.pp
 
+    new_pp: float = attrs.pp
     if math.isnan(new_pp) or math.isinf(new_pp):
         new_pp = 0.0
 
@@ -172,6 +170,7 @@ async def recalculate_user(
             f"bancho:leaderboard:{game_mode.value}",
             {str(id): pp},
         )
+
         await ctx.redis.zadd(
             f"bancho:leaderboard:{game_mode.value}:{user_info['country']}",
             {str(id): pp},
@@ -231,6 +230,7 @@ async def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Recalculate performance for scores and/or stats",
     )
+
     parser.add_argument(
         "-d",
         "--debug",
@@ -247,6 +247,7 @@ async def main(argv: Sequence[str] | None = None) -> int:
         help="Disable recalculating user stats",
         action="store_true",
     )
+
     parser.add_argument(
         "-m",
         "--mode",
@@ -256,7 +257,6 @@ async def main(argv: Sequence[str] | None = None) -> int:
         # would love to do things like "vn!std", but "!" will break interpretation
         choices=["0", "1", "2", "3", "4", "5", "6", "8"],
     )
-
     args = parser.parse_args(argv)
 
     global debug_mode_enabled
@@ -271,8 +271,10 @@ async def main(argv: Sequence[str] | None = None) -> int:
 
     for mode in args.mode:
         mode = GameMode(int(mode))
+
         if not args.no_scores:
             await recalculate_mode_scores(mode, ctx)
+
         if not args.no_stats:
             await recalculate_mode_users(mode, ctx)
 
