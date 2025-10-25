@@ -36,6 +36,7 @@ except ModuleNotFoundError:
 
 T = TypeVar("T")
 
+
 debug_mode_enabled = False
 BEATMAPS_PATH = Path.cwd() / ".data/osu"
 
