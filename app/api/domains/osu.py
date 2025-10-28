@@ -69,6 +69,7 @@ from app.repositories import scores as scores_repo
 from app.repositories import stats as stats_repo
 from app.repositories import users as users_repo
 from app.repositories.achievements import Achievement
+from app.repositories.pp_aggregates import update_player_pp_aggregates
 from app.usecases import achievements as achievements_usecases
 from app.usecases import user_achievements as user_achievements_usecases
 from app.utils import escape_enum
@@ -946,6 +947,8 @@ async def osuSubmitModularSelector(
         acc=stats_updates.get("acc", UNSET),
         pp=stats_updates.get("pp", UNSET),
     )
+
+    await update_player_pp_aggregates(score.player.id)
 
     if not score.player.restricted:
         # enqueue new stats info to all other users
