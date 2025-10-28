@@ -230,34 +230,34 @@ create table player_pp_aggregates
 	pp_stddev_catch int unsigned default 0 not null
 );
 
-create index idx_pp_total_all_modes 
+create index idx_pp_total_all_modes
 	on player_pp_aggregates (pp_total_all_modes desc);
-create index idx_pp_stddev_all_modes 
+create index idx_pp_stddev_all_modes
 	on player_pp_aggregates (pp_stddev_all_modes desc);
-create index idx_pp_total_classic 
+create index idx_pp_total_classic
 	on player_pp_aggregates (pp_total_classic desc);
-create index idx_pp_stddev_classic 
+create index idx_pp_stddev_classic
 	on player_pp_aggregates (pp_stddev_classic desc);
-create index idx_pp_total_relax 
+create index idx_pp_total_relax
 	on player_pp_aggregates (pp_total_relax desc);
-create index idx_pp_stddev_relax 
+create index idx_pp_stddev_relax
 	on player_pp_aggregates (pp_stddev_relax desc);
 
-create index idx_pp_std 
+create index idx_pp_std
 	on player_pp_aggregates (pp_std desc);
-create index idx_pp_std_rx 
+create index idx_pp_std_rx
 	on player_pp_aggregates (pp_std_rx desc);
-create index idx_pp_std_ap 
+create index idx_pp_std_ap
 	on player_pp_aggregates (pp_std_ap desc);
-create index idx_pp_taiko 
+create index idx_pp_taiko
 	on player_pp_aggregates (pp_taiko desc);
-create index idx_pp_taiko_rx 
+create index idx_pp_taiko_rx
 	on player_pp_aggregates (pp_taiko_rx desc);
-create index idx_pp_catch 
+create index idx_pp_catch
 	on player_pp_aggregates (pp_catch desc);
-create index idx_pp_catch_rx 
+create index idx_pp_catch_rx
 	on player_pp_aggregates (pp_catch_rx desc);
-create index idx_pp_mania 
+create index idx_pp_mania
 	on player_pp_aggregates (pp_mania desc);
 
 create table ratings

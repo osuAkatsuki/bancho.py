@@ -1,20 +1,24 @@
 from __future__ import annotations
+
 import math
-from typing import Dict, Any
+from typing import Any
+from typing import Dict
+
 import app.state.services
+
 
 async def update_player_pp_aggregates(player_id: int) -> None:
     # Fetch all stats for listed modes
     stats_rows = await app.state.services.database.fetch_all(
         "SELECT mode, pp FROM stats WHERE id = :player_id AND mode IN (0,1,2,3,4,5,6,8)",
-        {"player_id": player_id}
+        {"player_id": player_id},
     )
 
     if not stats_rows:
         return
 
     # Group pp by needed categories
-    mode_pp: Dict[int, float] = {}
+    mode_pp: dict[int, float] = {}
     for row in stats_rows:
         mode_pp[row["mode"]] = row["pp"]
 
@@ -24,10 +28,10 @@ async def update_player_pp_aggregates(player_id: int) -> None:
             return (0, 0)
         total = sum(pp_values)
         mean = total / len(pp_values)
-        variance = sum((x - mean) ** 2 for x in pp_values) / max(len(pp_values)-1, 1)
+        variance = sum((x - mean) ** 2 for x in pp_values) / max(len(pp_values) - 1, 1)
         stddev = 0 if len(pp_values) <= 1 else total - 2 * math.sqrt(variance)
         return (round(total), round(stddev))
-    
+
     # Individual mode values (with defaults)
     pp_std = mode_pp.get(0, 0)
     pp_std_rx = mode_pp.get(4, 0)
@@ -39,13 +43,13 @@ async def update_player_pp_aggregates(player_id: int) -> None:
     pp_mania = mode_pp.get(3, 0)
 
     # Groupings for aggregates
-    all_modes = [mode_pp.get(i, 0) for i in [0,1,2,3,4,5,6,8]]
-    classic = [mode_pp.get(i, 0) for i in [0,1,2,3]]
-    relax = [mode_pp.get(i, 0) for i in [4,5,6]]
-    
-    std_group = [mode_pp.get(i, 0) for i in [0,4,8]]      # osu, osu relax, osu autopilot
-    taiko_group = [mode_pp.get(i, 0) for i in [1,5]]      # taiko, taiko relax
-    catch_group = [mode_pp.get(i, 0) for i in [2,6]]      # catch, catch relax
+    all_modes = [mode_pp.get(i, 0) for i in [0, 1, 2, 3, 4, 5, 6, 8]]
+    classic = [mode_pp.get(i, 0) for i in [0, 1, 2, 3]]
+    relax = [mode_pp.get(i, 0) for i in [4, 5, 6]]
+
+    std_group = [mode_pp.get(i, 0) for i in [0, 4, 8]]  # osu, osu relax, osu autopilot
+    taiko_group = [mode_pp.get(i, 0) for i in [1, 5]]  # taiko, taiko relax
+    catch_group = [mode_pp.get(i, 0) for i in [2, 6]]  # catch, catch relax
 
     # Compute all totals/stddevs
     all_total, all_stddev = calculate_stats([v for v in all_modes if v])
@@ -84,14 +88,25 @@ async def update_player_pp_aggregates(player_id: int) -> None:
         """,
         {
             "player_id": player_id,
-            "pp_std": pp_std, "pp_std_rx": pp_std_rx, "pp_std_ap": pp_std_ap,
-            "pp_taiko": pp_taiko, "pp_taiko_rx": pp_taiko_rx,
-            "pp_catch": pp_catch, "pp_catch_rx": pp_catch_rx,
+            "pp_std": pp_std,
+            "pp_std_rx": pp_std_rx,
+            "pp_std_ap": pp_std_ap,
+            "pp_taiko": pp_taiko,
+            "pp_taiko_rx": pp_taiko_rx,
+            "pp_catch": pp_catch,
+            "pp_catch_rx": pp_catch_rx,
             "pp_mania": pp_mania,
-            "pp_total_all_modes": all_total, "pp_stddev_all_modes": all_stddev,
-            "pp_total_classic": classic_total, "pp_stddev_classic": classic_stddev,
-            "pp_total_relax": relax_total, "pp_stddev_relax": relax_stddev,
-            "pp_total_std": std_total, "pp_total_taiko": taiko_total, "pp_total_catch": catch_total,
-            "pp_stddev_std": std_stddev, "pp_stddev_taiko": taiko_stddev, "pp_stddev_catch": catch_stddev
-        }
+            "pp_total_all_modes": all_total,
+            "pp_stddev_all_modes": all_stddev,
+            "pp_total_classic": classic_total,
+            "pp_stddev_classic": classic_stddev,
+            "pp_total_relax": relax_total,
+            "pp_stddev_relax": relax_stddev,
+            "pp_total_std": std_total,
+            "pp_total_taiko": taiko_total,
+            "pp_total_catch": catch_total,
+            "pp_stddev_std": std_stddev,
+            "pp_stddev_taiko": taiko_stddev,
+            "pp_stddev_catch": catch_stddev,
+        },
     )
