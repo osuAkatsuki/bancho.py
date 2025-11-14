@@ -24,6 +24,9 @@ from app._typing import UNSET
 from app._typing import _UnsetSentinel
 from app.repositories import Base
 
+INITIAL_MAP_ID = 1000000000
+INITIAL_SET_ID = 1000000000
+
 
 class MapServer(StrEnum):
     OSU = "osu!"
@@ -178,9 +181,9 @@ async def create(
         hp=hp,
         diff=diff,
     )
-    rec_id = await app.state.services.database.execute(insert_stmt)
+    await app.state.services.database.execute(insert_stmt)
 
-    select_stmt = select(*READ_PARAMS).where(MapsTable.id == rec_id)
+    select_stmt = select(*READ_PARAMS).where(MapsTable.id == id)
     map = await app.state.services.database.fetch_one(select_stmt)
     assert map is not None
     return cast(Map, map)
@@ -368,3 +371,33 @@ async def delete_one(id: int) -> Map | None:
     delete_stmt = delete(MapsTable).where(MapsTable.id == id)
     await app.state.services.database.execute(delete_stmt)
     return cast(Map, map)
+
+
+async def generate_next_beatmap_id() -> int:
+    """Generate the next beatmap ID."""
+    select_stmt = select(func.max(MapsTable.id).label("max_id")).where(
+        MapsTable.server == MapServer.PRIVATE,
+    )
+    rec = await app.state.services.database.fetch_one(select_stmt)
+    assert rec is not None
+
+    if rec["max_id"] is None:
+        # If there are no records, return the initial ID
+        return INITIAL_MAP_ID
+
+    return cast(int, rec["max_id"]) + 1
+
+
+async def generate_next_beatmapset_id() -> int:
+    """Generate the next beatmap ID."""
+    select_stmt = select(func.max(MapsTable.set_id).label("max_id")).where(
+        MapsTable.server == MapServer.PRIVATE,
+    )
+    rec = await app.state.services.database.fetch_one(select_stmt)
+    assert rec is not None
+
+    if rec["max_id"] is None:
+        # If there are no records, return the initial ID
+        return INITIAL_SET_ID
+
+    return cast(int, rec["max_id"]) + 1
