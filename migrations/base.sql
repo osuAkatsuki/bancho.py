@@ -202,6 +202,64 @@ create table performance_reports
 	primary key (scoreid, mod_mode)
 );
 
+create table player_pp_aggregates
+(
+	player_id int not null
+		primary key,
+	pp_std int unsigned default 0 not null,
+	pp_std_rx int unsigned default 0 not null,
+	pp_std_ap int unsigned default 0 not null,
+	pp_taiko int unsigned default 0 not null,
+	pp_taiko_rx int unsigned default 0 not null,
+	pp_catch int unsigned default 0 not null,
+	pp_catch_rx int unsigned default 0 not null,
+	pp_mania int unsigned default 0 not null,
+
+	pp_total_all_modes int unsigned default 0 not null,
+	pp_total_classic int unsigned default 0 not null,
+	pp_total_relax int unsigned default 0 not null,
+	pp_stddev_all_modes int unsigned default 0 not null,
+	pp_stddev_classic int unsigned default 0 not null,
+	pp_stddev_relax int unsigned default 0 not null,
+
+	pp_total_std int unsigned default 0 not null,
+	pp_total_taiko int unsigned default 0 not null,
+	pp_total_catch int unsigned default 0 not null,
+	pp_stddev_std int unsigned default 0 not null,
+	pp_stddev_taiko int unsigned default 0 not null,
+	pp_stddev_catch int unsigned default 0 not null
+);
+
+create index idx_pp_total_all_modes
+	on player_pp_aggregates (pp_total_all_modes desc);
+create index idx_pp_stddev_all_modes
+	on player_pp_aggregates (pp_stddev_all_modes desc);
+create index idx_pp_total_classic
+	on player_pp_aggregates (pp_total_classic desc);
+create index idx_pp_stddev_classic
+	on player_pp_aggregates (pp_stddev_classic desc);
+create index idx_pp_total_relax
+	on player_pp_aggregates (pp_total_relax desc);
+create index idx_pp_stddev_relax
+	on player_pp_aggregates (pp_stddev_relax desc);
+
+create index idx_pp_std
+	on player_pp_aggregates (pp_std desc);
+create index idx_pp_std_rx
+	on player_pp_aggregates (pp_std_rx desc);
+create index idx_pp_std_ap
+	on player_pp_aggregates (pp_std_ap desc);
+create index idx_pp_taiko
+	on player_pp_aggregates (pp_taiko desc);
+create index idx_pp_taiko_rx
+	on player_pp_aggregates (pp_taiko_rx desc);
+create index idx_pp_catch
+	on player_pp_aggregates (pp_catch desc);
+create index idx_pp_catch_rx
+	on player_pp_aggregates (pp_catch_rx desc);
+create index idx_pp_mania
+	on player_pp_aggregates (pp_mania desc);
+
 create table ratings
 (
 	userid int not null,
