@@ -9,7 +9,8 @@ from datetime import timedelta
 from enum import IntEnum
 from enum import unique
 from pathlib import Path
-from typing import Any
+from re import search, sub, IGNORECASE
+from typing import Any, cast
 from typing import TypedDict
 
 import httpx
@@ -69,6 +70,13 @@ def unwrap_osu_direct_api_response(response: httpx.Response) -> BeatmapApiRespon
 
     match response_data:
         case list(l):
+            for (i, beatmap) in enumerate(l):
+                if ("version" not in beatmap): continue
+                v = cast(str, beatmap["version"])
+                regex = r"^\[\d+k\] "
+                if not search(regex,v, flags=IGNORECASE):
+                    continue
+                beatmap["version"] = sub(regex,"",v, flags=IGNORECASE)
             return {"data": l, "status_code": response.status_code}
 
         # {code: int, message: str}
