@@ -79,6 +79,10 @@ coverage = "^7.4.1"
 databases = { version = "^0.8.0", extras = ["mysql"] }
 python-json-logger = "^2.0.7"
 anyio = "^4.9.0"
+osz2 = "1.0.6"
+slider = { git = "https://github.com/OliBomby/slider", branch = "bg" }
+pillow = "^11.3.0"
+pydub = "^0.25.1"
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = "3.6.1"

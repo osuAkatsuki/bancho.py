@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import os
 import random
 import secrets
 from collections import defaultdict
@@ -42,6 +43,7 @@ import app.packets
 import app.settings
 import app.state
 import app.utils
+from app import bss
 from app import encryption
 from app._typing import UNSET
 from app.constants import regexes
@@ -69,8 +71,11 @@ from app.repositories import scores as scores_repo
 from app.repositories import stats as stats_repo
 from app.repositories import users as users_repo
 from app.repositories.achievements import Achievement
+from app.repositories.maps import MapServer
 from app.usecases import achievements as achievements_usecases
+from app.usecases import maps as maps_usecases
 from app.usecases import user_achievements as user_achievements_usecases
+from app.utils import DATA_PATH
 from app.utils import escape_enum
 from app.utils import pymysql_encode
 
@@ -112,6 +117,35 @@ def authenticate_player_session(
     return wrapper
 
 
+def integer_boolean(parameter: str) -> Callable[[Request], Awaitable[bool]]:
+    async def wrapper(request: Request) -> bool:
+        query = (await request.form()).get(parameter, "0")
+        return query == "1"
+
+    return wrapper
+
+
+def bss_error_response(
+    error_code: int,
+    message: str = "",
+    legacy: bool = False,
+) -> Response:
+    if not legacy:
+        return Response(f"{error_code}\n{message}")
+
+    message_dict = {
+        1: "The beatmap you're trying to submit isn't owned by you.",
+        2: "The beatmap you're trying to submit is no longer available.",
+        3: "The beatmap is already ranked. You cannot update ranked maps.",
+        4: "The beatmap is currently in the beatmap graveyard. You can ungraveyard your map by visiting the beatmaps section of your user profile.",
+        5: "An error occurred while processing your beatmap.",
+    }
+
+    fallback_message = message_dict.get(error_code, "An unknown error occurred.")
+
+    return Response(message or fallback_message)
+
+
 """ /web/ handlers """
 
 # Unhandled endpoints:
@@ -119,8 +153,279 @@ def authenticate_player_session(
 # POST /web/osu-session.php
 # POST /web/osu-osz2-bmsubmit-post.php
 # POST /web/osu-osz2-bmsubmit-upload.php
-# GET /web/osu-osz2-bmsubmit-getid.php
 # GET /web/osu-get-beatmap-topic.php
+
+
+@router.get("/web/osu-osz2-bmsubmit-getid.php")
+async def osuOsz2BeatmapSubmitGetId(
+    player: Player = Depends(authenticate_player_session(Query, "u", "h")),
+    bmap_ids_str: str = Query(..., alias="b"),
+    osz2_hash: str = Query(..., alias="z"),
+    bmapset_id: int = Query(..., alias="s"),
+) -> Response:
+    if app.settings.DISALLOW_BEATMAP_SUBMISSION:
+        log("The beatmap submission system is currently disabled. Aborting...")
+        return bss_error_response(
+            5,
+            "The beatmap submission system is currently disabled. Please try again later!",
+        )
+
+    bmap_ids = list(map(int, bmap_ids_str.split(",")))
+
+    await maps_usecases.delete_inactive_beatmaps(player)
+
+    # TODO: Implement remaining beatmap uploads
+
+    bmapset = await maps_usecases.resolve_beatmapset(bmapset_id, bmap_ids)
+
+    if bmapset:
+        # User wants to update an existing beatmapset
+        bmapset_id = bmapset[0]["set_id"]
+
+        if bmapset[0]["creator"] != player.name:
+            log(
+                "Failed to update beatmapset: User does not own the beatmapset",
+                Ansi.LRED,
+            )
+            return bss_error_response(1)
+
+        if bmapset[0]["server"] != MapServer.PRIVATE:
+            log(
+                "Failed to update beatmapset: Beatmapset is not on bancho.py",
+                Ansi.LRED,
+            )
+            return bss_error_response(1)
+
+        if any(bmap["status"] > RankedStatus.Pending for bmap in bmapset):
+            log(
+                "Failed to update beatmapset: There are ranked/loved beatmaps",
+                Ansi.LRED,
+            )
+            return bss_error_response(3)
+
+        # Create/Remove new beatmaps if neccesary
+        bmap_ids = await maps_usecases.update_beatmaps(
+            bmap_ids,
+            bmapset,
+        )
+
+        log(f"{player.name} wants to update a beatmapset ({bmapset_id})", Ansi.LCYAN)
+    else:
+        # Create a new empty beatmapset inside the database
+        bmapset_id, bmap_ids = await maps_usecases.create_beatmapset(player, bmap_ids)
+
+        if bmapset_id is None:
+            return bss_error_response(
+                5,
+                "An error ocurred while creating the beatmapset.",
+            )
+
+    # Either we don't have the osz2 file or the client has no osz2 file
+    # If full-submit is true, the client will submit a patch file
+    full_submit = await maps_usecases.is_full_submit(bmapset_id, osz2_hash)
+
+    return Response(
+        "\n".join(
+            [
+                "0",
+                f"{bmapset_id}",
+                ",".join(map(str, bmap_ids)),
+                f"{int(full_submit)}",
+                f"{10}",  # TODO: implement remaining beatmaps
+                f"{0}",  # bubbled status
+            ],
+        ),
+    )
+
+
+@router.post("/web/osu-osz2-bmsubmit-upload.php")
+async def osuOsz2BeatmapSubmitUpload(
+    player: Player = Depends(authenticate_player_session(Form, "u", "h")),
+    submission_file: UploadFile = File(..., alias="osz2"),
+    full_submit: bool = Depends(integer_boolean("t")),
+    osz2_hash: str | None = Form(None, alias="z"),
+    bmapset_id: int = Form(..., alias="s"),
+) -> Response:
+    if app.settings.DISALLOW_BEATMAP_SUBMISSION:
+        log("The beatmap submission system is currently disabled. Aborting...")
+        return bss_error_response(
+            5,
+            "The beatmap submission system is currently disabled. Please try again later!",
+        )
+
+    bmapset = await maps_repo.fetch_many(
+        set_id=bmapset_id,
+    )
+
+    if not bmapset:
+        log("Failed to update beatmapset: Beatmapset not found", Ansi.LRED)
+        return bss_error_response(
+            5,
+            "The beatmapset you are trying to upload to does not exist. Please try again!",
+        )
+
+    if bmapset[0]["creator"] != player.name:
+        log("Failed to update beatmapset: User does not own the beatmapset", Ansi.LRED)
+        return bss_error_response(1)
+
+    if bmapset[0]["server"] != MapServer.PRIVATE:
+        log(
+            "Failed to update beatmapset: Beatmapset is not on bancho.py",
+            Ansi.LRED,
+        )
+        return bss_error_response(1)
+
+    if any(bmap["status"] > RankedStatus.Pending for bmap in bmapset):
+        log("Failed to update beatmapset: There are ranked/loved beatmaps", Ansi.LRED)
+        return bss_error_response(4)
+
+    osz2_file = submission_file.file.read()
+
+    if len(osz2_file) > 100_000_000:  # 100mb
+        log("Failed to upload beatmap: osz2 file is too large")
+        return bss_error_response(
+            5,
+            "Your beatmap is too big. Try to reduce its filesize and try again!",
+        )
+
+    if not full_submit:
+        # User uploaded a patch file
+        osz2_path = f"{DATA_PATH}/osz2/{bmapset[0]['set_id']}.osz2"
+
+        if not os.path.exists(osz2_path):
+            log(
+                "Failed to upload beatmap: Full submit requested but osz2 file is missing",
+            )
+            return bss_error_response(5, "The osz2 file is missing. Please try again!")
+
+        with open(osz2_path, "rb") as f:
+            current_osz2_file = f.read()
+
+        osz2_file = maps_usecases.patch_osz2(
+            osz2_file,
+            current_osz2_file,
+        )
+
+    if not osz2_file:
+        os.remove(f"{DATA_PATH}/osz2/{bmapset[0]['set_id']}.osz2")
+        log(f"Failed to upload beatmap: Failed to read osz2 file ({full_submit})")
+        return bss_error_response(
+            5,
+            "Something went wrong while processing your beatmap. Please try again!",
+        )
+
+    # Verify osz2 hash
+    server_hash = hashlib.md5(osz2_file).hexdigest()
+
+    if osz2_hash and osz2_hash != server_hash:
+        os.remove(f"{DATA_PATH}/osz2/{bmapset[0]['set_id']}.osz2")
+        log(
+            f"Failed to upload beatmap: osz2 hash mismatch (client: {osz2_hash} / server: {server_hash})",
+        )
+        return bss_error_response(
+            5,
+            "Something went wrong while processing your beatmap. Please try again!",
+        )
+
+    # Decrypt osz2 file
+    osz2 = maps_usecases.decrypt_osz2(osz2_file)
+
+    if osz2 is None:
+        os.remove(f"{DATA_PATH}/osz2/{bmapset[0]['set_id']}.osz2")
+        log("Failed to upload beatmap: Failed to decrypt osz2 file")
+        return bss_error_response(
+            5,
+            "Something went wrong while processing your beatmap. Please try again!",
+        )
+
+    try:
+        if await maps_usecases.duplicate_beatmap_files(bmapset, osz2.files):
+            log(f"Failed to upload beatmap: Duplicate beatmap files")
+            return bss_error_response(
+                5,
+                "It seems like one of your beatmaps was already uploaded by someone else. Please try again!",
+            )
+
+        allowed_usernames = [
+            bmapset[0]["creator"],
+        ]
+
+        if not maps_usecases.validate_beatmap_owner(
+            osz2.metadata,
+            osz2.beatmaps,
+            allowed_usernames,
+        ):
+            log("Failed to upload beatmap: User does not own the beatmapset")
+            return bss_error_response(1)
+
+        max_beatmap_length = bss.maximum_beatmap_length(list(osz2.beatmaps.values()))
+
+        if max_beatmap_length <= 1:
+            log(f"Failed to upload beatmap: Beatmap length is too short")
+            return bss_error_response(
+                5,
+                "Your beatmap is too short. Please try to make it longer and try again!",
+            )
+
+        package_filesize = bss.calculate_osz_size(osz2.files)
+        size_limit = bss.calculate_size_limit(max_beatmap_length)
+
+        if package_filesize > size_limit:
+            log(
+                f"Failed to upload beatmap: Beatmap package is too large "
+                f"({package_filesize} / {size_limit} bytes)",
+            )
+            return bss_error_response(
+                5,
+                "Your beatmap is too big. Try to reduce its filesize and try again!",
+            )
+
+        # Update metadata for beatmapset and beatmaps
+        await maps_usecases.update_beatmap_metadata(
+            bmapset,
+            osz2.files,
+            osz2.metadata,
+            osz2.beatmaps,
+        )
+
+        # Create & upload .osz file
+        await maps_usecases.update_beatmap_package(
+            bmapset[0]["set_id"],
+            osz2.files,
+        )
+
+        # Update beatmap assets
+        await maps_usecases.update_beatmap_thumbnail_and_cover(
+            bmapset,
+            osz2.beatmaps,
+            osz2.files,
+        )
+        await maps_usecases.update_beatmap_audio(bmapset, osz2.beatmaps, osz2.files)
+        await maps_usecases.update_beatmap_files(osz2.files)
+
+        # Upload the osz2 file to storage
+        with open(f"{DATA_PATH}/osz2/{bmapset[0]['set_id']}.osz2", "wb") as f:
+            f.write(osz2_file)
+    except Exception as e:
+        log(f"Failed to upload beatmap: Failed to process osz2 file ({e})")
+        return bss_error_response(
+            5,
+            "Something went wrong while processing your beatmap. Please try again!",
+        )
+
+    for bmap in bmapset:
+        if app.state.cache.beatmap.get(bmap["id"]):
+            app.state.cache.beatmap.pop(bmap["id"])
+
+    if app.state.cache.beatmapset.get(bmapset[0]["set_id"]):
+        app.state.cache.beatmapset.pop(bmapset[0]["set_id"])
+
+    log(
+        f"{player.name} successfully {'uploaded' if full_submit else 'updated'} a beatmapset",
+        Ansi.LCYAN,
+    )
+
+    return Response("0")
 
 
 @router.post("/web/osu-screenshot.php")

@@ -14,7 +14,6 @@ from collections.abc import Callable
 from collections.abc import Mapping
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime
 from datetime import timedelta
 from functools import wraps
 from pathlib import Path
@@ -60,6 +59,7 @@ from app.repositories import clans as clans_repo
 from app.repositories import logs as logs_repo
 from app.repositories import map_requests as map_requests_repo
 from app.repositories import maps as maps_repo
+from app.repositories import scores as scores_repo
 from app.repositories import tourney_pool_maps as tourney_pool_maps_repo
 from app.repositories import tourney_pools as tourney_pools_repo
 from app.repositories import users as users_repo
@@ -1174,9 +1174,8 @@ async def wipemap(ctx: Context) -> str | None:
     map_md5 = ctx.player.last_np["bmap"].md5
 
     # delete scores from all tables
-    await app.state.services.database.execute(
-        "DELETE FROM scores WHERE map_md5 = :map_md5",
-        {"map_md5": map_md5},
+    await scores_repo.delete_all_in_beatmap(
+        map_md5=map_md5,
     )
 
     return "Scores wiped."

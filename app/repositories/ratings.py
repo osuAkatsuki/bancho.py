@@ -6,6 +6,7 @@ from typing import cast
 from sqlalchemy import Column
 from sqlalchemy import Integer
 from sqlalchemy import String
+from sqlalchemy import delete
 from sqlalchemy import insert
 from sqlalchemy import select
 from sqlalchemy.dialects.mysql import TINYINT
@@ -83,3 +84,23 @@ async def fetch_one(userid: int, map_md5: str) -> Rating | None:
     )
     rating = await app.state.services.database.fetch_one(select_stmt)
     return cast(Rating | None, rating)
+
+
+async def delete_rating_from_player(userid: int, map_md5: str) -> Rating | None:
+    """Delete a rating entry from the database."""
+    select_stmt = (
+        select(*READ_PARAMS)
+        .where(RatingsTable.userid == userid)
+        .where(RatingsTable.map_md5 == map_md5)
+    )
+    rating = await app.state.services.database.fetch_one(select_stmt)
+    if rating is None:
+        return None
+
+    delete_stmt = (
+        delete(RatingsTable)
+        .where(RatingsTable.userid == userid)
+        .where(RatingsTable.map_md5 == map_md5)
+    )
+    await app.state.services.database.execute(delete_stmt)
+    return cast(Rating, rating)
