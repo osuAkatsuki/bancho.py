@@ -28,6 +28,8 @@ services:
     user: root
     volumes:
       - redis-data:/data
+    environment:
+      - REDIS_PASS=${REDIS_PASS}
     command:
       - sh
       - -c
