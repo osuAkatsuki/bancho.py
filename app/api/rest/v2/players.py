@@ -7,12 +7,12 @@ from fastapi import status
 from fastapi.param_functions import Query
 
 import app.state.sessions
-from app.api.v2.common import responses
-from app.api.v2.common.responses import Failure
-from app.api.v2.common.responses import Success
-from app.api.v2.models.players import Player
-from app.api.v2.models.players import PlayerStats
-from app.api.v2.models.players import PlayerStatus
+from app.api.rest.v2.common import responses
+from app.api.rest.v2.common.responses import Failure
+from app.api.rest.v2.common.responses import Success
+from app.api.rest.v2.models.players import Player
+from app.api.rest.v2.models.players import PlayerStats
+from app.api.rest.v2.models.players import PlayerStatus
 from app.repositories import stats as stats_repo
 from app.repositories import users as users_repo
 
