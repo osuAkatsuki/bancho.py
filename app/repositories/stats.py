@@ -234,4 +234,101 @@ async def partial_update(
     return cast(Stat | None, stat)
 
 
+async def sql_recalculate_mode(player_id: int, mode: int) -> None:
+    # https://osu.ppy.sh/wiki/en/Gameplay/Score/Ranked_score
+    # The ranked score is the total sum of the *best scores* for all ranked, loved, and approved difficulties played online.
+    sql = f"""
+    WITH 
+    ordered_pp AS (
+        SELECT
+            s1.id scoreId,
+            s1.userid,
+            s1.mode,
+            s1.pp,
+            s1.acc
+        FROM
+            scores s1
+        INNER JOIN maps m ON s1.map_md5 = m.md5
+        WHERE
+            s1.status = 2
+            AND m.status IN (2, 3)
+            AND s1.pp > 0
+            AND s1.mode = :mode
+            AND s1.userid = :user_id
+        ORDER BY
+            s1.pp DESC,
+            s1.acc DESC,
+            s1.id DESC
+    ),
+    bests AS (
+        SELECT
+            scoreId,
+            pp,
+            acc,
+            ROW_NUMBER() OVER (
+                ORDER BY
+                    pp DESC
+            ) AS global_rank
+        FROM
+            ordered_pp
+    ),
+    user_calc AS (
+        SELECT
+            SUM(POW (0.95, global_rank - 1) * pp) AS weightedPP,
+            (1 - POW (0.9994, COUNT(*))) * 416.6667 AS bnsPP,
+            SUM(POW (0.95, global_rank - 1) * acc) / SUM(POW (0.95, global_rank - 1)) AS acc
+        FROM
+            bests
+    ),
+    calculated AS (
+        SELECT
+            *,
+            weightedPP + bnsPP AS pp
+        FROM
+            user_calc
+    ), 
+    concrete_stats AS (
+        SELECT
+            COUNT(*) AS count,
+            SUM(s2.score) AS total_score,
+            SUM(IF(m2.status IN (2, 3) AND s2.status = 2, s2.score, 0)) AS ranked_score,
+            SUM(s2.n300 + s2.n100 + s2.n50 + (IF(s2.mode IN (1, 3, 5), s2.ngeki + s2.nkatu, 0))) AS total_hits,
+            SUM(s2.time_elapsed) / 1000 AS play_time,
+            MAX(s2.max_combo) AS max_combo,  
+            SUM(s2.grade = "XH") AS xh_count,
+            SUM(s2.grade = "X") AS x_count,
+            SUM(s2.grade = "SH") AS sh_count,
+            SUM(s2.grade = "S") AS s_count,
+            SUM(s2.grade = "A") AS a_count
+        FROM
+            scores s2
+        LEFT JOIN maps m2 ON s2.map_md5 = m2.md5
+        WHERE s2.mode = :mode
+        AND s2.userid = :user_id
+    )
+UPDATE stats s
+INNER JOIN concrete_stats cs ON 1
+INNER JOIN calculated c ON 1
+SET
+    s.tscore = COALESCE(cs.total_score, 0),
+    s.rscore = COALESCE(cs.ranked_score, 0),
+    s.pp = COALESCE(c.pp, 0),
+    s.acc = COALESCE(c.acc, 0),
+    s.plays = COALESCE(cs.count, 0),
+    s.playtime = COALESCE(cs.play_time, 0),
+    s.max_combo = COALESCE(cs.max_combo, 0),
+    s.total_hits = COALESCE(cs.total_hits, 0),
+    s.xh_count = COALESCE(cs.xh_count, 0),
+    s.x_count = COALESCE(cs.x_count, 0),
+    s.sh_count = COALESCE(cs.sh_count, 0),
+    s.s_count = COALESCE(cs.s_count, 0),
+    s.a_count = COALESCE(cs.a_count, 0)
+WHERE s.id = :user_id AND s.mode = :mode
+    """
+
+    _ = await app.state.services.database.execute(
+        sql, {"user_id": player_id, "mode": mode}
+    )
+
+
 # TODO: delete?
