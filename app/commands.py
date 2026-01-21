@@ -14,11 +14,9 @@ from collections.abc import Callable
 from collections.abc import Mapping
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime
 from datetime import timedelta
 from functools import wraps
 from pathlib import Path
-from time import perf_counter_ns as clock_ns
 from typing import TYPE_CHECKING
 from typing import Any
 from typing import NamedTuple
@@ -2482,59 +2480,60 @@ async def process_commands(
     target: Channel | Player,
     msg: str,
 ) -> CommandResponse | None:
-    # response is either a CommandResponse if we hit a command,
-    # or simply False if we don't have any command hits.
-    start_time = clock_ns()
+    """
+    Process a command from a player.
+
+    Response is either:
+    - CommandResponse if an appropriate command was found
+    - None if no appropriate command was found
+    """
+
+    start_time = time.perf_counter_ns()
 
     prefix_len = len(app.settings.COMMAND_PREFIX)
     trigger, *args = msg[prefix_len:].strip().split(" ")
 
-    # case-insensitive triggers
     trigger = trigger.lower()
 
-    # check if any command sets match.
+    # Command sets
     commands: list[Command] = []
     for cmd_set in command_sets:
         if trigger == cmd_set.trigger:
             if not args:
                 args = ["help"]
 
-            trigger, *args = args  # get subcommand
-
-            # case-insensitive triggers
+            trigger, *args = args
             trigger = trigger.lower()
 
             commands = cmd_set.commands
             break
     else:
-        # no set commands matched, check normal commands.
         commands = regular_commands
 
+    # Regular commands
     for cmd in commands:
-        if trigger in cmd.triggers and player.priv & cmd.priv == cmd.priv:
-            # found matching trigger with sufficient privs
-            try:
-                res = await cmd.callback(
-                    Context(
-                        player=player,
-                        trigger=trigger,
-                        args=args,
-                        recipient=target,
-                    ),
-                )
-            except Exception:
-                # print exception info to the console,
-                # but do not break the player's session.
-                traceback.print_exc()
+        if trigger not in cmd.triggers:
+            continue
 
-                res = "An exception occurred when running the command."
+        if player.priv & cmd.priv != cmd.priv:
+            continue
 
-            if res is not None:
-                # we have a message to return, include elapsed time
-                elapsed = app.logging.magnitude_fmt_time(clock_ns() - start_time)
-                return {"resp": f"{res} | Elapsed: {elapsed}", "hidden": cmd.hidden}
-            else:
-                # no message to return
+        try:
+            res = await cmd.callback(
+                Context(
+                    player=player,
+                    trigger=trigger,
+                    args=args,
+                    recipient=target,
+                ),
+            )
+            if res is None:
                 return {"resp": None, "hidden": False}
+        except Exception:
+            res = "An exception occurred when running the command."
+            traceback.print_exc()
+
+        elapsed = app.logging.magnitude_fmt_time(time.perf_counter_ns() - start_time)
+        return {"resp": f"{res} | Elapsed: {elapsed}", "hidden": cmd.hidden}
 
     return None
