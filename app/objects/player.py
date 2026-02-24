@@ -635,7 +635,7 @@ class Player:
 
         slot = self.match.get_slot(self)
         if slot is None:
-            log(f"{self} tried leaving a match without its slot?", Ansi.LYELLOW)
+            log(f"{self} tried leaving a match, but slot couldn't be found?", Ansi.LYELLOW)
         else:
             if slot.status == SlotStatus.locked:
                 # player was kicked, keep the slot locked.
