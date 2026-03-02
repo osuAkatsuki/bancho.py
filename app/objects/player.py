@@ -288,6 +288,7 @@ class Player:
         self.last_np: LastNp | None = None
 
         self._packet_queue = bytearray()
+        self._broadcast_cursor: int = 0
 
     def __repr__(self) -> str:
         return f"<{self.name} ({self.id})>"
@@ -985,11 +986,25 @@ class Player:
 
     def dequeue(self) -> bytes | None:
         """Get data from the queue to send to the client."""
+        parts: list[bytes] = []
+
+        # drain broadcast log entries since our last cursor
+        players = app.state.sessions.players
+        log_start = players._broadcast_seq - len(players._broadcast_log)
+        offset = max(0, self._broadcast_cursor - log_start)
+        for entry_data, immune_ids in players._broadcast_log[offset:]:
+            if self.id not in immune_ids:
+                parts.append(entry_data)
+        self._broadcast_cursor = players._broadcast_seq
+
+        # drain personal packet queue
         if self._packet_queue:
             data = bytes(self._packet_queue)
             self._packet_queue.clear()
-            return data
+            parts.append(data)
 
+        if parts:
+            return b"".join(parts)
         return None
 
     def send(self, msg: str, sender: Player, chan: Channel | None = None) -> None:

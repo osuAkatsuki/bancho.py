@@ -124,6 +124,8 @@ class Players(list[Player]):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
+        self._broadcast_log: list[tuple[bytes, frozenset[int]]] = []
+        self._broadcast_seq: int = 0
 
     def __iter__(self) -> Iterator[Player]:
         return super().__iter__()
@@ -161,9 +163,22 @@ class Players(list[Player]):
 
     def enqueue(self, data: bytes, immune: Sequence[Player] = []) -> None:
         """Enqueue `data` to all players, except for those in `immune`."""
-        for player in self:
-            if player not in immune:
-                player.enqueue(data)
+        immune_ids = frozenset(p.id for p in immune)
+        self._broadcast_log.append((data, immune_ids))
+        self._broadcast_seq += 1
+
+    def trim_broadcast_log(self) -> None:
+        """Remove broadcast log entries that all players have consumed."""
+        if not self:
+            self._broadcast_log.clear()
+            return
+        min_cursor = min(
+            p._broadcast_cursor for p in self
+            if not p.is_bot_client
+        ) if any(not p.is_bot_client for p in self) else self._broadcast_seq
+        trim_count = min_cursor - (self._broadcast_seq - len(self._broadcast_log))
+        if trim_count > 0:
+            del self._broadcast_log[:trim_count]
 
     def get(
         self,
@@ -273,6 +288,7 @@ class Players(list[Player]):
             return
 
         super().append(player)
+        player._broadcast_cursor = self._broadcast_seq
 
     def remove(self, player: Player) -> None:
         """Remove `p` from the list."""

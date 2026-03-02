@@ -81,6 +81,8 @@ async def _disconnect_ghosts(interval: int) -> None:
                 log(f"Auto-dced {player}.", Ansi.LMAGENTA)
                 player.logout()
 
+        app.state.sessions.players.trim_broadcast_log()
+
 
 async def _update_bot_status(interval: int) -> None:
     """Re roll the bot status, every `interval`."""
