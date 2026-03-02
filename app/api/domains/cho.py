@@ -925,21 +925,13 @@ async def handle_osu_login_request(
     data += user_data
 
     if not player.restricted:
-        # player is unrestricted, two way data
-        for o in app.state.sessions.players:
-            # enqueue us to them
-            o.enqueue(user_data)
+        # enqueue us to all other players
+        app.state.sessions.players.enqueue(user_data, immune=[player])
 
-            # enqueue them to us.
-            if not o.restricted:
-                if o is app.state.sessions.bot:
-                    # optimization for bot since it's
-                    # the most frequently requested user
-                    data += app.packets.bot_presence(o)
-                    data += app.packets.bot_stats(o)
-                else:
-                    data += app.packets.user_presence(o)
-                    data += app.packets.user_stats(o)
+        # enqueue all other players to us using the pre-built blob
+        data += app.packets.bot_presence(app.state.sessions.bot)
+        data += app.packets.bot_stats(app.state.sessions.bot)
+        data += app.state.sessions.players.get_presence_blob()
 
         # the player may have been sent mail while offline,
         # enqueue any messages from their respective authors.

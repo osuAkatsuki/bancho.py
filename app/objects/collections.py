@@ -7,6 +7,7 @@ from typing import Any
 
 import databases.core
 
+import app.packets
 import app.settings
 import app.state
 import app.utils
@@ -124,6 +125,7 @@ class Players(list[Player]):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
+        self._presence_blob = bytearray()
 
     def __iter__(self) -> Iterator[Player]:
         return super().__iter__()
@@ -164,6 +166,20 @@ class Players(list[Player]):
         for player in self:
             if player not in immune:
                 player.enqueue(data)
+
+    def rebuild_presence_blob(self) -> None:
+        """Rebuild the pre-built presence blob from all online players."""
+        self._presence_blob.clear()
+        for player in self:
+            if not player.restricted and not player.is_bot_client:
+                self._presence_blob += (
+                    app.packets.user_presence(player)
+                    + app.packets.user_stats(player)
+                )
+
+    def get_presence_blob(self) -> bytes:
+        """Return the pre-built presence blob as bytes."""
+        return bytes(self._presence_blob)
 
     def get(
         self,
@@ -274,6 +290,12 @@ class Players(list[Player]):
 
         super().append(player)
 
+        if not player.restricted and not player.is_bot_client:
+            self._presence_blob += (
+                app.packets.user_presence(player)
+                + app.packets.user_stats(player)
+            )
+
     def remove(self, player: Player) -> None:
         """Remove `p` from the list."""
         if player not in self:
@@ -282,6 +304,9 @@ class Players(list[Player]):
             return
 
         super().remove(player)
+
+        if not player.restricted and not player.is_bot_client:
+            self.rebuild_presence_blob()
 
 
 async def initialize_ram_caches() -> None:
