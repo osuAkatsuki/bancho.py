@@ -200,7 +200,7 @@ class Player:
     is_tourney_client: `bool`
         Whether this is a management/spectator tourney client.
 
-    _packet_queue: `bytearray`
+    _packet_queue: `list[bytes]`
         Bytes enqueued to the player which will be transmitted
         at the tail end of their next connection to the server.
         XXX: cls.enqueue() will add data to this queue, and
@@ -287,7 +287,7 @@ class Player:
         # store the last beatmap /np'ed by the user.
         self.last_np: LastNp | None = None
 
-        self._packet_queue = bytearray()
+        self._packet_queue: list[bytes] = []
 
     def __repr__(self) -> str:
         return f"<{self.name} ({self.id})>"
@@ -981,12 +981,12 @@ class Player:
 
     def enqueue(self, data: bytes) -> None:
         """Add data to be sent to the client."""
-        self._packet_queue += data
+        self._packet_queue.append(data)
 
     def dequeue(self) -> bytes | None:
         """Get data from the queue to send to the client."""
         if self._packet_queue:
-            data = bytes(self._packet_queue)
+            data = b"".join(self._packet_queue)
             self._packet_queue.clear()
             return data
 
