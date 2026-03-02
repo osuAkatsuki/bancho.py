@@ -172,10 +172,9 @@ class Players(list[Player]):
         self._presence_blob.clear()
         for player in self:
             if not player.restricted and not player.is_bot_client:
-                self._presence_blob += (
-                    app.packets.user_presence(player)
-                    + app.packets.user_stats(player)
-                )
+                self._presence_blob += app.packets.user_presence(
+                    player,
+                ) + app.packets.user_stats(player)
 
     def get_presence_blob(self) -> bytes:
         """Return the pre-built presence blob as bytes."""
@@ -291,10 +290,9 @@ class Players(list[Player]):
         super().append(player)
 
         if not player.restricted and not player.is_bot_client:
-            self._presence_blob += (
-                app.packets.user_presence(player)
-                + app.packets.user_stats(player)
-            )
+            self._presence_blob += app.packets.user_presence(
+                player,
+            ) + app.packets.user_stats(player)
 
     def remove(self, player: Player) -> None:
         """Remove `p` from the list."""
