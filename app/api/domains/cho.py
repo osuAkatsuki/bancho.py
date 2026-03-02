@@ -291,9 +291,11 @@ class ChangeAction(BasePacket):
         player.status.mode = GameMode(self.mode)
         player.status.map_id = self.map_id
 
+        player.invalidate_cached_stats()
+
         # broadcast it to all online players.
         if not player.restricted:
-            app.state.sessions.players.enqueue(app.packets.user_stats(player))
+            app.state.sessions.players.enqueue(player.cached_stats)
 
 
 IGNORED_CHANNELS: list[str] = ["#highlight", "#userlog"]
@@ -920,7 +922,7 @@ async def handle_osu_login_request(
     data += app.packets.silence_end(player.remaining_silence)
 
     # update our new player's stats, and broadcast them.
-    user_data = app.packets.user_presence(player) + app.packets.user_stats(player)
+    user_data = player.cached_presence + player.cached_stats
 
     data += user_data
 
@@ -938,8 +940,8 @@ async def handle_osu_login_request(
                     data += app.packets.bot_presence(o)
                     data += app.packets.bot_stats(o)
                 else:
-                    data += app.packets.user_presence(o)
-                    data += app.packets.user_stats(o)
+                    data += o.cached_presence
+                    data += o.cached_stats
 
         # the player may have been sent mail while offline,
         # enqueue any messages from their respective authors.
