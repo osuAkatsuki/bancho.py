@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ctypes
 import inspect
+import io
 import os
 import socket
 import sys
@@ -14,6 +15,9 @@ from typing import TypeVar
 
 import httpx
 import pymysql
+from PIL import Image
+from PIL.Image import Image as PILImage
+from pydub import AudioSegment  # type: ignore[import-untyped]
 
 import app.settings
 from app.logging import Ansi
@@ -187,7 +191,18 @@ def ensure_persistent_volumes_are_available() -> None:
     DATA_PATH.mkdir(exist_ok=True)
 
     # create /.data/... subdirectories
-    for sub_dir in ("avatars", "logs", "osu", "osr", "ss"):
+    for sub_dir in (
+        "audio",
+        "avatars",
+        "covers",
+        "logs",
+        "osu",
+        "osr",
+        "osz",
+        "osz2",
+        "ss",
+        "thumbnails",
+    ):
         subdir = DATA_PATH / sub_dir
         subdir.mkdir(exist_ok=True)
 
@@ -248,3 +263,56 @@ def has_png_headers_and_trailers(data_view: memoryview) -> bool:
         data_view[:8] == b"\x89PNG\r\n\x1a\n"
         and data_view[-8:] == b"\x49END\xae\x42\x60\x82"
     )
+
+
+def empty_zip_file() -> bytes:
+    return b"PK\x05\x06\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+
+
+def resize_and_crop_image(image: bytes, target_width: int, target_height: int) -> bytes:
+    img: PILImage = Image.open(io.BytesIO(image))
+    image_width, image_height = img.size
+
+    aspect = image_width / float(image_height)
+    target_aspect = target_width / float(target_height)
+
+    if aspect > target_aspect:
+        # Crop off left and right
+        new_width = int(image_height * target_aspect)
+        offset = (image_width - new_width) / 2
+        box = (offset, 0.0, float(image_width) - offset, float(image_height))
+
+    else:
+        # Crop off top and bottom
+        new_height = int(image_width / target_aspect)
+        offset = (image_height - new_height) / 2
+        box = (0.0, offset, image_width, image_height - offset)
+
+    image_buffer = io.BytesIO()
+    img = img.crop(box)
+    img = img.resize((target_width, target_height), Image.Resampling.LANCZOS)
+    img.convert("RGB").save(image_buffer, format="JPEG")
+    return image_buffer.getvalue()
+
+
+def extract_audio_snippet(
+    audio_data: bytes,
+    offset_ms: float,
+    duration_ms: int = 10000,
+    bitrate: str = "64k",
+) -> bytes:
+    # Load audio and extract snippet
+    audio: AudioSegment = AudioSegment.from_file(io.BytesIO(audio_data))
+    assert audio is not None
+
+    if offset_ms < 0:
+        # Set default offset
+        audio_length = audio.duration_seconds * 1000
+        offset_ms = audio_length / 2.5
+
+    snippet = audio[int(offset_ms) : int(offset_ms + duration_ms)]
+
+    # Export snippet as mp3
+    snippet_buffer = io.BytesIO()
+    snippet.export(snippet_buffer, format="mp3", bitrate=bitrate)
+    return snippet_buffer.getvalue()
