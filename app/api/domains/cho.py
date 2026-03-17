@@ -1395,18 +1395,7 @@ class MatchCreate(BasePacket):
 
         if player.match:
             player.enqueue(app.packets.match_join_fail())
-            player.send_bot("You're already in a match. We will try removing you from it.")
-
-            async def next_tick():
-                player.leave_match()
-                player.enqueue(
-                    app.packets.notification(
-                        "You can try again. Please report to staff if you keep getting this error."
-                    )
-                )
-
-            asyncio.create_task(next_tick(), name="remove-duplicated-user")
-            return
+            player.leave_match()
 
         # create the channel and add it
         # to the global channel list as
