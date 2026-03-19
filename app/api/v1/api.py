@@ -267,7 +267,9 @@ async def api_get_player_info(
                 "rank": rank + 1 if rank is not None else 0,
                 "country_rank": country_rank + 1 if country_rank is not None else 0,
                 "level": level,
-                "level_progress": int((get_level_precise(mode_stats["tscore"]) - level) * 100),
+                "level_progress": int(
+                    (get_level_precise(mode_stats["tscore"]) - level) * 100,
+                ),
             }
 
     return ORJSONResponse({"status": "success", "player": api_data})
