@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from functools import cached_property
+
 from pydantic import computed_field
 
+from app.constants.level import get_level
+from app.constants.level import get_level_precise
+
 from . import BaseModel
-from app.constants.level import get_level, get_level_precise
 
 # input models
 
