@@ -111,7 +111,7 @@ def get_required_score_for_level(level: int) -> int:
         return 0
     if level <= 100:
         return LEVEL_GRAPH[level - 1]
-    return LEVEL_GRAPH[99] + 100000000000 * int(level - 100)
+    return LEVEL_GRAPH[99] + 100_000_000_000 * int(level - 100)
 
 
 def get_level(score: int) -> int:
