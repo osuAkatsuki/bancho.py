@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 
-LEVEL_GRAPH = [
+LEVEL_GRAPH: list[int] = [
     0,
     30000,
     130000,
