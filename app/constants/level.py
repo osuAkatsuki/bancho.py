@@ -119,7 +119,7 @@ def get_level(score: int) -> int:
         return 1
 
     if score >= LEVEL_GRAPH[99]:
-        return 100 + int((score - LEVEL_GRAPH[99]) / 100000000000)
+        return 100 + int((score - LEVEL_GRAPH[99]) / 100_000_000_000)
 
     for idx, v in enumerate(LEVEL_GRAPH, start=0):
         if v > score:
