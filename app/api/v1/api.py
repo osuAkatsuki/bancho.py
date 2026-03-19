@@ -245,6 +245,7 @@ async def api_get_player_info(
             # NOTE: this dict-like return is intentional.
             #       but quite cursed.
             stats_key = str(mode_stats["mode"])
+            level = get_level(int(mode_stats["tscore"]))
             api_data["stats"][stats_key] = {
                 "id": mode_stats["id"],
                 "mode": mode_stats["mode"],
@@ -265,14 +266,8 @@ async def api_get_player_info(
                 # extra fields are added to the api response
                 "rank": rank + 1 if rank is not None else 0,
                 "country_rank": country_rank + 1 if country_rank is not None else 0,
-                "level": get_level(int(mode_stats["tscore"])),
-                "level_progress": int(
-                    (
-                        get_level_precise(mode_stats["tscore"])
-                        - get_level(mode_stats["tscore"])
-                    )
-                    * 100,
-                ),
+                "level": level,
+                "level_progress": int((get_level_precise(mode_stats["tscore"]) - level) * 100),
             }
 
     return ORJSONResponse({"status": "success", "player": api_data})
