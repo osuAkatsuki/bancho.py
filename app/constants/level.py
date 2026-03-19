@@ -131,7 +131,7 @@ def get_level_precise(score: int) -> float:
         get_required_score_for_level(base_level + 1) - base_level_score
     )
 
-    res = float(score_progress) / float(score_level_difference) + float(baseLevel)
+    res = float(score_progress) / float(score_level_difference) + float(base_level)
     if math.isinf(res) or math.isnan(res):
         return 0
 
