@@ -44,6 +44,8 @@ if TYPE_CHECKING:
 
 @unique
 class ClientPackets(IntEnum):
+    UNKNOWN_PACKET = -1  # unmapped
+
     CHANGE_ACTION = 0
     SEND_PUBLIC_MESSAGE = 1
     LOGOUT = 2
@@ -335,6 +337,8 @@ class BanchoPacketReader:
     def __next__(self) -> BasePacket:
         # do not break until we've read the
         # header of a packet we can handle.
+        p_type = ClientPackets.UNKNOWN_PACKET
+        p_len = 0
         while self.body_view:  # len(self.view) < 7?
             p_type, p_len = self._read_header()
 
@@ -828,7 +832,7 @@ def bot_stats(player: Player) -> bytes:
         (0, osuTypes.i32),  # plays
         (0, osuTypes.i64),  # tscore
         (0, osuTypes.i32),  # rank
-        (0, osuTypes.i16),  # pp
+        (0, osuTypes.u16),  # pp
     )
 
 
@@ -848,7 +852,7 @@ def _user_stats(
     global_rank: int,
     pp: int,
 ) -> bytes:
-    if pp > 0x7FFF:
+    if pp > 0xFFFF:
         # HACK: if pp is over osu!'s ingame cap,
         # we can instead display it as ranked score
         ranked_score = pp
@@ -868,13 +872,13 @@ def _user_stats(
         (plays, osuTypes.i32),
         (total_score, osuTypes.i64),
         (global_rank, osuTypes.i32),
-        (pp, osuTypes.i16),
+        (pp, osuTypes.u16),
     )
 
 
 def user_stats(player: Player) -> bytes:
     gm_stats = player.gm_stats
-    if gm_stats.pp > 0x7FFF:
+    if gm_stats.pp > 0xFFFF:
         # HACK: if pp is over osu!'s ingame cap,
         # we can instead display it as ranked score
         rscore = gm_stats.pp
@@ -897,7 +901,7 @@ def user_stats(player: Player) -> bytes:
         (gm_stats.plays, osuTypes.i32),
         (gm_stats.tscore, osuTypes.i64),
         (gm_stats.rank, osuTypes.i32),
-        (pp, osuTypes.i16),  # why not u16 peppy :(
+        (pp, osuTypes.u16),
     )
 
 

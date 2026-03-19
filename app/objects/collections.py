@@ -41,12 +41,12 @@ class Channels(list[Channel]):
         # XXX: we use the "real" name, aka
         # #multi_1 instead of #multiplayer
         # #spect_1 instead of #spectator.
-        return f'[{", ".join(c._name for c in self)}]'
+        return f'[{", ".join(c.real_name for c in self)}]'
 
     def get_by_name(self, name: str) -> Channel | None:
         """Get a channel from the list by `name`."""
         for channel in self:
-            if channel._name == name:
+            if channel.real_name == name:
                 return channel
 
         return None
@@ -124,15 +124,16 @@ class Players(list[Player]):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
+        self._by_token: dict[str, Player] = {}
+        self._by_id: dict[int, Player] = {}
+        self._by_name: dict[str, Player] = {}
 
     def __iter__(self) -> Iterator[Player]:
         return super().__iter__()
 
     def __contains__(self, player: object) -> bool:
-        # allow us to either pass in the player
-        # obj, or the player name as a string.
         if isinstance(player, str):
-            return player in (player.name for player in self)
+            return make_safe_name(player) in self._by_name
         else:
             return super().__contains__(player)
 
@@ -172,17 +173,12 @@ class Players(list[Player]):
         name: str | None = None,
     ) -> Player | None:
         """Get a player by token, id, or name from cache."""
-        for player in self:
-            if token is not None:
-                if player.token == token:
-                    return player
-            elif id is not None:
-                if player.id == id:
-                    return player
-            elif name is not None:
-                if player.safe_name == make_safe_name(name):
-                    return player
-
+        if token is not None:
+            return self._by_token.get(token)
+        elif id is not None:
+            return self._by_id.get(id)
+        elif name is not None:
+            return self._by_name.get(make_safe_name(name))
         return None
 
     async def get_sql(
@@ -266,22 +262,28 @@ class Players(list[Player]):
         return None
 
     def append(self, player: Player) -> None:
-        """Append `p` to the list."""
+        """Append `player` to the list."""
         if player in self:
             if app.settings.DEBUG:
                 log(f"{player} double-added to global player list?")
             return
 
         super().append(player)
+        self._by_token[player.token] = player
+        self._by_id[player.id] = player
+        self._by_name[player.safe_name] = player
 
     def remove(self, player: Player) -> None:
-        """Remove `p` from the list."""
+        """Remove `player` from the list."""
         if player not in self:
             if app.settings.DEBUG:
                 log(f"{player} removed from player list when not online?")
             return
 
         super().remove(player)
+        del self._by_token[player.token]
+        del self._by_id[player.id]
+        del self._by_name[player.safe_name]
 
 
 async def initialize_ram_caches() -> None:

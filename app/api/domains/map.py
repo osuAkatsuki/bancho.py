@@ -1,4 +1,4 @@
-""" bmap: static beatmap info (thumbnails, previews, etc.) """
+"""bmap: static beatmap info (thumbnails, previews, etc.)"""
 
 from __future__ import annotations
 

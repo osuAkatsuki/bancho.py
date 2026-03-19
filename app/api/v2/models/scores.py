@@ -25,6 +25,7 @@ class Score(BaseModel):
     n100: int
     n50: int
     nmiss: int
+    ngeki: int
     nkatu: int
 
     grade: str
