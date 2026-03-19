@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+from functools import cached_property
+from pydantic import computed_field
+
 from . import BaseModel
+from app.constants.level import get_level, get_level_precise
 
 # input models
 
@@ -58,5 +62,13 @@ class PlayerStats(BaseModel):
     sh_count: int
     s_count: int
     a_count: int
-    level: int
-    level_progress: int
+
+    @computed_field  # type: ignore[misc]
+    @cached_property
+    def level(self) -> int:
+        return get_level(self.tscore)
+
+    @computed_field  # type: ignore[misc]
+    @cached_property
+    def level_progress(self) -> int:
+        return int((get_level_precise(self.tscore) - get_level(self.tscore)) * 100)
