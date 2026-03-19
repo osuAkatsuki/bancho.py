@@ -2181,19 +2181,19 @@ test = ["Cython (>=0.29.36,<0.30.0)", "aiohttp (==3.9.0b0) ; python_version >= \
 
 [[package]]
 name = "virtualenv"
-version = "20.35.0"
+version = "20.36.1"
 description = "Virtual Python Environment builder"
 optional = false
 python-versions = ">=3.8"
 groups = ["dev"]
 files = [
-    {file = "virtualenv-20.35.0-py3-none-any.whl", hash = "sha256:3961608acaf5ee9ddc87b5e05664c8dd91d34db59494ae9e648f659292be55ef"},
-    {file = "virtualenv-20.35.0.tar.gz", hash = "sha256:040361d5b7451558edc0a3a68b9f108830d9dc87cc5d03d437a5cf9c742b5cb8"},
+    {file = "virtualenv-20.36.1-py3-none-any.whl", hash = "sha256:575a8d6b124ef88f6f51d56d656132389f961062a9177016a50e4f507bbcc19f"},
+    {file = "virtualenv-20.36.1.tar.gz", hash = "sha256:8befb5c81842c641f8ee658481e42641c68b5eab3521d8e092d18320902466ba"},
 ]
 
 [package.dependencies]
 distlib = ">=0.3.7,<1"
-filelock = ">=3.12.2,<4"
+filelock = {version = ">=3.20.1,<4", markers = "python_version >= \"3.10\""}
 platformdirs = ">=3.9.1,<5"
 
 [package.extras]
