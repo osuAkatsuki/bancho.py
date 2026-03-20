@@ -574,7 +574,7 @@ class Player:
 
     def _special_case_disconnected_rejoin(self, match: Match, passwd: str) -> bool:
         """This method will allow user to rejoin a match they were disconnected from. If everything's working properly, this method should never be called."""
-        
+
         reverse_slot_search = match.get_slot(self)
         lobby = app.state.sessions.channels.get_by_name("#lobby")
         if reverse_slot_search is None:
@@ -593,7 +593,7 @@ class Player:
     def join_match(self, match: Match, passwd: str) -> bool:
         """Attempt to add `self` to `match`."""
         if self.match:
-            if (self.match.id == match.id):
+            if self.match.id == match.id:
                 return self._special_case_disconnected_rejoin(match, passwd)
             log(f"{self} tried to join multiple matches?")
             self.enqueue(app.packets.match_join_fail())
@@ -655,7 +655,10 @@ class Player:
 
         slot = self.match.get_slot(self)
         if slot is None:
-            log(f"{self} tried leaving a match, but slot couldn't be found?", Ansi.LYELLOW)
+            log(
+                f"{self} tried leaving a match, but slot couldn't be found?",
+                Ansi.LYELLOW,
+            )
         else:
             if slot.status == SlotStatus.locked:
                 # player was kicked, keep the slot locked.
