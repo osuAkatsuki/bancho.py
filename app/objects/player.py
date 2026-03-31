@@ -289,6 +289,9 @@ class Player:
 
         self._packet_queue: list[bytes] = []
 
+        self._cached_presence: bytes | None = None
+        self._cached_stats: bytes | None = None
+
     def __repr__(self) -> str:
         return f"<{self.name} ({self.id})>"
 
@@ -412,6 +415,8 @@ class Player:
         if "bancho_priv" in vars(self):
             del self.bancho_priv  # wipe cached_property
 
+        self.invalidate_cached_presence()
+
         await users_repo.partial_update(
             id=self.id,
             priv=self.priv,
@@ -423,6 +428,8 @@ class Player:
         self.priv |= bits
         if "bancho_priv" in vars(self):
             del self.bancho_priv  # wipe cached_property
+
+        self.invalidate_cached_presence()
 
         await users_repo.partial_update(
             id=self.id,
@@ -440,6 +447,8 @@ class Player:
         self.priv &= ~bits
         if "bancho_priv" in vars(self):
             del self.bancho_priv  # wipe cached_property
+
+        self.invalidate_cached_presence()
 
         await users_repo.partial_update(
             id=self.id,
@@ -971,6 +980,9 @@ class Player:
                 },
             )
 
+        self.invalidate_cached_presence()
+        self.invalidate_cached_stats()
+
     def update_latest_activity_soon(self) -> None:
         """Update the player's latest activity in the database."""
         task = users_repo.partial_update(
@@ -991,6 +1003,24 @@ class Player:
             return data
 
         return None
+
+    @property
+    def cached_presence(self) -> bytes:
+        if self._cached_presence is None:
+            self._cached_presence = app.packets.user_presence(self)
+        return self._cached_presence
+
+    @property
+    def cached_stats(self) -> bytes:
+        if self._cached_stats is None:
+            self._cached_stats = app.packets.user_stats(self)
+        return self._cached_stats
+
+    def invalidate_cached_presence(self) -> None:
+        self._cached_presence = None
+
+    def invalidate_cached_stats(self) -> None:
+        self._cached_stats = None
 
     def send(self, msg: str, sender: Player, chan: Channel | None = None) -> None:
         """Enqueue `sender`'s `msg` to `self`. Sent in `chan`, or dm."""

@@ -668,7 +668,8 @@ async def osuSubmitModularSelector(
         score.player.status.mode = score.mode
 
         if not score.player.restricted:
-            app.state.sessions.players.enqueue(app.packets.user_stats(score.player))
+            score.player.invalidate_cached_stats()
+            app.state.sessions.players.enqueue(score.player.cached_stats)
 
     # hold a lock around (check if submitted, submission) to ensure no duplicates
     # are submitted to the database, and potentially award duplicate score/pp/etc.
@@ -949,7 +950,8 @@ async def osuSubmitModularSelector(
 
     if not score.player.restricted:
         # enqueue new stats info to all other users
-        app.state.sessions.players.enqueue(app.packets.user_stats(score.player))
+        score.player.invalidate_cached_stats()
+        app.state.sessions.players.enqueue(score.player.cached_stats)
 
         # update beatmap with new stats
         score.bmap.plays += 1
