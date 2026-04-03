@@ -361,6 +361,9 @@ class BanchoPacketReader:
 
     def _read_header(self) -> tuple[ClientPackets, int]:
         """Read the header of an osu! packet (id & length)."""
+        if len(self.body_view) < 7:
+            raise StopIteration
+
         # read type & length from the body
         data = struct.unpack("<HxI", self.body_view[:7])
         self.body_view = self.body_view[7:]
@@ -436,9 +439,14 @@ class BanchoPacketReader:
 
     # XXX: some osu! packets use i16 for
     # array length, while others use i32
+
+    _MAX_LIST_LENGTH = 256  # sane upper bound for id lists
+
     def read_i32_list_i16l(self) -> tuple[int, ...]:
         length = int.from_bytes(self.body_view[:2], "little")
         self.body_view = self.body_view[2:]
+
+        length = min(length, self._MAX_LIST_LENGTH)
 
         val = struct.unpack(f'<{"I" * length}', self.body_view[: length * 4])
         self.body_view = self.body_view[length * 4 :]
@@ -447,6 +455,8 @@ class BanchoPacketReader:
     def read_i32_list_i32l(self) -> tuple[int, ...]:
         length = int.from_bytes(self.body_view[:4], "little")
         self.body_view = self.body_view[4:]
+
+        length = min(length, self._MAX_LIST_LENGTH)
 
         val = struct.unpack(f'<{"I" * length}', self.body_view[: length * 4])
         self.body_view = self.body_view[length * 4 :]
