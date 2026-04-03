@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import html as html_module
 import re
 import struct
 import time
@@ -15,8 +16,6 @@ from pathlib import Path
 from typing import Literal
 from typing import TypedDict
 from zoneinfo import ZoneInfo
-
-import html as html_module
 
 import bcrypt
 from fastapi import APIRouter
