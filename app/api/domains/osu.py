@@ -1468,9 +1468,8 @@ async def osuComment(
         # client is submitting a new comment
 
         # validate all required params are provided
-        assert target is not None
-        assert start_time is not None
-        assert comment is not None
+        if target is None or start_time is None or comment is None:
+            return Response(b"", status_code=400)
 
         # get the corresponding id from the request
         if target == "song":
