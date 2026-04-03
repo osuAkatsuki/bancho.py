@@ -728,17 +728,18 @@ class BeatmapSet:
             # save changes to sql
 
             if map_md5s_to_delete:
-                # delete maps
-                await app.state.services.database.execute(
-                    "DELETE FROM maps WHERE md5 IN :map_md5s",
-                    {"map_md5s": map_md5s_to_delete},
-                )
+                async with app.state.services.database.transaction():
+                    # delete maps
+                    await app.state.services.database.execute(
+                        "DELETE FROM maps WHERE md5 IN :map_md5s",
+                        {"map_md5s": map_md5s_to_delete},
+                    )
 
-                # delete scores on the maps
-                await app.state.services.database.execute(
-                    "DELETE FROM scores WHERE map_md5 IN :map_md5s",
-                    {"map_md5s": map_md5s_to_delete},
-                )
+                    # delete scores on the maps
+                    await app.state.services.database.execute(
+                        "DELETE FROM scores WHERE map_md5 IN :map_md5s",
+                        {"map_md5s": map_md5s_to_delete},
+                    )
 
             # update last_osuapi_check
             await app.state.services.database.execute(
@@ -761,26 +762,27 @@ class BeatmapSet:
             # TODO: a couple of open questions here:
             # - should we delete the beatmap from the database if it's not in the osu!api?
             # - are 404 and 200 the only cases where we should delete the beatmap?
-            if self.maps:
-                map_md5s_to_delete = {bmap.md5 for bmap in self.maps}
+            async with app.state.services.database.transaction():
+                if self.maps:
+                    map_md5s_to_delete = {bmap.md5 for bmap in self.maps}
 
-                # delete maps
+                    # delete maps
+                    await app.state.services.database.execute(
+                        "DELETE FROM maps WHERE md5 IN :map_md5s",
+                        {"map_md5s": map_md5s_to_delete},
+                    )
+
+                    # delete scores on the maps
+                    await app.state.services.database.execute(
+                        "DELETE FROM scores WHERE map_md5 IN :map_md5s",
+                        {"map_md5s": map_md5s_to_delete},
+                    )
+
+                # delete set
                 await app.state.services.database.execute(
-                    "DELETE FROM maps WHERE md5 IN :map_md5s",
-                    {"map_md5s": map_md5s_to_delete},
+                    "DELETE FROM mapsets WHERE id = :set_id",
+                    {"set_id": self.id},
                 )
-
-                # delete scores on the maps
-                await app.state.services.database.execute(
-                    "DELETE FROM scores WHERE map_md5 IN :map_md5s",
-                    {"map_md5s": map_md5s_to_delete},
-                )
-
-            # delete set
-            await app.state.services.database.execute(
-                "DELETE FROM mapsets WHERE id = :set_id",
-                {"set_id": self.id},
-            )
 
     async def _save_to_sql(self) -> None:
         """Save the object's attributes into the database."""
