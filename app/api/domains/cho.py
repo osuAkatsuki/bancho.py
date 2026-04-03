@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import html as html_module
 import re
 import struct
 import time
@@ -134,9 +135,9 @@ async def bancho_view_online_users() -> Response:
 <!DOCTYPE html>
 <body style="font-family: monospace;  white-space: pre-wrap;"><a href="/">back</a>
 users:
-{new_line.join([f"({p.id:>{id_max_length}}): {p.safe_name}" for p in players])}
+{new_line.join([f"({p.id:>{id_max_length}}): {html_module.escape(p.safe_name)}" for p in players])}
 bots:
-{new_line.join(f"({p.id:>{id_max_length}}): {p.safe_name}" for p in bots)}
+{new_line.join(f"({p.id:>{id_max_length}}): {html_module.escape(p.safe_name)}" for p in bots)}
 </body>
 </html>""",
     )
@@ -167,11 +168,11 @@ async def bancho_view_matches() -> Response:
 <body style="font-family: monospace;  white-space: pre-wrap;"><a href="/">back</a>
 matches:
 {new_line.join(
-    f'''{(ON_GOING if m.in_progress else IDLE):<{max_status_length}} ({m.id:>{match_id_max_length}}): {m.name}
+    f'''{(ON_GOING if m.in_progress else IDLE):<{max_status_length}} ({m.id:>{match_id_max_length}}): {html_module.escape(m.name)}
 -- '''
     + f"{new_line}-- ".join([
-        f'{BEATMAP:<{max_properties_length}}: {m.map_name}',
-        f'{HOST:<{max_properties_length}}: <{m.host.id}> {m.host.safe_name}'
+        f'{BEATMAP:<{max_properties_length}}: {html_module.escape(m.map_name)}',
+        f'{HOST:<{max_properties_length}}: <{m.host.id}> {html_module.escape(m.host.safe_name)}'
     ]) for m in matches
 )}
 </body>
