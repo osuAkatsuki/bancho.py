@@ -842,125 +842,30 @@ async def osuSubmitModularSelector(
     stats = score.player.stats[score.mode]
     prev_stats = copy.copy(stats)
 
-    # stuff update for all submitted scores
-    stats.playtime += score.time_elapsed // 1000
-    stats.plays += 1
-    stats.tscore += score.score
-    stats.total_hits += score.n300 + score.n100 + score.n50
+    # recalculate stats
+    stats = await score.player.recalc_stats_sql(score.mode)
 
-    if score.mode.as_vanilla in (1, 3):
-        # taiko uses geki & katu for hitting big notes with 2 keys
-        # mania uses geki & katu for rainbow 300 & 200
-        stats.total_hits += score.ngeki + score.nkatu
-
-    stats_updates: dict[str, Any] = {
-        "plays": stats.plays,
-        "playtime": stats.playtime,
-        "tscore": stats.tscore,
-        "total_hits": stats.total_hits,
-    }
-
-    if score.passed and score.bmap.has_leaderboard:
-        # player passed & map is ranked, approved, or loved.
-
-        if score.max_combo > stats.max_combo:
-            stats.max_combo = score.max_combo
-            stats_updates["max_combo"] = stats.max_combo
-
-        if score.bmap.awards_ranked_pp and score.status == SubmissionStatus.BEST:
-            # map is ranked or approved, and it's our (new)
-            # best score on the map. update the player's
-            # ranked score, grades, pp, acc and global rank.
-
-            additional_rscore = score.score
-            if score.prev_best:
-                # we previously had a score, so remove
-                # it's score from our ranked score.
-                additional_rscore -= score.prev_best.score
-
-                if score.grade != score.prev_best.grade:
-                    if score.grade >= Grade.A:
-                        stats.grades[score.grade] += 1
-                        grade_col = format(score.grade, "stats_column")
-                        stats_updates[grade_col] = stats.grades[score.grade]
-
-                    if score.prev_best.grade >= Grade.A:
-                        stats.grades[score.prev_best.grade] -= 1
-                        grade_col = format(score.prev_best.grade, "stats_column")
-                        stats_updates[grade_col] = stats.grades[score.prev_best.grade]
-            else:
-                # this is our first submitted score on the map
-                if score.grade >= Grade.A:
-                    stats.grades[score.grade] += 1
-                    grade_col = format(score.grade, "stats_column")
-                    stats_updates[grade_col] = stats.grades[score.grade]
-
-            stats.rscore += additional_rscore
-            stats_updates["rscore"] = stats.rscore
-
-            # fetch scores sorted by pp for total acc/pp calc
-            # NOTE: we select all plays (and not just top100)
-            # because bonus pp counts the total amount of ranked
-            # scores. I'm aware this scales horribly, and it'll
-            # likely be split into two queries in the future.
-            best_scores = await app.state.services.database.fetch_all(
-                "SELECT s.pp, s.acc FROM scores s "
-                "INNER JOIN maps m ON s.map_md5 = m.md5 "
-                "WHERE s.userid = :user_id AND s.mode = :mode "
-                "AND s.status = 2 AND m.status IN (2, 3) "  # ranked, approved
-                "ORDER BY s.pp DESC",
-                {"user_id": score.player.id, "mode": score.mode},
-            )
-
-            # calculate new total weighted accuracy
-            weighted_acc = sum(
-                row["acc"] * 0.95**i for i, row in enumerate(best_scores)
-            )
-            bonus_acc = 100.0 / (20 * (1 - 0.95 ** len(best_scores)))
-            stats.acc = (weighted_acc * bonus_acc) / 100
-            stats_updates["acc"] = stats.acc
-
-            # calculate new total weighted pp
-            weighted_pp = sum(row["pp"] * 0.95**i for i, row in enumerate(best_scores))
-            bonus_pp = 416.6667 * (1 - 0.9994 ** len(best_scores))
-            stats.pp = round(weighted_pp + bonus_pp)
-            stats_updates["pp"] = stats.pp
-
-            # update global & country ranking
-            stats.rank = await score.player.update_rank(score.mode)
-
-    await stats_repo.partial_update(
-        score.player.id,
-        score.mode.value,
-        plays=stats_updates.get("plays", UNSET),
-        playtime=stats_updates.get("playtime", UNSET),
-        tscore=stats_updates.get("tscore", UNSET),
-        total_hits=stats_updates.get("total_hits", UNSET),
-        max_combo=stats_updates.get("max_combo", UNSET),
-        xh_count=stats_updates.get("xh_count", UNSET),
-        x_count=stats_updates.get("x_count", UNSET),
-        sh_count=stats_updates.get("sh_count", UNSET),
-        s_count=stats_updates.get("s_count", UNSET),
-        a_count=stats_updates.get("a_count", UNSET),
-        rscore=stats_updates.get("rscore", UNSET),
-        acc=stats_updates.get("acc", UNSET),
-        pp=stats_updates.get("pp", UNSET),
-    )
+    # update global & country ranking
+    stats.rank = await score.player.update_rank(score.mode)
 
     if not score.player.restricted:
         # enqueue new stats info to all other users
         app.state.sessions.players.enqueue(app.packets.user_stats(score.player))
 
-        # update beatmap with new stats
-        score.bmap.plays += 1
+        plays_incr = 1
+        passes_incr = 0
         if score.passed:
-            score.bmap.passes += 1
+            passes_incr = 1
+
+        # update beatmap with new stats
+        score.bmap.plays += plays_incr
+        score.bmap.passes += passes_incr
 
         await app.state.services.database.execute(
-            "UPDATE maps SET plays = :plays, passes = :passes WHERE md5 = :map_md5",
+            "UPDATE maps SET plays = plays + :plays_incr, passes = passes + :passes_incr WHERE md5 = :map_md5",
             {
-                "plays": score.bmap.plays,
-                "passes": score.bmap.passes,
+                "plays_incr": plays_incr,
+                "passes_incr": passes_incr,
                 "map_md5": score.bmap.md5,
             },
         )
