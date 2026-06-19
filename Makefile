@@ -1,34 +1,44 @@
 #!/usr/bin/env make
 
+COMPOSE = docker compose --env-file .env
+TEST_COMPOSE = docker compose --env-file .env.test -f docker-compose.test.yml
+
+.PHONY: build run run-bg run-cfd run-cfd-bg run-caddy logs shell test utest lint type-check install install-dev uninstall bump
+
 build:
 	if [ -d ".dbdata" ]; then sudo chmod -R 755 .dbdata; fi
 	docker build -t bancho:latest .
 
 run:
-	docker compose up bancho mysql redis
+	$(COMPOSE) up bancho mysql redis
 
 run-bg:
-	docker compose up -d bancho mysql redis
+	$(COMPOSE) up -d bancho mysql redis
 
 run-cfd:
-	docker compose -f docker-compose.cloudflared.yml up
+	$(COMPOSE) -f docker-compose.cloudflared.yml up
 
 run-cfd-bg:
-	docker compose -f docker-compose.cloudflared.yml up -d
+	$(COMPOSE) -f docker-compose.cloudflared.yml up -d
 
 run-caddy:
 	caddy run --envfile .env --config ext/Caddyfile
 
 last?=1
 logs:
-	docker compose logs -f bancho mysql redis --tail ${last}
+	$(COMPOSE) logs -f bancho mysql redis --tail ${last}
 
 shell:
 	uv run ${SHELL}
 
 test:
-	docker compose -f docker-compose.test.yml up -d bancho-test mysql-test redis-test
-	docker compose -f docker-compose.test.yml exec -T bancho-test /srv/root/scripts/run-tests.sh
+	set -e; \
+		trap '$(TEST_COMPOSE) down --volumes --remove-orphans' EXIT; \
+		$(TEST_COMPOSE) up --detach --wait --wait-timeout 30 bancho-test mysql-test redis-test; \
+		$(TEST_COMPOSE) exec -T bancho-test /srv/root/scripts/run-tests.sh
+
+utest:
+	uv run --frozen --env-file .env.test pytest tests/unit
 
 lint:
 	uv run pre-commit run --all-files

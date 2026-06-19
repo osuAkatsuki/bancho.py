@@ -1,0 +1,7 @@
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:2025.9.1
+    restart: unless-stopped
+    command: tunnel run
+    env_file:
+      - .env

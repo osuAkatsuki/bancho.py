@@ -9,8 +9,11 @@ git clone https://github.com/osuAkatsuki/bancho.py
 # enter bancho.py's new directory
 cd bancho.py
 
-# install docker for building the application image
-sudo apt install -y docker
+# install docker for building/running the application image
+sudo apt install -y docker.io docker-compose-plugin
+
+# optional: install uv for local linting, type checking, and unit tests
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
 ## configuring bancho.py
@@ -73,12 +76,15 @@ make logs
 # run all automated tests
 make test
 
+# run the unit test subset without docker
+make utest
+
 # run formatters and linters
 make lint
 
 # run static type checking
 make type-check
 
-# remove all unused dependencies
-make clean
+# remove the local uv virtualenv
+make uninstall
 ```

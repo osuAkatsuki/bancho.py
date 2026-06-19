@@ -1,10 +1,15 @@
 /.vscode
+.git/
 __pycache__/
 /.data
 _testing/
 *.lprof
 .venv/
+.uv-cache/
 .mypy_cache/
 .pytest_cache/
+.coverage
+coverage/
+htmlcov/
 tools/cf_records.txt
 .env

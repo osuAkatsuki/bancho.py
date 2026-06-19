@@ -19,11 +19,12 @@ different setup processes.
 we aim to minimize our dependencies, but still rely on ones such as
 
 - python (programming language)
-- mysql (relational database)
-- redis (in memory database)
+- docker (container runtime)
+- docker compose plugin (container orchestration)
+- mysql (relational database, via docker compose)
+- redis (in memory database, via docker compose)
 - nginx (http(s) reverse proxy)
-- geoip2 (an nginx module)
 - certbot (ssl certificate tool)
-- build-essential (build tools for c/c++)
+- uv (python project manager, optional for local development)
 
 as well as some others.

@@ -21,11 +21,12 @@ abweichende Installationsprozesse haben.
 Wir versuchen, unsere Abhängigkeiten zu minimieren, sind aber immer noch auf Abhängigkeiten wie
 
 - python (Programmiersprache)
-- mysql (relationale Datenbank)
-- redis (speicherinterne Datenbank)
+- docker (Container-Laufzeit)
+- docker compose plugin (Container-Orchestrierung)
+- mysql (relationale Datenbank, über docker compose)
+- redis (speicherinterne Datenbank, über docker compose)
 - nginx (http(s)-Reverse-Proxy)
-- geoip2 (ein nginx-Modul)
 - certbot (ssl-Zertifikatstool)
-- build-essential (Build-Werkzeuge für C/C++)
+- uv (Python-Projektmanager, optional für lokale Entwicklung)
 
 als auch einige andere angewiesen.
