@@ -40,6 +40,7 @@ import app.usecases.performance
 import app.utils
 from app.constants import regexes
 from app.constants.gamemodes import GAMEMODE_REPR_LIST
+from app.constants.gamemodes import GameMode
 from app.constants.mods import SPEED_CHANGING_MODS
 from app.constants.mods import Mods
 from app.constants.privileges import ClanPrivileges
@@ -60,6 +61,7 @@ from app.repositories import clans as clans_repo
 from app.repositories import logs as logs_repo
 from app.repositories import map_requests as map_requests_repo
 from app.repositories import maps as maps_repo
+from app.repositories import scores as scores_repo
 from app.repositories import tourney_pool_maps as tourney_pool_maps_repo
 from app.repositories import tourney_pools as tourney_pools_repo
 from app.repositories import users as users_repo
@@ -314,36 +316,40 @@ async def maplink(ctx: Context) -> str | None:
 async def recent(ctx: Context) -> str | None:
     """Show information about a player's most recent score."""
     if ctx.args:
-        target = app.state.sessions.players.get(name=" ".join(ctx.args))
+        target = await users_repo.fetch_one(name=" ".join(ctx.args))
         if not target:
             return "Player not found."
+        score = await scores_repo.fetch_recent(user_id=target["id"])
     else:
-        target = ctx.player
-
-    score = target.recent_score
+        score = await scores_repo.fetch_recent(user_id=ctx.player.id)
     if not score:
-        return "No scores found (only saves per play session)."
+        return "No scores found."
 
-    if score.bmap is None:
+    beatmap = await Beatmap.from_md5(score["map_md5"])
+    if beatmap is None:
         return "We don't have a beatmap on file for your recent score."
 
-    l = [f"[{score.mode!r}] {score.bmap.embed}", f"{score.acc:.2f}%"]
+    l = [f"[{GameMode(score['mode'])!r}] {beatmap.embed}", f"{score['acc']:.2f}%"]
 
-    if score.mods:
-        l.insert(1, f"+{score.mods!r}")
+    if score["mods"]:
+        l.insert(1, f"+{Mods(score['mods'])!r}")
 
     l = [" ".join(l)]
 
-    if score.passed:
-        rank = score.rank if score.status == SubmissionStatus.BEST else "NA"
-        l.append(f"PASS {{{score.pp:.2f}pp #{rank}}}")
+    if score["grade"] != "F":
+        rank = (
+            await scores_repo.calculate_placement(score)
+            if score["status"] == SubmissionStatus.BEST
+            else "NA"
+        )
+        l.append(f"PASS {{{score['pp']:.2f}pp #{rank}}}")
     else:
         # XXX: prior to v3.2.0, bancho.py didn't parse total_length from
         # the osu!api, and thus this can do some zerodivision moments.
         # this can probably be removed in the future, or better yet
         # replaced with a better system to fix the maps.
-        if score.bmap.total_length != 0:
-            completion = score.time_elapsed / (score.bmap.total_length * 1000)
+        if beatmap.total_length != 0:
+            completion = score["time_elapsed"] / (beatmap.total_length * 1000)
             l.append(f"FAIL {{{completion * 100:.2f}% complete}})")
         else:
             l.append("FAIL")
