@@ -12,7 +12,7 @@ cd bancho.py
 # installa docker per costruire/eseguire l'immagine dell'applicazione
 sudo apt install -y docker.io docker-compose-plugin
 
-# facoltativo: installa uv per linting, type checking e unit test locali
+# facoltativo: installa uv per linting, controllo dei tipi e test unitari locali
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
@@ -76,10 +76,10 @@ make logs
 # esegui tutti i test automatici
 make test
 
-# esegui il subset di unit test senza docker
+# esegui il subset di test unitari senza docker
 make utest
 
-# esegui formattatori e linters
+# esegui formattatori e linter
 make lint
 
 # esegui il controllo statico dei tipi

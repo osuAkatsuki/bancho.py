@@ -1,30 +1,28 @@
-# Read before setting up
+# 设置前请阅读
 
-## Prerequisites
+## 前提条件
 
-knowledge of linux, python, and databases will certainly help, but are by no
-means required.
+了解 Linux、Python 和数据库当然会有帮助，但并不是必需条件。
 
-(lots of people have installed this server with no prior programming experience!)
+（很多没有编程经验的人也成功安装过这个服务器！）
 
-if you get stuck at any point in the process - we have a public discord above :)
+如果你在流程中的任何地方卡住了，可以加入上方的公共 Discord :)
 
-this guide will be targetted towards ubuntu - other distros may have slightly
-different setup processes.
+本指南面向 Ubuntu；其他发行版的安装流程可能会略有不同。
 
-## Requirements
+## 依赖项
 
-**bancho.py** is a ~20,000 line codebase built on the shoulder of giants.
+**bancho.py** 是一个约 20,000 行的代码库，建立在许多优秀项目之上。
 
-we aim to minimize our dependencies, but still rely on ones such as
+我们会尽量减少依赖，但仍然需要以下组件：
 
-- python (programming language)
-- docker (container runtime)
-- docker compose plugin (container orchestration)
-- mysql (relational database, via docker compose)
-- redis (in memory database, via docker compose)
-- nginx (http(s) reverse proxy)
-- certbot (ssl certificate tool)
-- uv (python project manager, optional for local development)
+- python（编程语言）
+- docker（容器运行时）
+- docker compose plugin（容器编排）
+- mysql（关系型数据库，通过 docker compose 运行）
+- redis（内存数据库，通过 docker compose 运行）
+- nginx（HTTP(S) 反向代理）
+- certbot（SSL 证书工具）
+- uv（Python 项目管理器，本地开发时可选）
 
-as well as some others.
+以及其他一些组件。

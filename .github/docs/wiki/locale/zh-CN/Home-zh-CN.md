@@ -1,4 +1,4 @@
-# Welcome to the bancho.py wiki
+# 欢迎来到 bancho.py wiki
 
 这是中文翻译哦~由 [hedgehog-qd](https://github.com/hedgehog-qd) 在根据原英语文档部署成功后翻译的。这里
 我根据我当时遇到的问题补充了一些提示，如有错误请指正，谢谢！

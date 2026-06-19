@@ -1,20 +1,20 @@
-# Breaking changes
+# 重大变更
 
 ## 2023-09-25
 
-The `SERVER_HOST` and `SERVER_PORT` environment variables have been renamed to `APP_HOST` and `APP_PORT` respectively.
+`SERVER_HOST` 和 `SERVER_PORT` 环境变量已分别重命名为 `APP_HOST` 和 `APP_PORT`。
 
 ## 2023-09-21
 
-The minimum Python version has been changed to 3.11.
+最低 Python 版本已改为 3.11。
 
 ## 2023-07-19
 
-The behaviour of overall pp and accuracy has changed to encapsulate all of a user's scores rather than their top 100, in order to match Bancho's behaviour. This means a recalculation of user's stats is necessary. bancho.py has a recalculation tool which can be found in `tools/recalc.py` in order to facilitate this.
+总 pp 和准确率的计算行为已改为包含用户的所有成绩，而不只是前 100 个成绩，以匹配 Bancho 的行为。因此需要重新计算用户统计数据。bancho.py 提供了一个重新计算工具，可在 `tools/recalc.py` 中找到。
 
 ## 2023-04-09
 
-The `MIRROR_URL` environment variable has been split into `MIRROR_SEARCH_ENDPOINT` and `MIRROR_DOWNLOAD_ENDPOINT`.
+`MIRROR_URL` 环境变量已拆分为 `MIRROR_SEARCH_ENDPOINT` 和 `MIRROR_DOWNLOAD_ENDPOINT`。
 
 ```diff
 -MIRROR_URL=https://api.chimu.moe/v1

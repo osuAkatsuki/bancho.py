@@ -1,32 +1,34 @@
-# Lesen Sie vor der Einrichtung
+# Vor der Einrichtung lesen
 
 ## Voraussetzungen
 
-Kenntnisse in Linux, Python und Datenbanken sind sicherlich hilfreich, aber
-keinesfalls erforderlich.
+Kenntnisse in Linux, Python und Datenbanken sind sicherlich hilfreich, aber nicht
+zwingend erforderlich.
 
 (Viele Leute haben diesen Server ohne vorherige Programmiererfahrung
 installiert!)
 
-Wenn du an irgendeinem Punkt des Prozesses nicht weiterkommst -
-wir haben oben einen öffentlichen Discord :)
+Wenn du an irgendeinem Punkt des Prozesses nicht weiterkommst, gibt es oben
+einen öffentlichen Discord :)
 
 Diese Anleitung ist auf Ubuntu ausgerichtet - andere Distributionen können leicht
 abweichende Installationsprozesse haben.
 
 ## Anforderungen
 
-**bancho.py** ist eine ~20.000 Zeilen lange Codebasis, die auf den Schultern von Riesen gebaut wurde.
+**bancho.py** ist eine Codebasis mit etwa 20.000 Zeilen, die auf vielen
+bewährten Projekten aufbaut.
 
-Wir versuchen, unsere Abhängigkeiten zu minimieren, sind aber immer noch auf Abhängigkeiten wie
+Wir versuchen, unsere Abhängigkeiten zu minimieren, benötigen aber weiterhin
+Komponenten wie:
 
 - python (Programmiersprache)
-- docker (Container-Laufzeit)
+- docker (Container-Laufzeitumgebung)
 - docker compose plugin (Container-Orchestrierung)
 - mysql (relationale Datenbank, über docker compose)
-- redis (speicherinterne Datenbank, über docker compose)
-- nginx (http(s)-Reverse-Proxy)
-- certbot (ssl-Zertifikatstool)
-- uv (Python-Projektmanager, optional für lokale Entwicklung)
+- redis (In-Memory-Datenbank, über docker compose)
+- nginx (HTTP(S)-Reverse-Proxy)
+- certbot (SSL-Zertifikatstool)
+- uv (Python-Projektmanager, wahlweise für lokale Entwicklung)
 
-als auch einige andere angewiesen.
+sowie einige weitere.
