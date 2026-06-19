@@ -24,30 +24,30 @@ logs:
 	docker compose logs -f bancho mysql redis --tail ${last}
 
 shell:
-	poetry shell
+	uv run ${SHELL}
 
 test:
 	docker compose -f docker-compose.test.yml up -d bancho-test mysql-test redis-test
 	docker compose -f docker-compose.test.yml exec -T bancho-test /srv/root/scripts/run-tests.sh
 
 lint:
-	poetry run pre-commit run --all-files
+	uv run pre-commit run --all-files
 
 type-check:
-	poetry run mypy .
+	uv run mypy .
 
 install:
-	POETRY_VIRTUALENVS_IN_PROJECT=1 poetry install --no-root
+	uv sync --no-install-project
 
 install-dev:
-	POETRY_VIRTUALENVS_IN_PROJECT=1 poetry install --no-root --with dev
-	poetry run pre-commit install
+	uv sync --no-install-project --all-groups
+	uv run pre-commit install
 
 uninstall:
-	poetry env remove python
+	rm -rf .venv
 
 # To bump the version number run `make bump version=<major/minor/patch>`
 # (DO NOT USE IF YOU DON'T KNOW WHAT YOU'RE DOING)
-# https://python-poetry.org/docs/cli/#version
+# https://docs.astral.sh/uv/reference/cli/#uv-version
 bump:
-	poetry version $(version)
+	uv version $(version)
