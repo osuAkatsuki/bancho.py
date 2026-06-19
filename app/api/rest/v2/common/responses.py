@@ -8,7 +8,7 @@ from typing import cast
 
 from pydantic import BaseModel
 
-from app.api.v2.common import json
+from app.api.rest.v2.common import json
 
 T = TypeVar("T")
 

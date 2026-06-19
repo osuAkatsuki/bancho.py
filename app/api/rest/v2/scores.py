@@ -6,10 +6,10 @@ from fastapi import APIRouter
 from fastapi import status
 from fastapi.param_functions import Query
 
-from app.api.v2.common import responses
-from app.api.v2.common.responses import Failure
-from app.api.v2.common.responses import Success
-from app.api.v2.models.scores import Score
+from app.api.rest.v2.common import responses
+from app.api.rest.v2.common.responses import Failure
+from app.api.rest.v2.common.responses import Success
+from app.api.rest.v2.models.scores import Score
 from app.repositories import scores as scores_repo
 
 router = APIRouter()
