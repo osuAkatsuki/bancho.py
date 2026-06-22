@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import copy
 import hashlib
 import random
 import secrets
@@ -43,8 +42,8 @@ import app.settings
 import app.state
 import app.utils
 from app import encryption
-from app._typing import UNSET
 from app.constants import regexes
+from app.constants.beatmap_statuses import RankedStatus
 from app.constants.clientflags import LastFMFlags
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
@@ -54,7 +53,6 @@ from app.logging import Ansi
 from app.logging import log
 from app.objects import models
 from app.objects.beatmap import Beatmap
-from app.objects.beatmap import RankedStatus
 from app.objects.beatmap import ensure_osu_file_is_available
 from app.objects.player import Player
 from app.objects.score import Score
@@ -752,90 +750,21 @@ async def osuSubmitModularSelector(
                 if score.player.is_online:
                     score.player.logout()
 
-    """ Update the user's & beatmap's stats """
+    def publish_user_stats(player: Player) -> None:
+        app.state.sessions.players.enqueue(app.packets.user_stats(player))
 
-    # get the current stats, and take a
-    # shallow copy for the response charts.
-    stats = score.player.stats[score.mode]
-    prev_stats = copy.copy(stats)
-
-    stats_updates = score_submission_usecases.apply_score_stats(score, stats)
-
-    if score.passed and score.bmap.has_leaderboard:
-        # player passed & map is ranked, approved, or loved.
-
-        if score.bmap.awards_ranked_pp and score.status == SubmissionStatus.BEST:
-            # map is ranked or approved, and it's our (new)
-            # best score on the map. update the player's pp,
-            # acc and global rank.
-
-            # fetch scores sorted by pp for total acc/pp calc
-            # NOTE: we select all plays (and not just top100)
-            # because bonus pp counts the total amount of ranked
-            # scores. I'm aware this scales horribly, and it'll
-            # likely be split into two queries in the future.
-            best_scores = await app.state.services.database.fetch_all(
-                "SELECT s.pp, s.acc FROM scores s "
-                "INNER JOIN maps m ON s.map_md5 = m.md5 "
-                "WHERE s.userid = :user_id AND s.mode = :mode "
-                "AND s.status = 2 AND m.status IN (2, 3) "  # ranked, approved
-                "ORDER BY s.pp DESC",
-                {"user_id": score.player.id, "mode": score.mode},
-            )
-
-            stats_updates.update(
-                score_submission_usecases.apply_weighted_performance_stats(
-                    stats,
-                    best_scores,
-                ),
-            )
-
-            # update global & country ranking
-            stats.rank = await score.player.update_rank(score.mode)
-
-    await stats_repo.partial_update(
-        score.player.id,
-        score.mode.value,
-        plays=stats_updates.get("plays", UNSET),
-        playtime=stats_updates.get("playtime", UNSET),
-        tscore=stats_updates.get("tscore", UNSET),
-        total_hits=stats_updates.get("total_hits", UNSET),
-        max_combo=stats_updates.get("max_combo", UNSET),
-        xh_count=stats_updates.get("xh_count", UNSET),
-        x_count=stats_updates.get("x_count", UNSET),
-        sh_count=stats_updates.get("sh_count", UNSET),
-        s_count=stats_updates.get("s_count", UNSET),
-        a_count=stats_updates.get("a_count", UNSET),
-        rscore=stats_updates.get("rscore", UNSET),
-        acc=stats_updates.get("acc", UNSET),
-        pp=stats_updates.get("pp", UNSET),
+    stats_result = await score_submission_usecases.persist_score_submission_stats(
+        score,
+        stats=stats_repo,
+        scores=scores_repo,
+        maps=maps_repo,
+        publish_user_stats=publish_user_stats,
     )
-
-    if not score.player.restricted:
-        # enqueue new stats info to all other users
-        app.state.sessions.players.enqueue(app.packets.user_stats(score.player))
-
-        # update beatmap with new stats
-        score.bmap.plays += 1
-        if score.passed:
-            score.bmap.passes += 1
-
-        await app.state.services.database.execute(
-            "UPDATE maps SET plays = :plays, passes = :passes WHERE md5 = :map_md5",
-            {
-                "plays": score.bmap.plays,
-                "passes": score.bmap.passes,
-                "map_md5": score.bmap.md5,
-            },
-        )
-
-    # update their recent score
-    score.player.recent_scores[score.mode] = score
 
     response = await score_submission_usecases.build_score_submission_response(
         score=score,
-        previous_stats=prev_stats,
-        current_stats=stats,
+        previous_stats=stats_result.previous_stats,
+        current_stats=stats_result.current_stats,
         domain=app.settings.DOMAIN,
         achievements=achievements_usecases,
         user_achievements=user_achievements_usecases,
@@ -843,7 +772,7 @@ async def osuSubmitModularSelector(
 
     log(
         f"[{score.mode!r}] {score.player} submitted a score! "
-        f"({score.status!r}, {score.pp:,.2f}pp / {stats.pp:,}pp)",
+        f"({score.status!r}, {score.pp:,.2f}pp / {stats_result.current_stats.pp:,}pp)",
         Ansi.LGREEN,
     )
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import datetime
 from typing import TypedDict
 from typing import cast
@@ -19,8 +20,10 @@ from sqlalchemy.dialects.mysql import TINYINT
 import app.state.services
 from app._typing import UNSET
 from app._typing import _UnsetSentinel
+from app.constants.beatmap_statuses import RankedStatus
 from app.constants.score_statuses import SubmissionStatus
 from app.repositories import Base
+from app.repositories.maps import MapsTable
 
 
 class ScoresTable(Base):
@@ -184,6 +187,32 @@ async def mark_previous_best_scores_submitted(
         .values(status=SubmissionStatus.SUBMITTED.value)
     )
     await app.state.services.database.execute(update_stmt)
+
+
+async def fetch_weighted_best_performances(
+    *,
+    user_id: int,
+    mode: int,
+) -> list[Mapping[str, float]]:
+    select_stmt = (
+        select(ScoresTable.pp, ScoresTable.acc)
+        .join(MapsTable, ScoresTable.map_md5 == MapsTable.md5)
+        .where(
+            ScoresTable.userid == user_id,
+            ScoresTable.mode == mode,
+            ScoresTable.status == SubmissionStatus.BEST.value,
+            MapsTable.status.in_(
+                (
+                    RankedStatus.Ranked.value,
+                    RankedStatus.Approved.value,
+                ),
+            ),
+        )
+        .order_by(ScoresTable.pp.desc())
+    )
+
+    scores = await app.state.services.database.fetch_all(select_stmt)
+    return cast(list[Mapping[str, float]], scores)
 
 
 async def fetch_one(id: int) -> Score | None:

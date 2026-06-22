@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import copy
 import hashlib
+from collections.abc import Callable
 from collections.abc import Mapping
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -8,9 +10,12 @@ from datetime import datetime
 from typing import Any
 from typing import Protocol
 
+from app._typing import UNSET
+from app._typing import _UnsetSentinel
 from app.constants.score_statuses import SubmissionStatus
 from app.objects.player import ClientDetails
 from app.objects.player import ModeData
+from app.objects.player import Player
 from app.objects.score import Grade
 from app.objects.score import Score
 from app.repositories.achievements import Achievement
@@ -75,11 +80,56 @@ class ScoresRepository(Protocol):
         mode: int,
     ) -> None: ...
 
+    async def fetch_weighted_best_performances(
+        self,
+        *,
+        user_id: int,
+        mode: int,
+    ) -> Sequence[BestScorePerformance]: ...
+
+
+class StatsRepository(Protocol):
+    async def partial_update(
+        self,
+        player_id: int,
+        mode: int,
+        tscore: int | _UnsetSentinel = UNSET,
+        rscore: int | _UnsetSentinel = UNSET,
+        pp: int | _UnsetSentinel = UNSET,
+        plays: int | _UnsetSentinel = UNSET,
+        playtime: int | _UnsetSentinel = UNSET,
+        acc: float | _UnsetSentinel = UNSET,
+        max_combo: int | _UnsetSentinel = UNSET,
+        total_hits: int | _UnsetSentinel = UNSET,
+        replay_views: int | _UnsetSentinel = UNSET,
+        xh_count: int | _UnsetSentinel = UNSET,
+        x_count: int | _UnsetSentinel = UNSET,
+        sh_count: int | _UnsetSentinel = UNSET,
+        s_count: int | _UnsetSentinel = UNSET,
+        a_count: int | _UnsetSentinel = UNSET,
+    ) -> Mapping[str, Any] | None: ...
+
+
+class MapsRepository(Protocol):
+    async def partial_update(
+        self,
+        id: int,
+        *,
+        plays: int | _UnsetSentinel = UNSET,
+        passes: int | _UnsetSentinel = UNSET,
+    ) -> Mapping[str, Any] | None: ...
+
 
 @dataclass(frozen=True)
 class UniqueIdHashes:
     unique_id1_md5: str
     unique_id2_md5: str
+
+
+@dataclass(frozen=True)
+class ScoreStatsPersistenceResult:
+    previous_stats: ModeData
+    current_stats: ModeData
 
 
 def parse_unique_id_hashes(unique_ids: str) -> UniqueIdHashes:
@@ -327,6 +377,94 @@ def apply_weighted_performance_stats(
         "acc": stats.acc,
         "pp": stats.pp,
     }
+
+
+async def persist_score_submission_stats(
+    score: Score,
+    *,
+    stats: StatsRepository,
+    scores: ScoresRepository,
+    maps: MapsRepository,
+    publish_user_stats: Callable[[Player], None],
+) -> ScoreStatsPersistenceResult:
+    assert score.bmap is not None
+    assert score.player is not None
+
+    # get the current stats, and take a
+    # shallow copy for the response charts.
+    current_stats = score.player.stats[score.mode]
+    previous_stats = copy.copy(current_stats)
+
+    stats_updates = apply_score_stats(score, current_stats)
+
+    if score.passed and score.bmap.has_leaderboard:
+        # player passed & map is ranked, approved, or loved.
+
+        if score.bmap.awards_ranked_pp and score.status == SubmissionStatus.BEST:
+            # map is ranked or approved, and it's our (new)
+            # best score on the map. update the player's pp,
+            # acc and global rank.
+
+            # fetch scores sorted by pp for total acc/pp calc
+            # NOTE: we select all plays (and not just top100)
+            # because bonus pp counts the total amount of ranked
+            # scores. I'm aware this scales horribly, and it'll
+            # likely be split into two queries in the future.
+            best_scores = await scores.fetch_weighted_best_performances(
+                user_id=score.player.id,
+                mode=score.mode.value,
+            )
+
+            stats_updates.update(
+                apply_weighted_performance_stats(
+                    current_stats,
+                    best_scores,
+                ),
+            )
+
+            # update global & country ranking
+            current_stats.rank = await score.player.update_rank(score.mode)
+
+    await stats.partial_update(
+        score.player.id,
+        score.mode.value,
+        plays=stats_updates.get("plays", UNSET),
+        playtime=stats_updates.get("playtime", UNSET),
+        tscore=stats_updates.get("tscore", UNSET),
+        total_hits=stats_updates.get("total_hits", UNSET),
+        max_combo=stats_updates.get("max_combo", UNSET),
+        xh_count=stats_updates.get("xh_count", UNSET),
+        x_count=stats_updates.get("x_count", UNSET),
+        sh_count=stats_updates.get("sh_count", UNSET),
+        s_count=stats_updates.get("s_count", UNSET),
+        a_count=stats_updates.get("a_count", UNSET),
+        rscore=stats_updates.get("rscore", UNSET),
+        acc=stats_updates.get("acc", UNSET),
+        pp=stats_updates.get("pp", UNSET),
+    )
+
+    if not score.player.restricted:
+        # enqueue new stats info to all other users
+        publish_user_stats(score.player)
+
+        # update beatmap with new stats
+        score.bmap.plays += 1
+        if score.passed:
+            score.bmap.passes += 1
+
+        await maps.partial_update(
+            score.bmap.id,
+            plays=score.bmap.plays,
+            passes=score.bmap.passes,
+        )
+
+    # update their recent score
+    score.player.recent_scores[score.mode] = score
+
+    return ScoreStatsPersistenceResult(
+        previous_stats=previous_stats,
+        current_stats=current_stats,
+    )
 
 
 def chart_entry(

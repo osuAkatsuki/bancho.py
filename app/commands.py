@@ -39,6 +39,7 @@ import app.state
 import app.usecases.performance
 import app.utils
 from app.constants import regexes
+from app.constants.beatmap_statuses import RankedStatus
 from app.constants.gamemodes import GAMEMODE_REPR_LIST
 from app.constants.mods import SPEED_CHANGING_MODS
 from app.constants.mods import Mods
@@ -48,7 +49,6 @@ from app.constants.score_statuses import SubmissionStatus
 from app.logging import Ansi
 from app.logging import log
 from app.objects.beatmap import Beatmap
-from app.objects.beatmap import RankedStatus
 from app.objects.beatmap import ensure_osu_file_is_available
 from app.objects.match import Match
 from app.objects.match import MatchTeams
