@@ -17,6 +17,7 @@ from app.objects.player import OsuStream
 from app.objects.player import OsuVersion
 from app.objects.score import Grade
 from app.objects.score import Score
+from app.objects.score import SubmissionStatus
 from app.usecases import score_submission
 
 
@@ -55,6 +56,7 @@ def _score() -> Score:
     score.grade = Grade.C
     score.mods = Mods.HIDDEN | Mods.RELAX
     score.passed = True
+    score.status = SubmissionStatus.BEST
     score.mode = GameMode.RELAX_OSU
     score.client_time = datetime(2024, 1, 1, 12, 0, 0)
     score.server_time = score.client_time
@@ -73,10 +75,55 @@ def _score() -> Score:
         plays=1,
         passes=1,
         last_update="2014-05-18 15:41:48",
+        has_leaderboard=True,
         awards_ranked_pp=True,
         set=SimpleNamespace(url="https://osu.cmyui.xyz/s/141"),
     )
     return score
+
+
+def _grade_counts(
+    *,
+    xh: int = 0,
+    x: int = 0,
+    sh: int = 0,
+    s: int = 0,
+    a: int = 0,
+) -> dict[Grade, int]:
+    return {
+        Grade.XH: xh,
+        Grade.X: x,
+        Grade.SH: sh,
+        Grade.S: s,
+        Grade.A: a,
+    }
+
+
+def _mode_data(
+    *,
+    tscore: int = 0,
+    rscore: int = 0,
+    pp: int = 0,
+    acc: float = 0.0,
+    plays: int = 0,
+    playtime: int = 0,
+    max_combo: int = 0,
+    total_hits: int = 0,
+    rank: int = 0,
+    grades: dict[Grade, int] | None = None,
+) -> ModeData:
+    return ModeData(
+        tscore=tscore,
+        rscore=rscore,
+        pp=pp,
+        acc=acc,
+        plays=plays,
+        playtime=playtime,
+        max_combo=max_combo,
+        total_hits=total_hits,
+        rank=rank,
+        grades=grades if grades is not None else _grade_counts(),
+    )
 
 
 def _stats() -> tuple[ModeData, ModeData]:
@@ -311,6 +358,354 @@ def test_validate_submission_integrity_rejects_mismatched_beatmap_hash() -> None
             submission_beatmap_md5="1cf5b2c2edfafd055536d2cefcb89c0e",
             updated_beatmap_hash="wrong-md5",
         )
+
+
+def test_apply_score_stats_updates_base_stats_for_failed_score() -> None:
+    score = _score()
+    score.passed = False
+    score.mode = GameMode.VANILLA_OSU
+    score.time_elapsed = 2_500
+    score.score = 1_000
+    score.n300 = 3
+    score.n100 = 2
+    score.n50 = 1
+    stats = ModeData(
+        tscore=10,
+        rscore=20,
+        pp=30,
+        acc=40.0,
+        plays=2,
+        playtime=5,
+        max_combo=100,
+        total_hits=7,
+        rank=50,
+        grades=_grade_counts(),
+    )
+
+    updates = score_submission.apply_score_stats(score, stats)
+
+    assert stats.plays == 3
+    assert stats.playtime == 7
+    assert stats.tscore == 1_010
+    assert stats.total_hits == 13
+    assert updates == {
+        "plays": 3,
+        "playtime": 7,
+        "tscore": 1_010,
+        "total_hits": 13,
+    }
+
+
+@pytest.mark.parametrize("mode", [GameMode.VANILLA_TAIKO, GameMode.VANILLA_MANIA])
+def test_apply_score_stats_counts_taiko_and_mania_bonus_hits_by_mode(
+    mode: GameMode,
+) -> None:
+    score = _score()
+    score.passed = False
+    score.mode = mode
+    stats = _mode_data()
+
+    updates = score_submission.apply_score_stats(score, stats)
+
+    assert stats.total_hits == 131
+    assert updates["total_hits"] == 131
+
+
+def test_apply_score_stats_skips_leaderboard_stats_without_leaderboard() -> None:
+    score = _score()
+    score.bmap.has_leaderboard = False
+    score.score = 50_000
+    score.max_combo = 300
+    score.grade = Grade.S
+    stats = ModeData(
+        tscore=0,
+        rscore=1_000,
+        pp=0,
+        acc=0.0,
+        plays=0,
+        playtime=0,
+        max_combo=100,
+        total_hits=0,
+        rank=0,
+        grades=_grade_counts(s=1),
+    )
+
+    updates = score_submission.apply_score_stats(score, stats)
+
+    assert stats.max_combo == 100
+    assert stats.rscore == 1_000
+    assert stats.grades[Grade.S] == 1
+    assert "max_combo" not in updates
+    assert "rscore" not in updates
+    assert "s_count" not in updates
+
+
+def test_apply_score_stats_updates_max_combo_without_ranked_stats_for_submitted_score() -> (
+    None
+):
+    score = _score()
+    score.status = SubmissionStatus.SUBMITTED
+    score.score = 50_000
+    score.max_combo = 300
+    score.grade = Grade.S
+    stats = _mode_data(
+        rscore=1_000,
+        max_combo=100,
+        grades=_grade_counts(s=1),
+    )
+
+    updates = score_submission.apply_score_stats(score, stats)
+
+    assert stats.max_combo == 300
+    assert stats.rscore == 1_000
+    assert stats.grades[Grade.S] == 1
+    assert updates["max_combo"] == 300
+    assert "rscore" not in updates
+    assert "s_count" not in updates
+
+
+def test_apply_score_stats_skips_ranked_stats_for_loved_map() -> None:
+    score = _score()
+    score.bmap.awards_ranked_pp = False
+    score.score = 50_000
+    score.max_combo = 300
+    score.grade = Grade.S
+    stats = _mode_data(
+        rscore=1_000,
+        max_combo=100,
+        grades=_grade_counts(s=1),
+    )
+
+    updates = score_submission.apply_score_stats(score, stats)
+
+    assert stats.max_combo == 300
+    assert stats.rscore == 1_000
+    assert stats.grades[Grade.S] == 1
+    assert updates["max_combo"] == 300
+    assert "rscore" not in updates
+    assert "s_count" not in updates
+
+
+def test_apply_score_stats_updates_first_best_ranked_score() -> None:
+    score = _score()
+    score.score = 50_000
+    score.max_combo = 300
+    score.grade = Grade.S
+    stats = ModeData(
+        tscore=0,
+        rscore=1_000,
+        pp=0,
+        acc=0.0,
+        plays=0,
+        playtime=0,
+        max_combo=100,
+        total_hits=0,
+        rank=0,
+        grades=_grade_counts(s=1),
+    )
+
+    updates = score_submission.apply_score_stats(score, stats)
+
+    assert stats.max_combo == 300
+    assert stats.rscore == 51_000
+    assert stats.grades[Grade.S] == 2
+    assert updates["max_combo"] == 300
+    assert updates["rscore"] == 51_000
+    assert updates["s_count"] == 2
+
+
+@pytest.mark.parametrize(
+    ("grade", "update_column"),
+    [
+        (Grade.XH, "xh_count"),
+        (Grade.X, "x_count"),
+        (Grade.SH, "sh_count"),
+        (Grade.S, "s_count"),
+        (Grade.A, "a_count"),
+    ],
+)
+def test_apply_score_stats_updates_first_best_grade_column(
+    grade: Grade,
+    update_column: str,
+) -> None:
+    score = _score()
+    score.score = 50_000
+    score.max_combo = 50
+    score.grade = grade
+    stats = _mode_data(
+        rscore=1_000,
+        max_combo=100,
+    )
+
+    updates = score_submission.apply_score_stats(score, stats)
+
+    assert stats.rscore == 51_000
+    assert stats.grades[grade] == 1
+    assert updates["rscore"] == 51_000
+    assert updates[update_column] == 1
+    assert "max_combo" not in updates
+
+
+def test_apply_score_stats_updates_first_best_ranked_score_without_b_grade_count() -> (
+    None
+):
+    score = _score()
+    score.score = 50_000
+    score.max_combo = 50
+    score.grade = Grade.B
+    stats = _mode_data(
+        rscore=1_000,
+        max_combo=100,
+    )
+
+    updates = score_submission.apply_score_stats(score, stats)
+
+    assert stats.rscore == 51_000
+    assert updates["rscore"] == 51_000
+    assert all(f"{grade.name.lower()}_count" not in updates for grade in Grade)
+    assert "max_combo" not in updates
+
+
+def test_apply_score_stats_replaces_previous_best_ranked_score_and_grades() -> None:
+    score = _score()
+    score.score = 30_000
+    score.max_combo = 50
+    score.grade = Grade.S
+    previous_best = Score()
+    previous_best.score = 20_000
+    previous_best.grade = Grade.A
+    score.prev_best = previous_best
+    stats = ModeData(
+        tscore=0,
+        rscore=50_000,
+        pp=0,
+        acc=0.0,
+        plays=0,
+        playtime=0,
+        max_combo=100,
+        total_hits=0,
+        rank=0,
+        grades=_grade_counts(s=1, a=2),
+    )
+
+    updates = score_submission.apply_score_stats(score, stats)
+
+    assert stats.rscore == 60_000
+    assert stats.grades[Grade.S] == 2
+    assert stats.grades[Grade.A] == 1
+    assert updates["rscore"] == 60_000
+    assert updates["s_count"] == 2
+    assert updates["a_count"] == 1
+    assert "max_combo" not in updates
+
+
+def test_apply_score_stats_replaces_previous_a_best_with_b_grade() -> None:
+    score = _score()
+    score.score = 30_000
+    score.max_combo = 50
+    score.grade = Grade.B
+    previous_best = Score()
+    previous_best.score = 20_000
+    previous_best.grade = Grade.A
+    score.prev_best = previous_best
+    stats = _mode_data(
+        rscore=50_000,
+        max_combo=100,
+        grades=_grade_counts(a=2),
+    )
+
+    updates = score_submission.apply_score_stats(score, stats)
+
+    assert stats.rscore == 60_000
+    assert stats.grades[Grade.A] == 1
+    assert updates["rscore"] == 60_000
+    assert updates["a_count"] == 1
+    assert "b_count" not in updates
+    assert "max_combo" not in updates
+
+
+def test_apply_score_stats_replaces_previous_b_best_with_a_grade() -> None:
+    score = _score()
+    score.score = 30_000
+    score.max_combo = 50
+    score.grade = Grade.A
+    previous_best = Score()
+    previous_best.score = 20_000
+    previous_best.grade = Grade.B
+    score.prev_best = previous_best
+    stats = _mode_data(
+        rscore=50_000,
+        max_combo=100,
+        grades=_grade_counts(a=2),
+    )
+
+    updates = score_submission.apply_score_stats(score, stats)
+
+    assert stats.rscore == 60_000
+    assert stats.grades[Grade.A] == 3
+    assert updates["rscore"] == 60_000
+    assert updates["a_count"] == 3
+    assert "b_count" not in updates
+    assert "max_combo" not in updates
+
+
+def test_apply_score_stats_keeps_grade_counts_when_previous_best_grade_matches() -> (
+    None
+):
+    score = _score()
+    score.score = 30_000
+    score.grade = Grade.S
+    previous_best = Score()
+    previous_best.score = 20_000
+    previous_best.grade = Grade.S
+    score.prev_best = previous_best
+    stats = ModeData(
+        tscore=0,
+        rscore=50_000,
+        pp=0,
+        acc=0.0,
+        plays=0,
+        playtime=0,
+        max_combo=100,
+        total_hits=0,
+        rank=0,
+        grades=_grade_counts(s=2),
+    )
+
+    updates = score_submission.apply_score_stats(score, stats)
+
+    assert stats.rscore == 60_000
+    assert stats.grades[Grade.S] == 2
+    assert updates["rscore"] == 60_000
+    assert "s_count" not in updates
+
+
+def test_apply_weighted_performance_stats_calculates_accuracy_and_pp() -> None:
+    stats = ModeData(
+        tscore=0,
+        rscore=0,
+        pp=0,
+        acc=0.0,
+        plays=0,
+        playtime=0,
+        max_combo=0,
+        total_hits=0,
+        rank=0,
+        grades=_grade_counts(),
+    )
+
+    updates = score_submission.apply_weighted_performance_stats(
+        stats,
+        [
+            {"pp": 100.0, "acc": 98.0},
+            {"pp": 50.0, "acc": 95.0},
+        ],
+    )
+
+    assert stats.acc == pytest.approx(96.5384615385)
+    assert stats.pp == 148
+    assert updates["acc"] == pytest.approx(96.5384615385)
+    assert updates["pp"] == 148
 
 
 def test_build_submission_charts_formats_osu_client_response() -> None:

@@ -1,15 +1,29 @@
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Mapping
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Any
 from typing import Protocol
 
 from app.objects.player import ClientDetails
 from app.objects.player import ModeData
+from app.objects.score import Grade
 from app.objects.score import Score
+from app.objects.score import SubmissionStatus
 from app.repositories.achievements import Achievement
 from app.repositories.user_achievements import UserAchievement
+
+StatsUpdates = dict[str, Any]
+BestScorePerformance = Mapping[str, float]
+GRADE_STATS_COLUMNS = {
+    Grade.XH: "xh_count",
+    Grade.X: "x_count",
+    Grade.SH: "sh_count",
+    Grade.S: "s_count",
+    Grade.A: "a_count",
+}
 
 
 class AchievementsService(Protocol):
@@ -124,6 +138,117 @@ def validate_submission_integrity(
         submission_beatmap_md5=submission_beatmap_md5,
         updated_beatmap_hash=updated_beatmap_hash,
     )
+
+
+def apply_score_base_stats(score: Score, stats: ModeData) -> StatsUpdates:
+    # Stats updated for all submitted scores.
+    stats.playtime += score.time_elapsed // 1000
+    stats.plays += 1
+    stats.tscore += score.score
+    stats.total_hits += score.n300 + score.n100 + score.n50
+
+    if score.mode.as_vanilla in (1, 3):
+        # Taiko uses geki & katu for hitting big notes with 2 keys;
+        # mania uses geki & katu for rainbow 300 & 200.
+        stats.total_hits += score.ngeki + score.nkatu
+
+    return {
+        "plays": stats.plays,
+        "playtime": stats.playtime,
+        "tscore": stats.tscore,
+        "total_hits": stats.total_hits,
+    }
+
+
+def ranked_score_delta(score: Score) -> int:
+    if score.prev_best is None:
+        return score.score
+
+    # We previously had a score, so remove its score from our ranked score.
+    return score.score - score.prev_best.score
+
+
+def grade_count_deltas(score: Score) -> dict[Grade, int]:
+    if score.prev_best is None:
+        # This is our first submitted score on the map.
+        return {score.grade: 1} if score.grade >= Grade.A else {}
+
+    if score.grade == score.prev_best.grade:
+        return {}
+
+    deltas: dict[Grade, int] = {}
+    if score.grade >= Grade.A:
+        deltas[score.grade] = 1
+    if score.prev_best.grade >= Grade.A:
+        deltas[score.prev_best.grade] = deltas.get(score.prev_best.grade, 0) - 1
+
+    return deltas
+
+
+def apply_ranked_score_stats(score: Score, stats: ModeData) -> StatsUpdates:
+    updates: StatsUpdates = {}
+
+    for grade, delta in grade_count_deltas(score).items():
+        stats.grades[grade] += delta
+        updates[GRADE_STATS_COLUMNS[grade]] = stats.grades[grade]
+
+    stats.rscore += ranked_score_delta(score)
+    updates["rscore"] = stats.rscore
+
+    return updates
+
+
+def apply_score_stats(score: Score, stats: ModeData) -> StatsUpdates:
+    updates = apply_score_base_stats(score, stats)
+
+    if not score.passed:
+        return updates
+
+    assert score.bmap is not None
+    if not score.bmap.has_leaderboard:
+        return updates
+
+    if score.max_combo > stats.max_combo:
+        stats.max_combo = score.max_combo
+        updates["max_combo"] = stats.max_combo
+
+    if score.bmap.awards_ranked_pp and score.status == SubmissionStatus.BEST:
+        # Official osu! includes loved maps in ranked score and grade counts.
+        # bancho.py has historically counted only ranked/approved maps here;
+        # expanding this would require a stats backfill for existing users.
+        # Map is ranked or approved, and this is our (new)
+        # best score on the map. Update the player's
+        # ranked score and grade counts.
+        updates.update(apply_ranked_score_stats(score, stats))
+
+    return updates
+
+
+def calculate_weighted_accuracy(best_scores: Sequence[BestScorePerformance]) -> float:
+    # Calculate new total weighted accuracy.
+    weighted_acc = sum(row["acc"] * 0.95**i for i, row in enumerate(best_scores))
+    bonus_acc = 100.0 / (20 * (1 - 0.95 ** len(best_scores)))
+    return (weighted_acc * bonus_acc) / 100
+
+
+def calculate_weighted_pp(best_scores: Sequence[BestScorePerformance]) -> int:
+    # Calculate new total weighted pp.
+    weighted_pp = sum(row["pp"] * 0.95**i for i, row in enumerate(best_scores))
+    bonus_pp = 416.6667 * (1 - 0.9994 ** len(best_scores))
+    return round(weighted_pp + bonus_pp)
+
+
+def apply_weighted_performance_stats(
+    stats: ModeData,
+    best_scores: Sequence[BestScorePerformance],
+) -> StatsUpdates:
+    stats.acc = calculate_weighted_accuracy(best_scores)
+    stats.pp = calculate_weighted_pp(best_scores)
+
+    return {
+        "acc": stats.acc,
+        "pp": stats.pp,
+    }
 
 
 def chart_entry(

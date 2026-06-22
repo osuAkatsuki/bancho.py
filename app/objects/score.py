@@ -57,12 +57,6 @@ class Grade(IntEnum):
             "n": Grade.N,
         }[s.lower()]
 
-    def __format__(self, format_spec: str) -> str:
-        if format_spec == "stats_column":
-            return f"{self.name.lower()}_count"
-        else:
-            raise ValueError(f"Invalid format specifier {format_spec}")
-
 
 @unique
 @pymysql_encode(escape_enum)
