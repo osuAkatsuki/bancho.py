@@ -70,7 +70,7 @@ from app.repositories import stats as stats_repo
 from app.repositories import users as users_repo
 from app.repositories.achievements import Achievement
 from app.usecases import achievements as achievements_usecases
-from app.usecases import score_submission as score_submission_usecase
+from app.usecases import score_submission as score_submission_usecases
 from app.usecases import user_achievements as user_achievements_usecases
 from app.utils import escape_enum
 from app.utils import pymysql_encode
@@ -595,7 +595,7 @@ async def osuSubmitModularSelector(
     ## perform checksum validation
 
     try:
-        score_submission_usecase.validate_submission_integrity(
+        score_submission_usecases.validate_submission_integrity(
             client_details=player.client_details,
             osu_version=osu_version,
             client_hash=client_hash_decoded,
@@ -971,7 +971,7 @@ async def osuSubmitModularSelector(
             achievements = []
 
         # create score submission charts for osu! client to display
-        response = score_submission_usecase.build_submission_charts(
+        response = score_submission_usecases.build_submission_charts(
             score=score,
             previous_stats=prev_stats,
             current_stats=stats,

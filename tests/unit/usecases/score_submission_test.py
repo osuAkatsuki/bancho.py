@@ -115,6 +115,23 @@ def test_parse_unique_id_hashes_md5s_submission_unique_ids() -> None:
     )
 
 
+def test_chart_entry_formats_optional_before_and_after_values() -> None:
+    assert score_submission.chart_entry("rankedScore", None, 123.45) == (
+        "rankedScoreBefore:|rankedScoreAfter:123.45"
+    )
+
+
+def test_format_achievement_string_uses_client_delimiters() -> None:
+    assert (
+        score_submission.format_achievement_string(
+            "osu-combo-500",
+            "500 Combo",
+            "Achieve a 500 combo.",
+        )
+        == "osu-combo-500+500 Combo+Achieve a 500 combo."
+    )
+
+
 def test_validate_client_details_accepts_matching_login_and_submission_data() -> None:
     client_details = _client_details()
 
