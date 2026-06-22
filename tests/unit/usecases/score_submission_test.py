@@ -158,7 +158,7 @@ def _stats() -> tuple[ModeData, ModeData]:
     return previous, current
 
 
-class _ReplayFile:
+class _FakeReplayFile:
     def __init__(self, data: bytes) -> None:
         self.data = data
         self.read_count = 0
@@ -168,7 +168,7 @@ class _ReplayFile:
         return self.data
 
 
-class _ReplayPlayer:
+class _FakeReplayPlayer:
     def __init__(self, *, restricted: bool = False, online: bool = True) -> None:
         self.id = 6
         self.name = "test-user"
@@ -190,7 +190,7 @@ class _ReplayPlayer:
         self.is_online = False
 
 
-class _AnnounceChannel:
+class _FakeAnnounceChannel:
     def __init__(self) -> None:
         self.messages: list[tuple[str, object, bool]] = []
 
@@ -198,7 +198,7 @@ class _AnnounceChannel:
         self.messages.append((msg, sender, to_self))
 
 
-class _FirstPlaceScoresRepository:
+class _FakeFirstPlaceScoresRepository:
     def __init__(self, previous_first_place: dict[str, object] | None = None) -> None:
         self.previous_first_place = previous_first_place
         self.calls: list[dict[str, object]] = []
@@ -222,10 +222,10 @@ class _FirstPlaceScoresRepository:
 
 async def test_save_replay_file_writes_passed_replay(tmp_path) -> None:
     score = _score()
-    player = _ReplayPlayer()
+    player = _FakeReplayPlayer()
     score.player = player
     replay_data = b"x" * score_submission.MIN_REPLAY_SIZE
-    replay_file = _ReplayFile(replay_data)
+    replay_file = _FakeReplayFile(replay_data)
     missing_replay_logs: list[str] = []
 
     await score_submission.save_replay_file(
@@ -245,10 +245,10 @@ async def test_save_replay_file_writes_passed_replay(tmp_path) -> None:
 
 async def test_save_replay_file_does_not_read_failed_score(tmp_path) -> None:
     score = _score()
-    player = _ReplayPlayer()
+    player = _FakeReplayPlayer()
     score.player = player
     score.passed = False
-    replay_file = _ReplayFile(b"")
+    replay_file = _FakeReplayFile(b"")
     missing_replay_logs: list[str] = []
 
     await score_submission.save_replay_file(
@@ -269,10 +269,10 @@ async def test_save_replay_file_restricts_unrestricted_player_without_replay(
     tmp_path,
 ) -> None:
     score = _score()
-    player = _ReplayPlayer()
-    admin = _ReplayPlayer()
+    player = _FakeReplayPlayer()
+    admin = _FakeReplayPlayer()
     score.player = player
-    replay_file = _ReplayFile(b"x" * (score_submission.MIN_REPLAY_SIZE - 1))
+    replay_file = _FakeReplayFile(b"x" * (score_submission.MIN_REPLAY_SIZE - 1))
     missing_replay_logs: list[str] = []
 
     await score_submission.save_replay_file(
@@ -296,9 +296,9 @@ async def test_save_replay_file_does_not_restrict_restricted_player_without_repl
     tmp_path,
 ) -> None:
     score = _score()
-    player = _ReplayPlayer(restricted=True)
+    player = _FakeReplayPlayer(restricted=True)
     score.player = player
-    replay_file = _ReplayFile(b"x" * (score_submission.MIN_REPLAY_SIZE - 1))
+    replay_file = _FakeReplayFile(b"x" * (score_submission.MIN_REPLAY_SIZE - 1))
     missing_replay_logs: list[str] = []
 
     await score_submission.save_replay_file(
@@ -406,10 +406,10 @@ def test_notify_score_submitter_skips_no_leaderboard() -> None:
 
 async def test_announce_first_place_sends_message_with_previous_first_place() -> None:
     score = _score()
-    scores = _FirstPlaceScoresRepository(
+    scores = _FakeFirstPlaceScoresRepository(
         {"id": 9, "name": "old-user"},
     )
-    channel = _AnnounceChannel()
+    channel = _FakeAnnounceChannel()
 
     await score_submission.announce_first_place(
         score,
@@ -439,10 +439,10 @@ async def test_announce_first_place_sends_message_with_previous_first_place() ->
 async def test_announce_first_place_omits_previous_holder_for_same_player() -> None:
     score = _score()
     score.mods = Mods.NOMOD
-    scores = _FirstPlaceScoresRepository(
+    scores = _FakeFirstPlaceScoresRepository(
         {"id": 6, "name": "test-user"},
     )
-    channel = _AnnounceChannel()
+    channel = _FakeAnnounceChannel()
 
     await score_submission.announce_first_place(
         score,
@@ -467,8 +467,8 @@ async def test_announce_first_place_uses_score_for_vanilla_loved_score() -> None
     score.mode = GameMode.VANILLA_OSU
     score.mods = Mods.NOMOD
     score.score = 1_234_567
-    scores = _FirstPlaceScoresRepository()
-    channel = _AnnounceChannel()
+    scores = _FakeFirstPlaceScoresRepository()
+    channel = _FakeAnnounceChannel()
 
     await score_submission.announce_first_place(
         score,
@@ -514,10 +514,10 @@ async def test_announce_first_place_skips_ineligible_scores(condition: str) -> N
     elif condition == "no_leaderboard":
         score.bmap.has_leaderboard = False
 
-    scores = _FirstPlaceScoresRepository(
+    scores = _FakeFirstPlaceScoresRepository(
         {"id": 9, "name": "old-user"},
     )
-    channel = _AnnounceChannel()
+    channel = _FakeAnnounceChannel()
 
     await score_submission.announce_first_place(
         score,
@@ -532,7 +532,7 @@ async def test_announce_first_place_skips_ineligible_scores(condition: str) -> N
 
 async def test_announce_first_place_requires_announce_channel() -> None:
     score = _score()
-    scores = _FirstPlaceScoresRepository()
+    scores = _FakeFirstPlaceScoresRepository()
 
     with pytest.raises(AssertionError):
         await score_submission.announce_first_place(
