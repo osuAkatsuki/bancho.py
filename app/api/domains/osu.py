@@ -670,27 +670,19 @@ async def osuSubmitModularSelector(
         if app.state.services.datadog:
             app.state.services.datadog.increment("bancho.submitted_scores")  # type: ignore[no-untyped-call]
 
+        def send_personal_best_notification(player: Player, message: str) -> None:
+            player.enqueue(app.packets.notification(message))
+
         if score.status == SubmissionStatus.BEST:
             if app.state.services.datadog:
                 app.state.services.datadog.increment("bancho.submitted_scores_best")  # type: ignore[no-untyped-call]
 
-            if score.bmap.has_leaderboard:
-                if score.bmap.status == RankedStatus.Loved and score.mode in (
-                    GameMode.VANILLA_OSU,
-                    GameMode.VANILLA_TAIKO,
-                    GameMode.VANILLA_CATCH,
-                    GameMode.VANILLA_MANIA,
-                ):
-                    performance = f"{score.score:,} score"
-                else:
-                    performance = f"{score.pp:,.2f}pp"
+            performance = score_submission_usecases.notify_personal_best(
+                score,
+                send_notification=send_personal_best_notification,
+            )
 
-                score.player.enqueue(
-                    app.packets.notification(
-                        f"You achieved #{score.rank}! ({performance})",
-                    ),
-                )
-
+            if performance is not None:
                 if score.rank == 1 and not score.player.restricted:
                     announce_chan = app.state.sessions.channels.get_by_name("#announce")
 

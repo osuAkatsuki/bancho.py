@@ -13,6 +13,8 @@ from typing import Protocol
 
 from app._typing import UNSET
 from app._typing import _UnsetSentinel
+from app.constants.beatmap_statuses import RankedStatus
+from app.constants.gamemodes import GameMode
 from app.constants.score_statuses import SubmissionStatus
 from app.objects.player import ClientDetails
 from app.objects.player import ModeData
@@ -25,6 +27,12 @@ from app.repositories.user_achievements import UserAchievement
 StatsUpdates = dict[str, Any]
 BestScorePerformance = Mapping[str, float]
 MIN_REPLAY_SIZE = 24
+VANILLA_GAME_MODES = (
+    GameMode.VANILLA_OSU,
+    GameMode.VANILLA_TAIKO,
+    GameMode.VANILLA_CATCH,
+    GameMode.VANILLA_MANIA,
+)
 GRADE_STATS_COLUMNS = {
     Grade.XH: "xh_count",
     Grade.X: "x_count",
@@ -304,6 +312,37 @@ async def save_replay_file(
         )
         if score.player.is_online:
             score.player.logout()
+
+
+def format_score_submission_performance(score: Score) -> str:
+    assert score.bmap is not None
+
+    if score.bmap.status == RankedStatus.Loved and score.mode in VANILLA_GAME_MODES:
+        return f"{score.score:,} score"
+
+    return f"{score.pp:,.2f}pp"
+
+
+def notify_personal_best(
+    score: Score,
+    *,
+    send_notification: Callable[[Player, str], None],
+) -> str | None:
+    assert score.bmap is not None
+    assert score.player is not None
+
+    if score.status != SubmissionStatus.BEST:
+        return None
+
+    if not score.bmap.has_leaderboard:
+        return None
+
+    performance = format_score_submission_performance(score)
+    send_notification(
+        score.player,
+        f"You achieved #{score.rank}! ({performance})",
+    )
+    return performance
 
 
 def apply_score_base_stats(score: Score, stats: ModeData) -> StatsUpdates:

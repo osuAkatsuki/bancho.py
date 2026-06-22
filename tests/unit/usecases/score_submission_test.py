@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import pytest
 
 from app._typing import UNSET
+from app.constants.beatmap_statuses import RankedStatus
 from app.constants.clientflags import ClientFlags
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
@@ -76,8 +77,10 @@ def _score() -> Score:
         plays=1,
         passes=1,
         last_update="2014-05-18 15:41:48",
+        status=RankedStatus.Ranked,
         has_leaderboard=True,
         awards_ranked_pp=True,
+        embed="[https://osu.cmyui.xyz/b/315 test map]",
         set=SimpleNamespace(url="https://osu.cmyui.xyz/s/141"),
     )
     return score
@@ -282,6 +285,93 @@ async def test_save_replay_file_does_not_restrict_restricted_player_without_repl
     ]
     assert player.restriction_reasons == []
     assert not player.logged_out
+
+
+def test_notify_personal_best_sends_pp_notification_for_ranked_score() -> None:
+    score = _score()
+    notifications: list[tuple[object, str]] = []
+
+    performance = score_submission.notify_personal_best(
+        score,
+        send_notification=lambda player, message: notifications.append(
+            (player, message),
+        ),
+    )
+
+    assert performance == "10.45pp"
+    assert notifications == [
+        (score.player, "You achieved #1! (10.45pp)"),
+    ]
+
+
+def test_notify_personal_best_uses_score_for_vanilla_loved_score() -> None:
+    score = _score()
+    score.bmap.status = RankedStatus.Loved
+    score.mode = GameMode.VANILLA_OSU
+    score.score = 1_234_567
+    notifications: list[tuple[object, str]] = []
+
+    performance = score_submission.notify_personal_best(
+        score,
+        send_notification=lambda player, message: notifications.append(
+            (player, message),
+        ),
+    )
+
+    assert performance == "1,234,567 score"
+    assert notifications == [
+        (score.player, "You achieved #1! (1,234,567 score)"),
+    ]
+
+
+def test_notify_personal_best_uses_pp_for_relax_loved_score() -> None:
+    score = _score()
+    score.bmap.status = RankedStatus.Loved
+    notifications: list[tuple[object, str]] = []
+
+    performance = score_submission.notify_personal_best(
+        score,
+        send_notification=lambda player, message: notifications.append(
+            (player, message),
+        ),
+    )
+
+    assert performance == "10.45pp"
+    assert notifications == [
+        (score.player, "You achieved #1! (10.45pp)"),
+    ]
+
+
+def test_notify_personal_best_skips_non_best_score() -> None:
+    score = _score()
+    score.status = SubmissionStatus.SUBMITTED
+    notifications: list[tuple[object, str]] = []
+
+    performance = score_submission.notify_personal_best(
+        score,
+        send_notification=lambda player, message: notifications.append(
+            (player, message),
+        ),
+    )
+
+    assert performance is None
+    assert notifications == []
+
+
+def test_notify_personal_best_skips_map_without_leaderboard() -> None:
+    score = _score()
+    score.bmap.has_leaderboard = False
+    notifications: list[tuple[object, str]] = []
+
+    performance = score_submission.notify_personal_best(
+        score,
+        send_notification=lambda player, message: notifications.append(
+            (player, message),
+        ),
+    )
+
+    assert performance is None
+    assert notifications == []
 
 
 class _FailingAchievements:
