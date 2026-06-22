@@ -11,13 +11,13 @@ import pytest
 from app.constants.clientflags import ClientFlags
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
+from app.constants.score_statuses import SubmissionStatus
 from app.objects.player import ClientDetails
 from app.objects.player import ModeData
 from app.objects.player import OsuStream
 from app.objects.player import OsuVersion
 from app.objects.score import Grade
 from app.objects.score import Score
-from app.objects.score import SubmissionStatus
 from app.usecases import score_submission
 
 
@@ -222,6 +222,97 @@ class _FakeUserAchievements:
         assert user_id == 6
         self.created_achievement_ids.append(achievement_id)
         return {"userid": user_id, "achid": achievement_id}
+
+
+class _FakeScoresRepository:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+        self.previous_best_updates: list[dict[str, int | str]] = []
+        self.created_scores: list[dict[str, object]] = []
+
+    async def create(
+        self,
+        **score_fields: object,
+    ) -> dict[str, object]:
+        self.calls.append("create")
+        self.created_scores.append(score_fields)
+        return {"id": 123}
+
+    async def mark_previous_best_scores_submitted(
+        self,
+        *,
+        map_md5: str,
+        user_id: int,
+        mode: int,
+    ) -> None:
+        self.calls.append("mark_previous_best_scores_submitted")
+        self.previous_best_updates.append(
+            {
+                "map_md5": map_md5,
+                "user_id": user_id,
+                "mode": mode,
+            },
+        )
+
+
+async def test_persist_submitted_score_demotes_previous_best_before_creating_score() -> (
+    None
+):
+    score = _score()
+    score.client_checksum = "client-checksum"
+    scores = _FakeScoresRepository()
+
+    score_id = await score_submission.persist_submitted_score(score, scores)
+
+    assert score_id == 123
+    assert score.id == 123
+    assert scores.calls == ["mark_previous_best_scores_submitted", "create"]
+    assert scores.previous_best_updates == [
+        {
+            "map_md5": "1cf5b2c2edfafd055536d2cefcb89c0e",
+            "user_id": 6,
+            "mode": GameMode.RELAX_OSU.value,
+        },
+    ]
+    assert scores.created_scores == [
+        {
+            "map_md5": "1cf5b2c2edfafd055536d2cefcb89c0e",
+            "score": 26_810,
+            "pp": 10.448,
+            "acc": 81.94,
+            "max_combo": 52,
+            "mods": (Mods.HIDDEN | Mods.RELAX).value,
+            "n300": 83,
+            "n100": 14,
+            "n50": 5,
+            "nmiss": 6,
+            "ngeki": 23,
+            "nkatu": 6,
+            "grade": "C",
+            "status": SubmissionStatus.BEST.value,
+            "mode": GameMode.RELAX_OSU.value,
+            "play_time": datetime(2024, 1, 1, 12, 0, 0),
+            "time_elapsed": 13_358,
+            "client_flags": 0,
+            "user_id": 6,
+            "perfect": 0,
+            "online_checksum": "client-checksum",
+        },
+    ]
+
+
+async def test_persist_submitted_score_creates_non_best_score_without_demoting() -> (
+    None
+):
+    score = _score()
+    score.status = SubmissionStatus.SUBMITTED
+    scores = _FakeScoresRepository()
+
+    await score_submission.persist_submitted_score(score, scores)
+
+    assert scores.calls == ["create"]
+    assert scores.previous_best_updates == []
+    assert scores.created_scores[0]["status"] == SubmissionStatus.SUBMITTED.value
 
 
 def test_parse_unique_id_hashes_md5s_submission_unique_ids() -> None:

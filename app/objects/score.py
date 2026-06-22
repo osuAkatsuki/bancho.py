@@ -14,11 +14,10 @@ import app.utils
 from app.constants.clientflags import ClientFlags
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
+from app.constants.score_statuses import SubmissionStatus
 from app.objects.beatmap import Beatmap
 from app.repositories import scores as scores_repo
 from app.usecases.performance import ScoreParams
-from app.utils import escape_enum
-from app.utils import pymysql_encode
 
 if TYPE_CHECKING:
     from app.objects.player import Player
@@ -56,22 +55,6 @@ class Grade(IntEnum):
             "f": Grade.F,
             "n": Grade.N,
         }[s.lower()]
-
-
-@unique
-@pymysql_encode(escape_enum)
-class SubmissionStatus(IntEnum):
-    # TODO: make a system more like bancho's?
-    FAILED = 0
-    SUBMITTED = 1
-    BEST = 2
-
-    def __repr__(self) -> str:
-        return {
-            self.FAILED: "Failed",
-            self.SUBMITTED: "Submitted",
-            self.BEST: "Best",
-        }[self]
 
 
 class Score:

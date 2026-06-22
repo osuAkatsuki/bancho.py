@@ -19,6 +19,7 @@ from sqlalchemy.dialects.mysql import TINYINT
 import app.state.services
 from app._typing import UNSET
 from app._typing import _UnsetSentinel
+from app.constants.score_statuses import SubmissionStatus
 from app.repositories import Base
 
 
@@ -164,6 +165,25 @@ async def create(
     _score = await app.state.services.database.fetch_one(select_stmt)
     assert _score is not None
     return cast(Score, _score)
+
+
+async def mark_previous_best_scores_submitted(
+    *,
+    map_md5: str,
+    user_id: int,
+    mode: int,
+) -> None:
+    update_stmt = (
+        update(ScoresTable)
+        .where(
+            ScoresTable.status == SubmissionStatus.BEST.value,
+            ScoresTable.map_md5 == map_md5,
+            ScoresTable.userid == user_id,
+            ScoresTable.mode == mode,
+        )
+        .values(status=SubmissionStatus.SUBMITTED.value)
+    )
+    await app.state.services.database.execute(update_stmt)
 
 
 async def fetch_one(id: int) -> Score | None:

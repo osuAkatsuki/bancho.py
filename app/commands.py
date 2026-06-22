@@ -44,6 +44,7 @@ from app.constants.mods import SPEED_CHANGING_MODS
 from app.constants.mods import Mods
 from app.constants.privileges import ClanPrivileges
 from app.constants.privileges import Privileges
+from app.constants.score_statuses import SubmissionStatus
 from app.logging import Ansi
 from app.logging import log
 from app.objects.beatmap import Beatmap
@@ -56,7 +57,6 @@ from app.objects.match import MatchWinConditions
 from app.objects.match import SlotStatus
 from app.objects.match import StartingTimers
 from app.objects.player import Player
-from app.objects.score import SubmissionStatus
 from app.repositories import clans as clans_repo
 from app.repositories import logs as logs_repo
 from app.repositories import map_requests as map_requests_repo
