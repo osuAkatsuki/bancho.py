@@ -56,7 +56,6 @@ from app.objects.beatmap import Beatmap
 from app.objects.beatmap import RankedStatus
 from app.objects.beatmap import ensure_osu_file_is_available
 from app.objects.player import Player
-from app.objects.score import Grade
 from app.objects.score import Score
 from app.objects.score import SubmissionStatus
 from app.repositories import clans as clans_repo
@@ -806,61 +805,15 @@ async def osuSubmitModularSelector(
     stats = score.player.stats[score.mode]
     prev_stats = copy.copy(stats)
 
-    # stuff update for all submitted scores
-    stats.playtime += score.time_elapsed // 1000
-    stats.plays += 1
-    stats.tscore += score.score
-    stats.total_hits += score.n300 + score.n100 + score.n50
-
-    if score.mode.as_vanilla in (1, 3):
-        # taiko uses geki & katu for hitting big notes with 2 keys
-        # mania uses geki & katu for rainbow 300 & 200
-        stats.total_hits += score.ngeki + score.nkatu
-
-    stats_updates: dict[str, Any] = {
-        "plays": stats.plays,
-        "playtime": stats.playtime,
-        "tscore": stats.tscore,
-        "total_hits": stats.total_hits,
-    }
+    stats_updates = score_submission_usecases.apply_score_stats(score, stats)
 
     if score.passed and score.bmap.has_leaderboard:
         # player passed & map is ranked, approved, or loved.
 
-        if score.max_combo > stats.max_combo:
-            stats.max_combo = score.max_combo
-            stats_updates["max_combo"] = stats.max_combo
-
         if score.bmap.awards_ranked_pp and score.status == SubmissionStatus.BEST:
             # map is ranked or approved, and it's our (new)
-            # best score on the map. update the player's
-            # ranked score, grades, pp, acc and global rank.
-
-            additional_rscore = score.score
-            if score.prev_best:
-                # we previously had a score, so remove
-                # it's score from our ranked score.
-                additional_rscore -= score.prev_best.score
-
-                if score.grade != score.prev_best.grade:
-                    if score.grade >= Grade.A:
-                        stats.grades[score.grade] += 1
-                        grade_col = format(score.grade, "stats_column")
-                        stats_updates[grade_col] = stats.grades[score.grade]
-
-                    if score.prev_best.grade >= Grade.A:
-                        stats.grades[score.prev_best.grade] -= 1
-                        grade_col = format(score.prev_best.grade, "stats_column")
-                        stats_updates[grade_col] = stats.grades[score.prev_best.grade]
-            else:
-                # this is our first submitted score on the map
-                if score.grade >= Grade.A:
-                    stats.grades[score.grade] += 1
-                    grade_col = format(score.grade, "stats_column")
-                    stats_updates[grade_col] = stats.grades[score.grade]
-
-            stats.rscore += additional_rscore
-            stats_updates["rscore"] = stats.rscore
+            # best score on the map. update the player's pp,
+            # acc and global rank.
 
             # fetch scores sorted by pp for total acc/pp calc
             # NOTE: we select all plays (and not just top100)
@@ -876,19 +829,12 @@ async def osuSubmitModularSelector(
                 {"user_id": score.player.id, "mode": score.mode},
             )
 
-            # calculate new total weighted accuracy
-            weighted_acc = sum(
-                row["acc"] * 0.95**i for i, row in enumerate(best_scores)
+            stats_updates.update(
+                score_submission_usecases.apply_weighted_performance_stats(
+                    stats,
+                    best_scores,
+                ),
             )
-            bonus_acc = 100.0 / (20 * (1 - 0.95 ** len(best_scores)))
-            stats.acc = (weighted_acc * bonus_acc) / 100
-            stats_updates["acc"] = stats.acc
-
-            # calculate new total weighted pp
-            weighted_pp = sum(row["pp"] * 0.95**i for i, row in enumerate(best_scores))
-            bonus_pp = 416.6667 * (1 - 0.9994 ** len(best_scores))
-            stats.pp = round(weighted_pp + bonus_pp)
-            stats_updates["pp"] = stats.pp
 
             # update global & country ranking
             stats.rank = await score.player.update_rank(score.mode)

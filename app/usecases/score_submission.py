@@ -1,15 +1,22 @@
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Mapping
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Any
 from typing import Protocol
 
 from app.objects.player import ClientDetails
 from app.objects.player import ModeData
+from app.objects.score import Grade
 from app.objects.score import Score
+from app.objects.score import SubmissionStatus
 from app.repositories.achievements import Achievement
 from app.repositories.user_achievements import UserAchievement
+
+StatsUpdates = dict[str, Any]
+BestScorePerformance = Mapping[str, float]
 
 
 class AchievementsService(Protocol):
@@ -124,6 +131,110 @@ def validate_submission_integrity(
         submission_beatmap_md5=submission_beatmap_md5,
         updated_beatmap_hash=updated_beatmap_hash,
     )
+
+
+def apply_score_base_stats(score: Score, stats: ModeData) -> StatsUpdates:
+    stats.playtime += score.time_elapsed // 1000
+    stats.plays += 1
+    stats.tscore += score.score
+    stats.total_hits += score.n300 + score.n100 + score.n50
+
+    if score.mode.as_vanilla in (1, 3):
+        stats.total_hits += score.ngeki + score.nkatu
+
+    return {
+        "plays": stats.plays,
+        "playtime": stats.playtime,
+        "tscore": stats.tscore,
+        "total_hits": stats.total_hits,
+    }
+
+
+def update_grade_count(
+    stats: ModeData,
+    grade: Grade,
+    delta: int,
+) -> tuple[str, int] | None:
+    if grade < Grade.A:
+        return None
+
+    stats.grades[grade] += delta
+    grade_column = format(grade, "stats_column")
+    return grade_column, stats.grades[grade]
+
+
+def apply_ranked_score_stats(score: Score, stats: ModeData) -> StatsUpdates:
+    updates: StatsUpdates = {}
+    additional_rscore = score.score
+
+    if score.prev_best:
+        additional_rscore -= score.prev_best.score
+
+        if score.grade != score.prev_best.grade:
+            grade_update = update_grade_count(stats, score.grade, 1)
+            if grade_update is not None:
+                grade_column, grade_count = grade_update
+                updates[grade_column] = grade_count
+
+            previous_grade_update = update_grade_count(stats, score.prev_best.grade, -1)
+            if previous_grade_update is not None:
+                grade_column, grade_count = previous_grade_update
+                updates[grade_column] = grade_count
+    else:
+        grade_update = update_grade_count(stats, score.grade, 1)
+        if grade_update is not None:
+            grade_column, grade_count = grade_update
+            updates[grade_column] = grade_count
+
+    stats.rscore += additional_rscore
+    updates["rscore"] = stats.rscore
+
+    return updates
+
+
+def apply_score_stats(score: Score, stats: ModeData) -> StatsUpdates:
+    updates = apply_score_base_stats(score, stats)
+
+    if not score.passed:
+        return updates
+
+    assert score.bmap is not None
+    if not score.bmap.has_leaderboard:
+        return updates
+
+    if score.max_combo > stats.max_combo:
+        stats.max_combo = score.max_combo
+        updates["max_combo"] = stats.max_combo
+
+    if score.bmap.awards_ranked_pp and score.status == SubmissionStatus.BEST:
+        updates.update(apply_ranked_score_stats(score, stats))
+
+    return updates
+
+
+def calculate_weighted_accuracy(best_scores: Sequence[BestScorePerformance]) -> float:
+    weighted_acc = sum(row["acc"] * 0.95**i for i, row in enumerate(best_scores))
+    bonus_acc = 100.0 / (20 * (1 - 0.95 ** len(best_scores)))
+    return (weighted_acc * bonus_acc) / 100
+
+
+def calculate_weighted_pp(best_scores: Sequence[BestScorePerformance]) -> int:
+    weighted_pp = sum(row["pp"] * 0.95**i for i, row in enumerate(best_scores))
+    bonus_pp = 416.6667 * (1 - 0.9994 ** len(best_scores))
+    return round(weighted_pp + bonus_pp)
+
+
+def apply_weighted_performance_stats(
+    stats: ModeData,
+    best_scores: Sequence[BestScorePerformance],
+) -> StatsUpdates:
+    stats.acc = calculate_weighted_accuracy(best_scores)
+    stats.pp = calculate_weighted_pp(best_scores)
+
+    return {
+        "acc": stats.acc,
+        "pp": stats.pp,
+    }
 
 
 def chart_entry(
