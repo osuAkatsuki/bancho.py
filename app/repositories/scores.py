@@ -19,6 +19,7 @@ from sqlalchemy.dialects.mysql import TINYINT
 import app.state.services
 from app._typing import UNSET
 from app._typing import _UnsetSentinel
+from app.constants.score_statuses import SubmissionStatus
 from app.repositories import Base
 
 
@@ -85,9 +86,6 @@ READ_PARAMS = (
     ScoresTable.perfect,
     ScoresTable.online_checksum,
 )
-
-SUBMITTED_STATUS = 1
-BEST_STATUS = 2
 
 
 class Score(TypedDict):
@@ -178,12 +176,12 @@ async def mark_previous_best_scores_submitted(
     update_stmt = (
         update(ScoresTable)
         .where(
-            ScoresTable.status == BEST_STATUS,
+            ScoresTable.status == SubmissionStatus.BEST.value,
             ScoresTable.map_md5 == map_md5,
             ScoresTable.userid == user_id,
             ScoresTable.mode == mode,
         )
-        .values(status=SUBMITTED_STATUS)
+        .values(status=SubmissionStatus.SUBMITTED.value)
     )
     await app.state.services.database.execute(update_stmt)
 
