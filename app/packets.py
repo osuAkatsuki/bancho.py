@@ -699,7 +699,7 @@ def write_scoreframe(s: ScoreFrame) -> bytes:
     )
 
 
-_noexpand_types: dict[osuTypes, Callable[..., bytes]] = {
+_noexpand_types: dict[osuTypes, Callable[..., bytes | bytearray]] = {
     # base
     osuTypes.i8: struct.Struct("<b").pack,
     osuTypes.u8: struct.Struct("<B").pack,

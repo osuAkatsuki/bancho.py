@@ -29,6 +29,11 @@ DATA_PATH = Path.cwd() / ".data"
 ACHIEVEMENTS_ASSETS_PATH = DATA_PATH / "assets/medals/client"
 DEFAULT_AVATAR_PATH = DATA_PATH / "avatars/default.jpg"
 
+_JPEG_JFIF_HEADER = memoryview(b"\xff\xd8\xff\xe0")
+_JPEG_JFIF_SIGNATURE = memoryview(b"JFIF\x00")
+_PNG_HEADER = memoryview(b"\x89PNG\r\n\x1a\n")
+_PNG_TRAILER = memoryview(b"\x49END\xae\x42\x60\x82")
+
 
 def make_safe_name(name: str) -> str:
     """Return a name safe for usage in sql."""
@@ -240,11 +245,10 @@ def display_startup_dialog() -> None:
 
 
 def has_jpeg_headers_and_trailers(data_view: memoryview) -> bool:
-    return data_view[:4] == b"\xff\xd8\xff\xe0" and data_view[6:11] == b"JFIF\x00"
+    return (
+        data_view[:4] == _JPEG_JFIF_HEADER and data_view[6:11] == _JPEG_JFIF_SIGNATURE
+    )
 
 
 def has_png_headers_and_trailers(data_view: memoryview) -> bool:
-    return (
-        data_view[:8] == b"\x89PNG\r\n\x1a\n"
-        and data_view[-8:] == b"\x49END\xae\x42\x60\x82"
-    )
+    return data_view[:8] == _PNG_HEADER and data_view[-8:] == _PNG_TRAILER

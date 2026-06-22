@@ -255,7 +255,7 @@ async def main(argv: Sequence[str] | None = None) -> int:
     db = databases.Database(app.settings.DB_DSN)
     await db.connect()
 
-    redis = await aioredis.from_url(app.settings.REDIS_DSN)  # type: ignore[no-untyped-call]
+    redis = await aioredis.from_url(app.settings.REDIS_DSN)
 
     ctx = Context(db, redis)
 

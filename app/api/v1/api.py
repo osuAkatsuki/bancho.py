@@ -6,6 +6,7 @@ import hashlib
 import struct
 from pathlib import Path as SystemPath
 from typing import Literal
+from typing import cast
 
 from fastapi import APIRouter
 from fastapi import Depends
@@ -226,13 +227,19 @@ async def api_get_player_info(
         all_stats = await stats_repo.fetch_many(player_id=resolved_user_id)
 
         for mode_stats in all_stats:
-            rank = await app.state.services.redis.zrevrank(
-                f"bancho:leaderboard:{mode_stats['mode']}",
-                str(resolved_user_id),
+            rank = cast(
+                int | None,
+                await app.state.services.redis.zrevrank(
+                    f"bancho:leaderboard:{mode_stats['mode']}",
+                    str(resolved_user_id),
+                ),
             )
-            country_rank = await app.state.services.redis.zrevrank(
-                f"bancho:leaderboard:{mode_stats['mode']}:{resolved_country}",
-                str(resolved_user_id),
+            country_rank = cast(
+                int | None,
+                await app.state.services.redis.zrevrank(
+                    f"bancho:leaderboard:{mode_stats['mode']}:{resolved_country}",
+                    str(resolved_user_id),
+                ),
             )
 
             # NOTE: this dict-like return is intentional.

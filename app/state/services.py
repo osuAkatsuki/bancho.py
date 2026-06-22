@@ -34,7 +34,7 @@ SQL_UPDATES_FILE = Path.cwd() / "migrations/migrations.sql"
 
 http_client = httpx.AsyncClient()
 database = Database(app.settings.DB_DSN)
-redis: aioredis.Redis = aioredis.from_url(app.settings.REDIS_DSN)  # type: ignore[no-untyped-call]
+redis: aioredis.Redis = aioredis.from_url(app.settings.REDIS_DSN)
 
 datadog: datadog_client.ThreadStats | None = None
 if str(app.settings.DATADOG_API_KEY) and str(app.settings.DATADOG_APP_KEY):
