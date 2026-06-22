@@ -3,11 +3,27 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Protocol
 
 from app.objects.player import ClientDetails
 from app.objects.player import ModeData
 from app.objects.score import Score
 from app.repositories.achievements import Achievement
+from app.repositories.user_achievements import UserAchievement
+
+
+class AchievementsService(Protocol):
+    async def fetch_many(self) -> Sequence[Achievement]: ...
+
+
+class UserAchievementsService(Protocol):
+    async def fetch_many(self, *, user_id: int) -> Sequence[UserAchievement]: ...
+
+    async def create(
+        self,
+        user_id: int,
+        achievement_id: int,
+    ) -> UserAchievement: ...
 
 
 @dataclass(frozen=True)
@@ -133,6 +149,43 @@ def format_achievements(achievements: Sequence[Achievement]) -> str:
     )
 
 
+def achievement_is_unlocked(
+    achievement: Achievement,
+    user_achievements: Sequence[UserAchievement],
+) -> bool:
+    return any(
+        user_achievement["achid"] == achievement["id"]
+        for user_achievement in user_achievements
+    )
+
+
+async def unlock_new_achievements(
+    *,
+    score: Score,
+    achievements: AchievementsService,
+    user_achievements: UserAchievementsService,
+) -> list[Achievement]:
+    assert score.player is not None
+
+    unlocked_achievements: list[Achievement] = []
+    server_achievements = await achievements.fetch_many()
+    player_achievements = await user_achievements.fetch_many(user_id=score.player.id)
+
+    for server_achievement in server_achievements:
+        if achievement_is_unlocked(server_achievement, player_achievements):
+            continue
+
+        achievement_condition = server_achievement["cond"]
+        if achievement_condition(score, score.mode.as_vanilla):
+            await user_achievements.create(
+                score.player.id,
+                server_achievement["id"],
+            )
+            unlocked_achievements.append(server_achievement)
+
+    return unlocked_achievements
+
+
 def build_submission_charts(
     *,
     score: Score,
@@ -200,3 +253,36 @@ def build_submission_charts(
     ]
 
     return "|".join(submission_charts).encode()
+
+
+async def build_score_submission_response(
+    *,
+    score: Score,
+    previous_stats: ModeData,
+    current_stats: ModeData,
+    domain: str,
+    achievements: AchievementsService,
+    user_achievements: UserAchievementsService,
+) -> bytes:
+    if not score.passed:  # TODO: check if this is correct
+        return b"error: no"
+
+    assert score.bmap is not None
+    assert score.player is not None
+
+    if score.bmap.awards_ranked_pp and not score.player.restricted:
+        unlocked_achievements = await unlock_new_achievements(
+            score=score,
+            achievements=achievements,
+            user_achievements=user_achievements,
+        )
+    else:
+        unlocked_achievements = []
+
+    return build_submission_charts(
+        score=score,
+        previous_stats=previous_stats,
+        current_stats=current_stats,
+        achievements=unlocked_achievements,
+        domain=domain,
+    )

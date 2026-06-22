@@ -68,7 +68,6 @@ from app.repositories import ratings as ratings_repo
 from app.repositories import scores as scores_repo
 from app.repositories import stats as stats_repo
 from app.repositories import users as users_repo
-from app.repositories.achievements import Achievement
 from app.usecases import achievements as achievements_usecases
 from app.usecases import score_submission as score_submission_usecases
 from app.usecases import user_achievements as user_achievements_usecases
@@ -933,51 +932,14 @@ async def osuSubmitModularSelector(
     # update their recent score
     score.player.recent_scores[score.mode] = score
 
-    """ score submission charts """
-
-    # charts are only displayed for passes vanilla gamemodes.
-    if not score.passed:  # TODO: check if this is correct
-        response = b"error: no"
-    else:
-        # construct and send achievements & ranking charts to the client
-        if score.bmap.awards_ranked_pp and not score.player.restricted:
-            unlocked_achievements: list[Achievement] = []
-
-            server_achievements = await achievements_usecases.fetch_many()
-            player_achievements = await user_achievements_usecases.fetch_many(
-                user_id=score.player.id,
-            )
-
-            for server_achievement in server_achievements:
-                player_unlocked_achievement = any(
-                    player_achievement
-                    for player_achievement in player_achievements
-                    if player_achievement["achid"] == server_achievement["id"]
-                )
-                if player_unlocked_achievement:
-                    # player already has this achievement.
-                    continue
-
-                achievement_condition = server_achievement["cond"]
-                if achievement_condition(score, score.mode.as_vanilla):
-                    await user_achievements_usecases.create(
-                        score.player.id,
-                        server_achievement["id"],
-                    )
-                    unlocked_achievements.append(server_achievement)
-
-            achievements = unlocked_achievements
-        else:
-            achievements = []
-
-        # create score submission charts for osu! client to display
-        response = score_submission_usecases.build_submission_charts(
-            score=score,
-            previous_stats=prev_stats,
-            current_stats=stats,
-            achievements=achievements,
-            domain=app.settings.DOMAIN,
-        )
+    response = await score_submission_usecases.build_score_submission_response(
+        score=score,
+        previous_stats=prev_stats,
+        current_stats=stats,
+        domain=app.settings.DOMAIN,
+        achievements=achievements_usecases,
+        user_achievements=user_achievements_usecases,
+    )
 
     log(
         f"[{score.mode!r}] {score.player} submitted a score! "
