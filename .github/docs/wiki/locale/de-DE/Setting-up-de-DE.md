@@ -1,84 +1,91 @@
-# Setting up
+# Einrichtung
 
-## download and install the osu! server codebase onto your machine
+## Die osu!-Server-Codebasis herunterladen und auf deinem System installieren
 
 ```sh
-# clone bancho.py's repository onto your machine
+# das bancho.py-Repository klonen
 git clone https://github.com/osuAkatsuki/bancho.py
 
-# enter bancho.py's new directory
+# in das neue bancho.py-Verzeichnis wechseln
 cd bancho.py
 
-# install docker for building the application image
-sudo apt install -y docker
+# docker zum Bauen und Ausführen des Anwendungs-Images installieren
+sudo apt install -y docker.io docker-compose-plugin
+
+# wahlweise: uv für lokales Linting, Type-Checking und Unit-Tests installieren
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-## configuring bancho.py
+## bancho.py konfigurieren
 
-all configuration for the osu! server (bancho.py) itself can be done from the
-`.env` and `logging.yaml` files. we will provide example files for each, which
-you can use as a base and modify as you'd like.
+Die Konfiguration des osu!-Servers (bancho.py) selbst erfolgt über die Dateien
+`.env` und `logging.yaml`. Für beide Dateien gibt es Beispieldateien, die du als
+Grundlage verwenden und nach Bedarf anpassen kannst.
 
 ```sh
-# create a configuration file from the sample provided
+# eine Konfigurationsdatei aus der Beispieldatei erstellen
 cp .env.example .env
 
-# create a logging configuration file from the sample provided
+# eine Logging-Konfigurationsdatei aus der Beispieldatei erstellen
 cp logging.yaml.example logging.yaml
 
-# configure the application to your needs
-# this is required to move onto the next steps
+# die Anwendung an deine Bedürfnisse anpassen
+# dies ist erforderlich, bevor du mit den nächsten Schritten fortfährst
 nano .env
 
-# you can additionally configure the logging if you'd like,
-# but the default should work fine for most users.
+# wenn du möchtest, kannst du auch das Logging konfigurieren;
+# die Standardkonfiguration sollte für die meisten Nutzer ausreichen.
 nano logging.yaml
 ```
 
-## configuring a reverse proxy (we'll use nginx)
+## Einen Reverse-Proxy konfigurieren (wir verwenden nginx)
 
-bancho.py relies on a reverse proxy for tls (https) support, and for ease-of-use
-in terms of configuration. nginx is an open-source and efficient web server we'll
-be using for this guide, but feel free to check out others, like caddy and h2o.
+bancho.py verwendet einen Reverse-Proxy für TLS-Unterstützung (HTTPS) und zur
+einfacheren Konfiguration. In dieser Anleitung verwenden wir den quelloffenen und
+effizienten Webserver nginx; andere Optionen wie caddy oder h2o sind ebenfalls
+möglich.
 
 ```sh
-# install nginx
+# nginx installieren
 sudo apt install nginx
 
-# install nginx configuration using values from your .env
+# nginx-Konfiguration mit den Werten aus deiner .env installieren
 ./scripts/install-nginx-config.sh
 ```
 
-## congratulations! you just set up an osu! private server
+## Glückwunsch! Du hast gerade einen privaten osu!-Server eingerichtet
 
-if everything went well, you should be able to start your server up:
+Wenn alles geklappt hat, kannst du deinen Server nun starten:
 
 ```sh
-# build the application
+# die Anwendung bauen
 make build
 
-# run the application
+# die Anwendung starten
 make run
 ```
 
-additionally, the following commands are available for your introspection:
+Zusätzlich stehen dir die folgenden Befehle zur Verfügung:
 
 ```sh
-# run the application in the background
+# die Anwendung im Hintergrund starten
 make run-bg
 
-# view logs of all running containers
+# Logs aller laufenden Container anzeigen
 make logs
 
-# run all automated tests
+# alle automatisierten Tests ausführen
 make test
 
-# run formatters and linters
+# nur die Unit-Tests ohne docker ausführen
+make utest
+
+# Formatierer und Linter ausführen
 make lint
 
-# run static type checking
+# statisches Type-Checking ausführen
 make type-check
 
-# remove all unused dependencies
-make clean
+# die lokale uv-virtualenv entfernen
+make uninstall
 ```

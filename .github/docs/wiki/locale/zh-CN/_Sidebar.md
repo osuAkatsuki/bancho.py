@@ -6,13 +6,13 @@
 ## 介绍
 
 * **[主页](https://github.com/osuAkatsuki/bancho.py/wiki/Home-zh-CN)**
-* **[Read before setting up](https://github.com/osuAkatsuki/bancho.py/wiki/Read-before-setting-up-zh-CN)**
-* **[Breaking changes](https://github.com/osuAkatsuki/bancho.py/wiki/Breaking-changes-zh-CN)**
+* **[设置前请阅读](https://github.com/osuAkatsuki/bancho.py/wiki/Read-before-setting-up-zh-CN)**
+* **[重大变更](https://github.com/osuAkatsuki/bancho.py/wiki/Breaking-changes-zh-CN)**
 
 ## 玩家
 
-* **[Setting up](https://github.com/osuAkatsuki/bancho.py/wiki/Setting-up-zh-CN)**
-* **[Post setup](https://github.com/osuAkatsuki/bancho.py/wiki/Post-setup-zh-CN)**
+* **[设置](https://github.com/osuAkatsuki/bancho.py/wiki/Setting-up-zh-CN)**
+* **[后续设置](https://github.com/osuAkatsuki/bancho.py/wiki/Post-setup-zh-CN)**
 
 ## 开发者
 

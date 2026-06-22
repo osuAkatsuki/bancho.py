@@ -1,84 +1,88 @@
-# Setting up
+# 设置
 
-## download and install the osu! server codebase onto your machine
+## 下载并安装 osu! 服务器代码库
 
 ```sh
-# clone bancho.py's repository onto your machine
+# 克隆 bancho.py 仓库
 git clone https://github.com/osuAkatsuki/bancho.py
 
-# enter bancho.py's new directory
+# 进入新创建的 bancho.py 目录
 cd bancho.py
 
-# install docker for building the application image
-sudo apt install -y docker
+# 安装 docker，用于构建和运行应用镜像
+sudo apt install -y docker.io docker-compose-plugin
+
+# 可选：安装 uv，用于本地 lint、类型检查和单元测试
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-## configuring bancho.py
+## 配置 bancho.py
 
-all configuration for the osu! server (bancho.py) itself can be done from the
-`.env` and `logging.yaml` files. we will provide example files for each, which
-you can use as a base and modify as you'd like.
+osu! 服务器（bancho.py）本身的配置都可以通过 `.env` 和 `logging.yaml`
+完成。项目为这两个文件都提供了示例文件，你可以以它们为基础按需修改。
 
 ```sh
-# create a configuration file from the sample provided
+# 从提供的示例创建配置文件
 cp .env.example .env
 
-# create a logging configuration file from the sample provided
+# 从提供的示例创建日志配置文件
 cp logging.yaml.example logging.yaml
 
-# configure the application to your needs
-# this is required to move onto the next steps
+# 按你的需求配置应用
+# 这是继续后续步骤前必须完成的操作
 nano .env
 
-# you can additionally configure the logging if you'd like,
-# but the default should work fine for most users.
+# 如果需要，也可以进一步配置日志；
+# 默认配置对大多数用户来说应该已经够用。
 nano logging.yaml
 ```
 
-## configuring a reverse proxy (we'll use nginx)
+## 配置反向代理（这里使用 nginx）
 
-bancho.py relies on a reverse proxy for tls (https) support, and for ease-of-use
-in terms of configuration. nginx is an open-source and efficient web server we'll
-be using for this guide, but feel free to check out others, like caddy and h2o.
+bancho.py 依赖反向代理来支持 TLS（HTTPS），同时也能让配置更简单。本指南使用
+开源且高效的 Web 服务器 nginx；你也可以根据需要了解 caddy、h2o 等其他方案。
 
 ```sh
-# install nginx
+# 安装 nginx
 sudo apt install nginx
 
-# install nginx configuration using values from your .env
+# 使用 .env 中的值安装 nginx 配置
 ./scripts/install-nginx-config.sh
 ```
 
-## congratulations! you just set up an osu! private server
+## 恭喜！你已经完成了 osu! 私服的基本设置
 
-if everything went well, you should be able to start your server up:
+如果一切顺利，现在应该可以启动服务器了：
 
 ```sh
-# build the application
+# 构建应用
 make build
 
-# run the application
+# 运行应用
 make run
 ```
 
-additionally, the following commands are available for your introspection:
+此外，还可以使用以下命令进行检查和维护：
 
 ```sh
-# run the application in the background
+# 在后台运行应用
 make run-bg
 
-# view logs of all running containers
+# 查看所有运行中容器的日志
 make logs
 
-# run all automated tests
+# 运行所有自动化测试
 make test
 
-# run formatters and linters
+# 不使用 docker，仅运行单元测试子集
+make utest
+
+# 运行格式化工具和 linter
 make lint
 
-# run static type checking
+# 运行静态类型检查
 make type-check
 
-# remove all unused dependencies
-make clean
+# 删除本地 uv virtualenv
+make uninstall
 ```

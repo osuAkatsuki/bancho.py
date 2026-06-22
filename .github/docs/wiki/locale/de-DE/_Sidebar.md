@@ -7,11 +7,11 @@
 
 * **[Startseite](https://github.com/osuAkatsuki/bancho.py/wiki/Home-de-DE)**
 * **[Lesen Sie vor der Einrichtung](https://github.com/osuAkatsuki/bancho.py/wiki/Read-before-setting-up-de-DE)**
-* **[Breaking Changes](https://github.com/osuAkatsuki/bancho.py/wiki/Breaking-changes-de-DE)**
+* **[Wichtige Änderungen](https://github.com/osuAkatsuki/bancho.py/wiki/Breaking-changes-de-DE)**
 
 ## Anleitungen
 
-* **[Einrichten](https://github.com/osuAkatsuki/bancho.py/wiki/Setting-up-de-DE)**
+* **[Einrichtung](https://github.com/osuAkatsuki/bancho.py/wiki/Setting-up-de-DE)**
 * **[Nach der Einrichtung](https://github.com/osuAkatsuki/bancho.py/wiki/Post-setup-de-DE)**
 
 ## Entwickler

@@ -18,10 +18,12 @@ Questa guida sarà orientata verso Ubuntu - altre distribuzioni potrebbero avere
 Cerchiamo di minimizzare le nostre dipendenze, ma ci affidiamo comunque a strumenti come:
 
 - Python (linguaggio di programmazione)
-- MySQL (database relazionale)
-- Redis (database in memoria)
+- Docker (runtime per container)
+- Docker Compose plugin (orchestrazione dei container)
+- MySQL (database relazionale, tramite Docker Compose)
+- Redis (database in memoria, tramite Docker Compose)
 - Nginx (proxy inverso HTTP(S))
 - Certbot (strumento per certificati SSL)
-- Build-essential (strumenti di compilazione per C/C++)
+- uv (project manager Python, facoltativo per lo sviluppo locale)
 
 e alcuni altri.
