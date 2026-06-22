@@ -14,6 +14,18 @@ from enum import unique
 
 from mitmproxy import http
 
+_JPEG_JFIF_HEADER = memoryview(b"\xff\xd8\xff\xe0")
+_JPEG_JFIF_SIGNATURE = memoryview(b"JFIF\x00")
+_JPEG_EXIF_HEADER = memoryview(b"\xff\xd8\xff\xe1")
+_JPEG_EXIF_SIGNATURE = memoryview(b"Exif\x00")
+_JPEG_SPIFF_HEADER = memoryview(b"\xff\xd8\xff\xe8")
+_JPEG_SPIFF_SIGNATURE = memoryview(b"SPIFF\x00")
+_PNG_HEADER = memoryview(b"\x89PNG\r\n\x1a\n")
+_PNG_TRAILER = memoryview(b"\x49END\xae\x42\x60\x82")
+_GIF87A_HEADER = memoryview(b"GIF87a")
+_GIF89A_HEADER = memoryview(b"GIF89a")
+_GIF_TRAILER = memoryview(b"\x00\x3b")
+
 
 @unique
 class ServerPackets(IntEnum):
@@ -139,27 +151,26 @@ def response(flow: http.HTTPFlow) -> None:
         if (  # todo check host
             (
                 # jfif, jpe, jpeg, jpg graphics file
-                body_view[:4] == b"\xff\xd8\xff\xe0"
-                and body_view[6:11] == b"JFIF\x00"
+                body_view[:4] == _JPEG_JFIF_HEADER
+                and body_view[6:11] == _JPEG_JFIF_SIGNATURE
             )
             or (
                 # exif digital jpg
-                body_view[:4] == b"\xff\xd8\xff\xe1"
-                and body_view[6:11] == b"Exif\x00"
+                body_view[:4] == _JPEG_EXIF_HEADER
+                and body_view[6:11] == _JPEG_EXIF_SIGNATURE
             )
             or (
                 # spiff still picture jpg
-                body_view[:4] == b"\xff\xd8\xff\xe8"
-                and body_view[6:12] == b"SPIFF\x00"
+                body_view[:4] == _JPEG_SPIFF_HEADER
+                and body_view[6:12] == _JPEG_SPIFF_SIGNATURE
             )
         ):
             sys.stdout.write(f"[{fmt_bytes(body_len)} jpeg file]\n\n")
-        elif (
-            body_view[:8] == b"\x89PNG\r\n\x1a\n"
-            and body_view[-8:] == b"\x49END\xae\x42\x60\x82"
-        ):
+        elif body_view[:8] == _PNG_HEADER and body_view[-8:] == _PNG_TRAILER:
             sys.stdout.write(f"[{fmt_bytes(body_len)} png file]\n\n")
-        elif body_view[:6] in (b"GIF87a", b"GIF89a") and body_view[-2:] == b"\x00\x3b":
+        elif (
+            body_view[:6] == _GIF87A_HEADER or body_view[:6] == _GIF89A_HEADER
+        ) and body_view[-2:] == _GIF_TRAILER:
             sys.stdout.write(f"[{fmt_bytes(body_len)} gif file]\n\n")
         else:
             sys.stdout.write(f"{str(body)[2:-1]}\n\n")  # remove b''

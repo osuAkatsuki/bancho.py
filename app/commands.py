@@ -54,6 +54,7 @@ from app.objects.match import MatchTeams
 from app.objects.match import MatchTeamTypes
 from app.objects.match import MatchWinConditions
 from app.objects.match import SlotStatus
+from app.objects.match import StartingTimers
 from app.objects.player import Player
 from app.objects.score import SubmissionStatus
 from app.repositories import clans as clans_repo
@@ -129,7 +130,7 @@ mp_commands = CommandSet("mp", "Multiplayer commands.")
 pool_commands = CommandSet("pool", "Mappool commands.")
 clan_commands = CommandSet("clan", "Clan commands.")
 
-regular_commands = []
+regular_commands: list[Command] = []
 command_sets = [
     mp_commands,
     pool_commands,
@@ -1436,15 +1437,16 @@ async def mp_start(ctx: Context, match: Match) -> str | None:
 
             # add timers to our match object,
             # so we can cancel them if needed.
-            match.starting = {
+            starting: StartingTimers = {
                 "start": app.state.loop.call_later(duration, _start),
                 "alerts": [
-                    app.state.loop.call_later(duration - t, lambda t=t: _alert_start(t))
+                    app.state.loop.call_later(duration - t, _alert_start, t)
                     for t in (60, 30, 10, 5, 4, 3, 2, 1)
                     if t < duration
                 ],
                 "time": time.time() + duration,
             }
+            match.starting = starting
 
             return f"Match will start in {duration} seconds."
         elif ctx.args[0] in ("cancel", "c"):

@@ -50,7 +50,8 @@ async def app() -> AsyncIterator[ASGIApp]:
 
 @pytest.fixture
 async def http_client(app: ASGIApp) -> AsyncIterator[httpx.AsyncClient]:
-    async with httpx.AsyncClient(app=app, base_url="http://test") as client:
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         yield client
 
 
