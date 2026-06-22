@@ -155,6 +155,135 @@ def _stats() -> tuple[ModeData, ModeData]:
     return previous, current
 
 
+class _ReplayFile:
+    def __init__(self, data: bytes) -> None:
+        self.data = data
+        self.read_count = 0
+
+    async def read(self) -> bytes:
+        self.read_count += 1
+        return self.data
+
+
+class _ReplayPlayer:
+    def __init__(self, *, restricted: bool = False, online: bool = True) -> None:
+        self.id = 6
+        self.name = "test-user"
+        self.restricted = restricted
+        self.is_online = online
+        self.restriction_reasons: list[str] = []
+        self.restriction_admins: list[object] = []
+        self.logged_out = False
+
+    def __repr__(self) -> str:
+        return f"<{self.name} ({self.id})>"
+
+    async def restrict(self, admin: object, reason: str) -> None:
+        self.restriction_admins.append(admin)
+        self.restriction_reasons.append(reason)
+
+    def logout(self) -> None:
+        self.logged_out = True
+        self.is_online = False
+
+
+async def test_save_replay_file_writes_passed_replay(tmp_path) -> None:
+    score = _score()
+    player = _ReplayPlayer()
+    score.player = player
+    replay_data = b"x" * score_submission.MIN_REPLAY_SIZE
+    replay_file = _ReplayFile(replay_data)
+    missing_replay_logs: list[str] = []
+
+    await score_submission.save_replay_file(
+        score,
+        replay_file=replay_file,
+        replays_path=tmp_path,
+        restriction_admin=player,
+        log_missing_replay=missing_replay_logs.append,
+    )
+
+    assert (tmp_path / "42.osr").read_bytes() == replay_data
+    assert replay_file.read_count == 1
+    assert missing_replay_logs == []
+    assert player.restriction_reasons == []
+    assert not player.logged_out
+
+
+async def test_save_replay_file_does_not_read_failed_score(tmp_path) -> None:
+    score = _score()
+    player = _ReplayPlayer()
+    score.player = player
+    score.passed = False
+    replay_file = _ReplayFile(b"")
+    missing_replay_logs: list[str] = []
+
+    await score_submission.save_replay_file(
+        score,
+        replay_file=replay_file,
+        replays_path=tmp_path,
+        restriction_admin=player,
+        log_missing_replay=missing_replay_logs.append,
+    )
+
+    assert replay_file.read_count == 0
+    assert list(tmp_path.iterdir()) == []
+    assert missing_replay_logs == []
+    assert player.restriction_reasons == []
+
+
+async def test_save_replay_file_restricts_unrestricted_player_without_replay(
+    tmp_path,
+) -> None:
+    score = _score()
+    player = _ReplayPlayer()
+    admin = _ReplayPlayer()
+    score.player = player
+    replay_file = _ReplayFile(b"x" * (score_submission.MIN_REPLAY_SIZE - 1))
+    missing_replay_logs: list[str] = []
+
+    await score_submission.save_replay_file(
+        score,
+        replay_file=replay_file,
+        replays_path=tmp_path,
+        restriction_admin=admin,
+        log_missing_replay=missing_replay_logs.append,
+    )
+
+    assert list(tmp_path.iterdir()) == []
+    assert missing_replay_logs == [
+        "<test-user (6)> submitted a score without a replay!",
+    ]
+    assert player.restriction_admins == [admin]
+    assert player.restriction_reasons == ["submitted score with no replay"]
+    assert player.logged_out
+
+
+async def test_save_replay_file_does_not_restrict_restricted_player_without_replay(
+    tmp_path,
+) -> None:
+    score = _score()
+    player = _ReplayPlayer(restricted=True)
+    score.player = player
+    replay_file = _ReplayFile(b"x" * (score_submission.MIN_REPLAY_SIZE - 1))
+    missing_replay_logs: list[str] = []
+
+    await score_submission.save_replay_file(
+        score,
+        replay_file=replay_file,
+        replays_path=tmp_path,
+        restriction_admin=player,
+        log_missing_replay=missing_replay_logs.append,
+    )
+
+    assert list(tmp_path.iterdir()) == []
+    assert missing_replay_logs == [
+        "<test-user (6)> submitted a score without a replay!",
+    ]
+    assert player.restriction_reasons == []
+    assert not player.logged_out
+
+
 class _FailingAchievements:
     async def fetch_many(self) -> list[dict[str, object]]:
         raise AssertionError("achievements should not be fetched")

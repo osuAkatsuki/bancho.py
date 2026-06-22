@@ -731,24 +731,16 @@ async def osuSubmitModularSelector(
 
         await score_submission_usecases.persist_submitted_score(score, scores_repo)
 
-    if score.passed:
-        replay_data = await replay_file.read()
+    def log_missing_replay(message: str) -> None:
+        log(message, Ansi.LRED)
 
-        MIN_REPLAY_SIZE = 24
-
-        if len(replay_data) >= MIN_REPLAY_SIZE:
-            replay_disk_file = REPLAYS_PATH / f"{score.id}.osr"
-            replay_disk_file.write_bytes(replay_data)
-        else:
-            log(f"{score.player} submitted a score without a replay!", Ansi.LRED)
-
-            if not score.player.restricted:
-                await score.player.restrict(
-                    admin=app.state.sessions.bot,
-                    reason="submitted score with no replay",
-                )
-                if score.player.is_online:
-                    score.player.logout()
+    await score_submission_usecases.save_replay_file(
+        score,
+        replay_file=replay_file,
+        replays_path=REPLAYS_PATH,
+        restriction_admin=app.state.sessions.bot,
+        log_missing_replay=log_missing_replay,
+    )
 
     def publish_user_stats(player: Player) -> None:
         app.state.sessions.players.enqueue(app.packets.user_stats(player))

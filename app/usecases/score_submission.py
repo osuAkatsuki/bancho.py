@@ -7,6 +7,7 @@ from collections.abc import Mapping
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 from typing import Protocol
 
@@ -23,6 +24,7 @@ from app.repositories.user_achievements import UserAchievement
 
 StatsUpdates = dict[str, Any]
 BestScorePerformance = Mapping[str, float]
+MIN_REPLAY_SIZE = 24
 GRADE_STATS_COLUMNS = {
     Grade.XH: "xh_count",
     Grade.X: "x_count",
@@ -44,6 +46,10 @@ class UserAchievementsService(Protocol):
         user_id: int,
         achievement_id: int,
     ) -> UserAchievement: ...
+
+
+class ReplayFile(Protocol):
+    async def read(self) -> bytes: ...
 
 
 class ScoresRepository(Protocol):
@@ -266,6 +272,38 @@ async def persist_submitted_score(score: Score, scores: ScoresRepository) -> int
     score_id = int(created_score["id"])
     score.id = score_id
     return score_id
+
+
+async def save_replay_file(
+    score: Score,
+    *,
+    replay_file: ReplayFile,
+    replays_path: Path,
+    restriction_admin: Player,
+    log_missing_replay: Callable[[str], None],
+) -> None:
+    assert score.player is not None
+
+    if not score.passed:
+        return
+
+    replay_data = await replay_file.read()
+
+    if len(replay_data) >= MIN_REPLAY_SIZE:
+        assert score.id is not None
+        replay_disk_file = replays_path / f"{score.id}.osr"
+        replay_disk_file.write_bytes(replay_data)
+        return
+
+    log_missing_replay(f"{score.player} submitted a score without a replay!")
+
+    if not score.player.restricted:
+        await score.player.restrict(
+            admin=restriction_admin,
+            reason="submitted score with no replay",
+        )
+        if score.player.is_online:
+            score.player.logout()
 
 
 def apply_score_base_stats(score: Score, stats: ModeData) -> StatsUpdates:
