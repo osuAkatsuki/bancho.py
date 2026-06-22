@@ -65,7 +65,7 @@ def _score() -> Score:
     score.rank = 1
     score.prev_best = None
     score.client_checksum = ""
-    score.player = SimpleNamespace(id=6, name="test-user")
+    score.player = SimpleNamespace(id=6, name="test-user", restricted=False)
     score.bmap = SimpleNamespace(
         id=315,
         set_id=141,
@@ -73,6 +73,7 @@ def _score() -> Score:
         plays=1,
         passes=1,
         last_update="2014-05-18 15:41:48",
+        awards_ranked_pp=True,
         set=SimpleNamespace(url="https://osu.cmyui.xyz/s/141"),
     )
     return score
@@ -104,6 +105,76 @@ def _stats() -> tuple[ModeData, ModeData]:
         grades={},
     )
     return previous, current
+
+
+class _FailingAchievements:
+    async def fetch_many(self) -> list[dict[str, object]]:
+        raise AssertionError("achievements should not be fetched")
+
+
+class _FailingUserAchievements:
+    async def fetch_many(
+        self,
+        *,
+        user_id: int,
+    ) -> list[dict[str, int]]:
+        raise AssertionError("user achievements should not be fetched")
+
+    async def create(
+        self,
+        user_id: int,
+        achievement_id: int,
+    ) -> dict[str, int]:
+        raise AssertionError("user achievements should not be created")
+
+
+class _FakeAchievements:
+    async def fetch_many(self) -> list[dict[str, object]]:
+        return [
+            {
+                "id": 1,
+                "file": "osu-skill-pass-4",
+                "name": "Insanity Approaches",
+                "desc": "You're not twitching, you're just ready.",
+                "cond": lambda score, mode_vn: True,
+            },
+            {
+                "id": 2,
+                "file": "osu-combo-500",
+                "name": "500 Combo",
+                "desc": "Achieve a 500 combo.",
+                "cond": lambda score, mode_vn: False,
+            },
+            {
+                "id": 3,
+                "file": "all-intro-hidden",
+                "name": "Blindsight",
+                "desc": "I can see just perfectly",
+                "cond": lambda score, mode_vn: True,
+            },
+        ]
+
+
+class _FakeUserAchievements:
+    def __init__(self) -> None:
+        self.created_achievement_ids: list[int] = []
+
+    async def fetch_many(
+        self,
+        *,
+        user_id: int,
+    ) -> list[dict[str, int]]:
+        assert user_id == 6
+        return [{"userid": 6, "achid": 3}]
+
+    async def create(
+        self,
+        user_id: int,
+        achievement_id: int,
+    ) -> dict[str, int]:
+        assert user_id == 6
+        self.created_achievement_ids.append(achievement_id)
+        return {"userid": user_id, "achid": achievement_id}
 
 
 def test_parse_unique_id_hashes_md5s_submission_unique_ids() -> None:
@@ -304,3 +375,74 @@ def test_build_submission_charts_includes_previous_best_values() -> None:
         b"accuracyBefore:80.12|accuracyAfter:81.94|ppBefore:9.5|ppAfter:10.448"
         in response
     )
+
+
+async def test_build_score_submission_response_returns_error_for_failed_score() -> None:
+    score = _score()
+    score.passed = False
+    previous_stats, current_stats = _stats()
+
+    response = await score_submission.build_score_submission_response(
+        score=score,
+        previous_stats=previous_stats,
+        current_stats=current_stats,
+        domain="cmyui.xyz",
+        achievements=_FailingAchievements(),
+        user_achievements=_FailingUserAchievements(),
+    )
+
+    assert response == b"error: no"
+
+
+@pytest.mark.parametrize(
+    ("awards_ranked_pp", "restricted"),
+    [
+        (False, False),
+        (True, True),
+    ],
+)
+async def test_build_score_submission_response_skips_achievements_when_score_is_not_eligible(
+    awards_ranked_pp: bool,
+    restricted: bool,
+) -> None:
+    score = _score()
+    score.bmap.awards_ranked_pp = awards_ranked_pp
+    score.player.restricted = restricted
+    previous_stats, current_stats = _stats()
+
+    response = await score_submission.build_score_submission_response(
+        score=score,
+        previous_stats=previous_stats,
+        current_stats=current_stats,
+        domain="cmyui.xyz",
+        achievements=_FailingAchievements(),
+        user_achievements=_FailingUserAchievements(),
+    )
+
+    assert b"achievements-new:" in response
+    assert b"osu-skill-pass-4" not in response
+
+
+async def test_build_score_submission_response_unlocks_matching_new_achievements() -> (
+    None
+):
+    score = _score()
+    previous_stats, current_stats = _stats()
+    user_achievements = _FakeUserAchievements()
+
+    response = await score_submission.build_score_submission_response(
+        score=score,
+        previous_stats=previous_stats,
+        current_stats=current_stats,
+        domain="cmyui.xyz",
+        achievements=_FakeAchievements(),
+        user_achievements=user_achievements,
+    )
+
+    assert user_achievements.created_achievement_ids == [1]
+    assert (
+        b"achievements-new:osu-skill-pass-4+Insanity Approaches+You're not twitching, you're just ready."
+        in response
+    )
+    assert b"osu-combo-500" not in response
+    assert b"all-intro-hidden" not in response
