@@ -15,6 +15,7 @@ from app.commands import status_to_id
 from app.constants.mods import Mods
 from app.objects.player import OsuStream
 from app.packets import MultiplayerMatch
+from app.usecases import score_submission as score_submission_usecase
 
 
 def test_parse_login_data_handles_protocol_trailing_newline() -> None:
@@ -140,15 +141,17 @@ def test_parse_score_form_data_rejects_invalid_score_parts(
     assert osu.parse_form_data_score_params(form_data) is None
 
 
-def test_osu_chart_entry_formats_optional_before_and_after_values() -> None:
-    assert osu.chart_entry("rankedScore", None, 123.45) == (
+def test_score_submission_chart_entry_formats_optional_before_and_after_values() -> (
+    None
+):
+    assert score_submission_usecase.chart_entry("rankedScore", None, 123.45) == (
         "rankedScoreBefore:|rankedScoreAfter:123.45"
     )
 
 
-def test_osu_achievement_string_uses_client_delimiters() -> None:
+def test_score_submission_achievement_string_uses_client_delimiters() -> None:
     assert (
-        osu.format_achievement_string(
+        score_submission_usecase.format_achievement_string(
             "osu-combo-500",
             "500 Combo",
             "Achieve a 500 combo.",

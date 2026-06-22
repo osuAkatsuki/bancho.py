@@ -70,6 +70,7 @@ from app.repositories import stats as stats_repo
 from app.repositories import users as users_repo
 from app.repositories.achievements import Achievement
 from app.usecases import achievements as achievements_usecases
+from app.usecases import score_submission as score_submission_usecase
 from app.usecases import user_achievements as user_achievements_usecases
 from app.utils import escape_enum
 from app.utils import pymysql_encode
@@ -495,14 +496,6 @@ async def osuSearchSetHandler(
     # 0s are threadid, has_vid, has_story, filesize, filesize_novid
 
 
-def chart_entry(name: str, before: float | None, after: float | None) -> str:
-    return f"{name}Before:{before or ''}|{name}After:{after or ''}"
-
-
-def format_achievement_string(file: str, name: str, description: str) -> str:
-    return f"{file}+{name}+{description}"
-
-
 def parse_form_data_score_params(
     score_data: FormData,
 ) -> tuple[bytes, StarletteUploadFile] | None:
@@ -601,45 +594,17 @@ async def osuSubmitModularSelector(
 
     ## perform checksum validation
 
-    unique_id1, unique_id2 = unique_ids.split("|", maxsplit=1)
-    unique_id1_md5 = hashlib.md5(unique_id1.encode()).hexdigest()
-    unique_id2_md5 = hashlib.md5(unique_id2.encode()).hexdigest()
-
     try:
-        assert player.client_details is not None
-
-        if osu_version != f"{player.client_details.osu_version.date:%Y%m%d}":
-            raise ValueError("osu! version mismatch")
-
-        if client_hash_decoded != player.client_details.client_hash:
-            raise ValueError("client hash mismatch")
-        # assert unique ids (c1) are correct and match login params
-        if unique_id1_md5 != player.client_details.uninstall_md5:
-            raise ValueError(
-                f"unique_id1 mismatch ({unique_id1_md5} != {player.client_details.uninstall_md5})",
-            )
-
-        if unique_id2_md5 != player.client_details.disk_signature_md5:
-            raise ValueError(
-                f"unique_id2 mismatch ({unique_id2_md5} != {player.client_details.disk_signature_md5})",
-            )
-
-        # assert online checksums match
-        server_score_checksum = score.compute_online_checksum(
+        score_submission_usecase.validate_submission_integrity(
+            client_details=player.client_details,
             osu_version=osu_version,
-            osu_client_hash=client_hash_decoded,
-            storyboard_checksum=storyboard_md5 or "",
+            client_hash=client_hash_decoded,
+            unique_ids=unique_ids,
+            score=score,
+            storyboard_md5=storyboard_md5,
+            submission_beatmap_md5=bmap_md5,
+            updated_beatmap_hash=updated_beatmap_hash,
         )
-        if score.client_checksum != server_score_checksum:
-            raise ValueError(
-                f"online score checksum mismatch ({server_score_checksum} != {score.client_checksum})",
-            )
-
-        # assert beatmap hashes match
-        if bmap_md5 != updated_beatmap_hash:
-            raise ValueError(
-                f"beatmap hash mismatch ({bmap_md5} != {updated_beatmap_hash})",
-            )
 
     except (ValueError, AssertionError):
         # NOTE: this is undergoing a temporary trial period,
@@ -1001,72 +966,18 @@ async def osuSubmitModularSelector(
                     )
                     unlocked_achievements.append(server_achievement)
 
-            achievements_str = "/".join(
-                format_achievement_string(a["file"], a["name"], a["desc"])
-                for a in unlocked_achievements
-            )
+            achievements = unlocked_achievements
         else:
-            achievements_str = ""
+            achievements = []
 
         # create score submission charts for osu! client to display
-
-        if score.prev_best:
-            beatmap_ranking_chart_entries = (
-                chart_entry("rank", score.prev_best.rank, score.rank),
-                chart_entry("rankedScore", score.prev_best.score, score.score),
-                chart_entry("totalScore", score.prev_best.score, score.score),
-                chart_entry("maxCombo", score.prev_best.max_combo, score.max_combo),
-                chart_entry(
-                    "accuracy",
-                    round(score.prev_best.acc, 2),
-                    round(score.acc, 2),
-                ),
-                chart_entry("pp", score.prev_best.pp, score.pp),
-            )
-        else:
-            # no previous best score
-            beatmap_ranking_chart_entries = (
-                chart_entry("rank", None, score.rank),
-                chart_entry("rankedScore", None, score.score),
-                chart_entry("totalScore", None, score.score),
-                chart_entry("maxCombo", None, score.max_combo),
-                chart_entry("accuracy", None, round(score.acc, 2)),
-                chart_entry("pp", None, score.pp),
-            )
-
-        overall_ranking_chart_entries = (
-            chart_entry("rank", prev_stats.rank, stats.rank),
-            chart_entry("rankedScore", prev_stats.rscore, stats.rscore),
-            chart_entry("totalScore", prev_stats.tscore, stats.tscore),
-            chart_entry("maxCombo", prev_stats.max_combo, stats.max_combo),
-            chart_entry("accuracy", round(prev_stats.acc, 2), round(stats.acc, 2)),
-            chart_entry("pp", prev_stats.pp, stats.pp),
+        response = score_submission_usecase.build_submission_charts(
+            score=score,
+            previous_stats=prev_stats,
+            current_stats=stats,
+            achievements=achievements,
+            domain=app.settings.DOMAIN,
         )
-
-        submission_charts = [
-            # beatmap info chart
-            f"beatmapId:{score.bmap.id}",
-            f"beatmapSetId:{score.bmap.set_id}",
-            f"beatmapPlaycount:{score.bmap.plays}",
-            f"beatmapPasscount:{score.bmap.passes}",
-            f"approvedDate:{score.bmap.last_update}",
-            "\n",
-            # beatmap ranking chart
-            "chartId:beatmap",
-            f"chartUrl:{score.bmap.set.url}",
-            "chartName:Beatmap Ranking",
-            *beatmap_ranking_chart_entries,
-            f"onlineScoreId:{score.id}",
-            "\n",
-            # overall ranking chart
-            "chartId:overall",
-            f"chartUrl:https://{app.settings.DOMAIN}/u/{score.player.id}",
-            "chartName:Overall Ranking",
-            *overall_ranking_chart_entries,
-            f"achievements-new:{achievements_str}",
-        ]
-
-        response = "|".join(submission_charts).encode()
 
     log(
         f"[{score.mode!r}] {score.player} submitted a score! "
