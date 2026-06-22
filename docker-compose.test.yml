@@ -2,7 +2,7 @@ services:
   ## shared services
 
   mysql-test:
-    image: mysql:9.4.0
+    image: mysql:9.7.1
     # ports:
     #   - ${DB_PORT}:${DB_PORT}
     environment:
@@ -24,7 +24,7 @@ services:
       retries: 10
 
   redis-test:
-    image: redis:8.2.2
+    image: redis:8.8.0
     # ports:
     #   - ${REDIS_PORT}:${REDIS_PORT}
     user: root

@@ -23,9 +23,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Push files into wiki repo
-        uses: newrelic/wiki-sync-action@main
+        uses: newrelic/wiki-sync-action@v1.0.1
         with:
           source: ${{ env.REPO_PATH }}
           destination: ${{ env.WIKI_PATH }}
@@ -40,13 +40,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           ref: master
 
       - name: Push files into repo
-        uses: newrelic/wiki-sync-action@main
+        uses: newrelic/wiki-sync-action@v1.0.1
         with:
           source: ${{ env.WIKI_PATH }}
           destination: ${{ env.REPO_PATH }}
