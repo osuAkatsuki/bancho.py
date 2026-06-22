@@ -337,7 +337,7 @@ def format_score_submission_performance(score: Score) -> str:
     return f"{score.pp:,.2f}pp"
 
 
-def notify_personal_best(
+def notify_score_submitter_of_personal_best(
     score: Score,
     *,
     send_notification: Callable[[Player, str], None],

@@ -677,7 +677,7 @@ async def osuSubmitModularSelector(
             if app.state.services.datadog:
                 app.state.services.datadog.increment("bancho.submitted_scores_best")  # type: ignore[no-untyped-call]
 
-            score_submission_usecases.notify_personal_best(
+            score_submission_usecases.notify_score_submitter_of_personal_best(
                 score,
                 send_notification=send_personal_best_notification,
             )

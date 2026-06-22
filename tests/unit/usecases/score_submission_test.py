@@ -317,11 +317,11 @@ async def test_save_replay_file_does_not_restrict_restricted_player_without_repl
     assert not player.logged_out
 
 
-def test_notify_personal_best_sends_pp_notification_for_ranked_score() -> None:
+def test_notify_score_submitter_sends_pp_notification() -> None:
     score = _score()
     notifications: list[tuple[object, str]] = []
 
-    performance = score_submission.notify_personal_best(
+    performance = score_submission.notify_score_submitter_of_personal_best(
         score,
         send_notification=lambda player, message: notifications.append(
             (player, message),
@@ -334,14 +334,14 @@ def test_notify_personal_best_sends_pp_notification_for_ranked_score() -> None:
     ]
 
 
-def test_notify_personal_best_uses_score_for_vanilla_loved_score() -> None:
+def test_notify_score_submitter_uses_score_for_vanilla_loved() -> None:
     score = _score()
     score.bmap.status = RankedStatus.Loved
     score.mode = GameMode.VANILLA_OSU
     score.score = 1_234_567
     notifications: list[tuple[object, str]] = []
 
-    performance = score_submission.notify_personal_best(
+    performance = score_submission.notify_score_submitter_of_personal_best(
         score,
         send_notification=lambda player, message: notifications.append(
             (player, message),
@@ -354,12 +354,12 @@ def test_notify_personal_best_uses_score_for_vanilla_loved_score() -> None:
     ]
 
 
-def test_notify_personal_best_uses_pp_for_relax_loved_score() -> None:
+def test_notify_score_submitter_uses_pp_for_relax_loved() -> None:
     score = _score()
     score.bmap.status = RankedStatus.Loved
     notifications: list[tuple[object, str]] = []
 
-    performance = score_submission.notify_personal_best(
+    performance = score_submission.notify_score_submitter_of_personal_best(
         score,
         send_notification=lambda player, message: notifications.append(
             (player, message),
@@ -372,12 +372,12 @@ def test_notify_personal_best_uses_pp_for_relax_loved_score() -> None:
     ]
 
 
-def test_notify_personal_best_skips_non_best_score() -> None:
+def test_notify_score_submitter_skips_non_best_score() -> None:
     score = _score()
     score.status = SubmissionStatus.SUBMITTED
     notifications: list[tuple[object, str]] = []
 
-    performance = score_submission.notify_personal_best(
+    performance = score_submission.notify_score_submitter_of_personal_best(
         score,
         send_notification=lambda player, message: notifications.append(
             (player, message),
@@ -388,12 +388,12 @@ def test_notify_personal_best_skips_non_best_score() -> None:
     assert notifications == []
 
 
-def test_notify_personal_best_skips_map_without_leaderboard() -> None:
+def test_notify_score_submitter_skips_no_leaderboard() -> None:
     score = _score()
     score.bmap.has_leaderboard = False
     notifications: list[tuple[object, str]] = []
 
-    performance = score_submission.notify_personal_best(
+    performance = score_submission.notify_score_submitter_of_personal_best(
         score,
         send_notification=lambda player, message: notifications.append(
             (player, message),
