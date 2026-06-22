@@ -464,7 +464,7 @@ def test_apply_score_stats_updates_max_combo_without_ranked_stats_for_submitted_
     assert "s_count" not in updates
 
 
-def test_apply_score_stats_updates_ranked_stats_for_loved_map() -> None:
+def test_apply_score_stats_skips_ranked_stats_for_loved_map() -> None:
     score = _score()
     score.bmap.awards_ranked_pp = False
     score.score = 50_000
@@ -479,11 +479,11 @@ def test_apply_score_stats_updates_ranked_stats_for_loved_map() -> None:
     updates = score_submission.apply_score_stats(score, stats)
 
     assert stats.max_combo == 300
-    assert stats.rscore == 51_000
-    assert stats.grades[Grade.S] == 2
+    assert stats.rscore == 1_000
+    assert stats.grades[Grade.S] == 1
     assert updates["max_combo"] == 300
-    assert updates["rscore"] == 51_000
-    assert updates["s_count"] == 2
+    assert "rscore" not in updates
+    assert "s_count" not in updates
 
 
 def test_apply_score_stats_updates_first_best_ranked_score() -> None:

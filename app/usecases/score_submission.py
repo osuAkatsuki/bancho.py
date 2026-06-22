@@ -212,8 +212,11 @@ def apply_score_stats(score: Score, stats: ModeData) -> StatsUpdates:
         stats.max_combo = score.max_combo
         updates["max_combo"] = stats.max_combo
 
-    if score.status == SubmissionStatus.BEST:
-        # Map has an online leaderboard, and this is our (new)
+    if score.bmap.awards_ranked_pp and score.status == SubmissionStatus.BEST:
+        # Official osu! includes loved maps in ranked score and grade counts.
+        # bancho.py has historically counted only ranked/approved maps here;
+        # expanding this would require a stats backfill for existing users.
+        # Map is ranked or approved, and this is our (new)
         # best score on the map. Update the player's
         # ranked score and grade counts.
         updates.update(apply_ranked_score_stats(score, stats))
