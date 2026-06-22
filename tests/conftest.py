@@ -4,6 +4,7 @@ from collections.abc import AsyncIterator
 
 import httpx
 import pytest
+import pytest_asyncio
 import respx
 from asgi_lifespan import LifespanManager
 from asgi_lifespan._types import ASGIApp
@@ -38,7 +39,7 @@ def mock_out_initial_image_downloads(respx_mock: respx.MockRouter) -> None:
     )
 
 
-@pytest.fixture
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def app() -> AsyncIterator[ASGIApp]:
     async with LifespanManager(
         asgi_app,
@@ -48,7 +49,7 @@ async def app() -> AsyncIterator[ASGIApp]:
         yield manager.app
 
 
-@pytest.fixture
+@pytest_asyncio.fixture(loop_scope="session")
 async def http_client(app: ASGIApp) -> AsyncIterator[httpx.AsyncClient]:
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:

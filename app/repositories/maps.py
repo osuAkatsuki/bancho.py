@@ -178,9 +178,9 @@ async def create(
         hp=hp,
         diff=diff,
     )
-    rec_id = await app.state.services.database.execute(insert_stmt)
+    await app.state.services.database.execute(insert_stmt)
 
-    select_stmt = select(*READ_PARAMS).where(MapsTable.id == rec_id)
+    select_stmt = select(*READ_PARAMS).where(MapsTable.id == id)
     map = await app.state.services.database.fetch_one(select_stmt)
     assert map is not None
     return cast(Map, map)

@@ -502,11 +502,12 @@ class LoginData(TypedDict):
 
 def parse_login_data(data: bytes) -> LoginData:
     """Parse data from the body of a login request."""
+    decoded_login_data = data.decode().rstrip("\n")
     (
         username,
         password_md5,
         remainder,
-    ) = data.decode().split("\n", maxsplit=2)
+    ) = decoded_login_data.split("\n", maxsplit=2)
 
     (
         osu_version,
