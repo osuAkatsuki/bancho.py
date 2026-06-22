@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml uv.lock ./
-RUN pip install -U pip uv==0.8.12
+RUN pip install -U pip uv==0.11.23
 RUN UV_PROJECT_ENVIRONMENT=/usr/local uv sync --frozen --no-install-project --inexact
 
 FROM python:3.11-slim
