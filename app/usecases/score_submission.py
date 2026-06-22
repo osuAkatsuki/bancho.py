@@ -4,6 +4,7 @@ import hashlib
 from collections.abc import Mapping
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 from typing import Protocol
 
@@ -38,6 +39,41 @@ class UserAchievementsService(Protocol):
         user_id: int,
         achievement_id: int,
     ) -> UserAchievement: ...
+
+
+class ScoresRepository(Protocol):
+    async def create(
+        self,
+        map_md5: str,
+        score: int,
+        pp: float,
+        acc: float,
+        max_combo: int,
+        mods: int,
+        n300: int,
+        n100: int,
+        n50: int,
+        nmiss: int,
+        ngeki: int,
+        nkatu: int,
+        grade: str,
+        status: int,
+        mode: int,
+        play_time: datetime,
+        time_elapsed: int,
+        client_flags: int,
+        user_id: int,
+        perfect: int,
+        online_checksum: str,
+    ) -> Mapping[str, Any]: ...
+
+    async def mark_previous_best_scores_submitted(
+        self,
+        *,
+        map_md5: str,
+        user_id: int,
+        mode: int,
+    ) -> None: ...
 
 
 @dataclass(frozen=True)
@@ -138,6 +174,48 @@ def validate_submission_integrity(
         submission_beatmap_md5=submission_beatmap_md5,
         updated_beatmap_hash=updated_beatmap_hash,
     )
+
+
+async def persist_submitted_score(score: Score, scores: ScoresRepository) -> int:
+    assert score.bmap is not None
+    assert score.player is not None
+
+    if score.status == SubmissionStatus.BEST:
+        # this score is our best score.
+        # update any preexisting personal best
+        # records with SubmissionStatus.SUBMITTED.
+        await scores.mark_previous_best_scores_submitted(
+            map_md5=score.bmap.md5,
+            user_id=score.player.id,
+            mode=score.mode.value,
+        )
+
+    created_score = await scores.create(
+        map_md5=score.bmap.md5,
+        score=score.score,
+        pp=score.pp,
+        acc=score.acc,
+        max_combo=score.max_combo,
+        mods=score.mods.value,
+        n300=score.n300,
+        n100=score.n100,
+        n50=score.n50,
+        nmiss=score.nmiss,
+        ngeki=score.ngeki,
+        nkatu=score.nkatu,
+        grade=score.grade.name,
+        status=score.status.value,
+        mode=score.mode.value,
+        play_time=score.server_time,
+        time_elapsed=score.time_elapsed,
+        client_flags=score.client_flags.value,
+        user_id=score.player.id,
+        perfect=int(score.perfect),
+        online_checksum=score.client_checksum,
+    )
+    score_id = int(created_score["id"])
+    score.id = score_id
+    return score_id
 
 
 def apply_score_base_stats(score: Score, stats: ModeData) -> StatsUpdates:

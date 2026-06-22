@@ -86,6 +86,9 @@ READ_PARAMS = (
     ScoresTable.online_checksum,
 )
 
+SUBMITTED_STATUS = 1
+BEST_STATUS = 2
+
 
 class Score(TypedDict):
     id: int
@@ -164,6 +167,25 @@ async def create(
     _score = await app.state.services.database.fetch_one(select_stmt)
     assert _score is not None
     return cast(Score, _score)
+
+
+async def mark_previous_best_scores_submitted(
+    *,
+    map_md5: str,
+    user_id: int,
+    mode: int,
+) -> None:
+    update_stmt = (
+        update(ScoresTable)
+        .where(
+            ScoresTable.status == BEST_STATUS,
+            ScoresTable.map_md5 == map_md5,
+            ScoresTable.userid == user_id,
+            ScoresTable.mode == mode,
+        )
+        .values(status=SUBMITTED_STATUS)
+    )
+    await app.state.services.database.execute(update_stmt)
 
 
 async def fetch_one(id: int) -> Score | None:
