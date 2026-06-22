@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+from typing import Literal
 from typing import Protocol
 
 from app._typing import UNSET
@@ -26,6 +27,7 @@ from app.repositories.user_achievements import UserAchievement
 
 StatsUpdates = dict[str, Any]
 BestScorePerformance = Mapping[str, float]
+FirstPlaceScoringMetric = Literal["score", "pp"]
 MIN_REPLAY_SIZE = 24
 VANILLA_GAME_MODES = (
     GameMode.VANILLA_OSU,
@@ -58,6 +60,10 @@ class UserAchievementsService(Protocol):
 
 class ReplayFile(Protocol):
     async def read(self) -> bytes: ...
+
+
+class AnnouncementChannel(Protocol):
+    def send(self, msg: str, sender: Player, to_self: bool = False) -> None: ...
 
 
 class ScoresRepository(Protocol):
@@ -100,6 +106,14 @@ class ScoresRepository(Protocol):
         user_id: int,
         mode: int,
     ) -> Sequence[BestScorePerformance]: ...
+
+    async def fetch_previous_first_place(
+        self,
+        *,
+        map_md5: str,
+        mode: int,
+        scoring_metric: FirstPlaceScoringMetric,
+    ) -> Mapping[str, Any] | None: ...
 
 
 class StatsRepository(Protocol):
@@ -343,6 +357,59 @@ def notify_personal_best(
         f"You achieved #{score.rank}! ({performance})",
     )
     return performance
+
+
+def first_place_scoring_metric(score: Score) -> FirstPlaceScoringMetric:
+    return "pp" if score.mode >= GameMode.RELAX_OSU else "score"
+
+
+async def announce_first_place(
+    score: Score,
+    *,
+    scores: ScoresRepository,
+    announce_channel: AnnouncementChannel | None,
+    domain: str,
+) -> None:
+    assert score.bmap is not None
+    assert score.player is not None
+
+    if score.status != SubmissionStatus.BEST:
+        return
+
+    if not score.bmap.has_leaderboard:
+        return
+
+    if score.rank != 1:
+        return
+
+    if score.player.restricted:
+        return
+
+    performance = format_score_submission_performance(score)
+    ann = [
+        f"\x01ACTION achieved #1 on {score.bmap.embed}",
+        f"with {score.acc:.2f}% for {performance}.",
+    ]
+
+    if score.mods:
+        ann.insert(1, f"+{score.mods!r}")
+
+    # If there was previously a score on the map, add old #1.
+    prev_n1 = await scores.fetch_previous_first_place(
+        map_md5=score.bmap.md5,
+        mode=score.mode.value,
+        scoring_metric=first_place_scoring_metric(score),
+    )
+
+    if prev_n1:
+        if score.player.id != prev_n1["id"]:
+            ann.append(
+                f"(Previous #1: [https://{domain}/u/{prev_n1['id']} "
+                f"{prev_n1['name']}])",
+            )
+
+    assert announce_channel is not None
+    announce_channel.send(" ".join(ann), sender=score.player, to_self=True)
 
 
 def apply_score_base_stats(score: Score, stats: ModeData) -> StatsUpdates:

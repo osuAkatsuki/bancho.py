@@ -190,6 +190,36 @@ class _ReplayPlayer:
         self.is_online = False
 
 
+class _AnnounceChannel:
+    def __init__(self) -> None:
+        self.messages: list[tuple[str, object, bool]] = []
+
+    def send(self, msg: str, sender: object, to_self: bool = False) -> None:
+        self.messages.append((msg, sender, to_self))
+
+
+class _FirstPlaceScoresRepository:
+    def __init__(self, previous_first_place: dict[str, object] | None = None) -> None:
+        self.previous_first_place = previous_first_place
+        self.calls: list[dict[str, object]] = []
+
+    async def fetch_previous_first_place(
+        self,
+        *,
+        map_md5: str,
+        mode: int,
+        scoring_metric: str,
+    ) -> dict[str, object] | None:
+        self.calls.append(
+            {
+                "map_md5": map_md5,
+                "mode": mode,
+                "scoring_metric": scoring_metric,
+            },
+        )
+        return self.previous_first_place
+
+
 async def test_save_replay_file_writes_passed_replay(tmp_path) -> None:
     score = _score()
     player = _ReplayPlayer()
@@ -372,6 +402,153 @@ def test_notify_personal_best_skips_map_without_leaderboard() -> None:
 
     assert performance is None
     assert notifications == []
+
+
+async def test_announce_first_place_sends_message_with_previous_first_place() -> None:
+    score = _score()
+    scores = _FirstPlaceScoresRepository(
+        {"id": 9, "name": "old-user"},
+    )
+    channel = _AnnounceChannel()
+
+    await score_submission.announce_first_place(
+        score,
+        scores=scores,
+        announce_channel=channel,
+        domain="osu.cmyui.xyz",
+    )
+
+    assert scores.calls == [
+        {
+            "map_md5": "1cf5b2c2edfafd055536d2cefcb89c0e",
+            "mode": GameMode.RELAX_OSU.value,
+            "scoring_metric": "pp",
+        },
+    ]
+    assert channel.messages == [
+        (
+            "\x01ACTION achieved #1 on [https://osu.cmyui.xyz/b/315 test map] "
+            "+HDRX with 81.94% for 10.45pp. "
+            "(Previous #1: [https://osu.cmyui.xyz/u/9 old-user])",
+            score.player,
+            True,
+        ),
+    ]
+
+
+async def test_announce_first_place_omits_previous_holder_for_same_player() -> None:
+    score = _score()
+    score.mods = Mods.NOMOD
+    scores = _FirstPlaceScoresRepository(
+        {"id": 6, "name": "test-user"},
+    )
+    channel = _AnnounceChannel()
+
+    await score_submission.announce_first_place(
+        score,
+        scores=scores,
+        announce_channel=channel,
+        domain="osu.cmyui.xyz",
+    )
+
+    assert channel.messages == [
+        (
+            "\x01ACTION achieved #1 on [https://osu.cmyui.xyz/b/315 test map] "
+            "with 81.94% for 10.45pp.",
+            score.player,
+            True,
+        ),
+    ]
+
+
+async def test_announce_first_place_uses_score_for_vanilla_loved_score() -> None:
+    score = _score()
+    score.bmap.status = RankedStatus.Loved
+    score.mode = GameMode.VANILLA_OSU
+    score.mods = Mods.NOMOD
+    score.score = 1_234_567
+    scores = _FirstPlaceScoresRepository()
+    channel = _AnnounceChannel()
+
+    await score_submission.announce_first_place(
+        score,
+        scores=scores,
+        announce_channel=channel,
+        domain="osu.cmyui.xyz",
+    )
+
+    assert scores.calls == [
+        {
+            "map_md5": "1cf5b2c2edfafd055536d2cefcb89c0e",
+            "mode": GameMode.VANILLA_OSU.value,
+            "scoring_metric": "score",
+        },
+    ]
+    assert channel.messages == [
+        (
+            "\x01ACTION achieved #1 on [https://osu.cmyui.xyz/b/315 test map] "
+            "with 81.94% for 1,234,567 score.",
+            score.player,
+            True,
+        ),
+    ]
+
+
+@pytest.mark.parametrize(
+    "condition",
+    [
+        "non_best",
+        "rank_two",
+        "restricted",
+        "no_leaderboard",
+    ],
+)
+async def test_announce_first_place_skips_ineligible_scores(condition: str) -> None:
+    score = _score()
+    if condition == "non_best":
+        score.status = SubmissionStatus.SUBMITTED
+    elif condition == "rank_two":
+        score.rank = 2
+    elif condition == "restricted":
+        score.player.restricted = True
+    elif condition == "no_leaderboard":
+        score.bmap.has_leaderboard = False
+
+    scores = _FirstPlaceScoresRepository(
+        {"id": 9, "name": "old-user"},
+    )
+    channel = _AnnounceChannel()
+
+    await score_submission.announce_first_place(
+        score,
+        scores=scores,
+        announce_channel=channel,
+        domain="osu.cmyui.xyz",
+    )
+
+    assert scores.calls == []
+    assert channel.messages == []
+
+
+async def test_announce_first_place_requires_announce_channel() -> None:
+    score = _score()
+    scores = _FirstPlaceScoresRepository()
+
+    with pytest.raises(AssertionError):
+        await score_submission.announce_first_place(
+            score,
+            scores=scores,
+            announce_channel=None,
+            domain="osu.cmyui.xyz",
+        )
+
+    assert scores.calls == [
+        {
+            "map_md5": "1cf5b2c2edfafd055536d2cefcb89c0e",
+            "mode": GameMode.RELAX_OSU.value,
+            "scoring_metric": "pp",
+        },
+    ]
 
 
 class _FailingAchievements:

@@ -677,49 +677,18 @@ async def osuSubmitModularSelector(
             if app.state.services.datadog:
                 app.state.services.datadog.increment("bancho.submitted_scores_best")  # type: ignore[no-untyped-call]
 
-            performance = score_submission_usecases.notify_personal_best(
+            score_submission_usecases.notify_personal_best(
                 score,
                 send_notification=send_personal_best_notification,
             )
 
-            if performance is not None:
-                if score.rank == 1 and not score.player.restricted:
-                    announce_chan = app.state.sessions.channels.get_by_name("#announce")
-
-                    ann = [
-                        f"\x01ACTION achieved #1 on {score.bmap.embed}",
-                        f"with {score.acc:.2f}% for {performance}.",
-                    ]
-
-                    if score.mods:
-                        ann.insert(1, f"+{score.mods!r}")
-
-                    scoring_metric = (
-                        "pp" if score.mode >= GameMode.RELAX_OSU else "score"
-                    )
-
-                    # If there was previously a score on the map, add old #1.
-                    prev_n1 = await app.state.services.database.fetch_one(
-                        "SELECT u.id, name FROM users u "
-                        "INNER JOIN scores s ON u.id = s.userid "
-                        "WHERE s.map_md5 = :map_md5 AND s.mode = :mode "
-                        "AND s.status = 2 AND u.priv & 1 "
-                        f"ORDER BY s.{scoring_metric} DESC LIMIT 1",
-                        {"map_md5": score.bmap.md5, "mode": score.mode},
-                    )
-
-                    if prev_n1:
-                        if score.player.id != prev_n1["id"]:
-                            ann.append(
-                                f"(Previous #1: [https://{app.settings.DOMAIN}/u/"
-                                "{id} {name}])".format(
-                                    id=prev_n1["id"],
-                                    name=prev_n1["name"],
-                                ),
-                            )
-
-                    assert announce_chan is not None
-                    announce_chan.send(" ".join(ann), sender=score.player, to_self=True)
+            announce_chan = app.state.sessions.channels.get_by_name("#announce")
+            await score_submission_usecases.announce_first_place(
+                score,
+                scores=scores_repo,
+                announce_channel=announce_chan,
+                domain=app.settings.DOMAIN,
+            )
 
         await score_submission_usecases.persist_submitted_score(score, scores_repo)
 
