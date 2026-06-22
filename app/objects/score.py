@@ -14,7 +14,7 @@ import app.utils
 from app.constants.clientflags import ClientFlags
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
-from app.constants.score_statuses import SubmissionStatus as SubmissionStatus
+from app.constants.score_statuses import SubmissionStatus
 from app.objects.beatmap import Beatmap
 from app.repositories import scores as scores_repo
 from app.usecases.performance import ScoreParams
@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from app.objects.player import Player
 
 BEATMAPS_PATH = Path.cwd() / ".data/osu"
+__all__ = ("Grade", "Score", "SubmissionStatus")
 
 
 @unique
