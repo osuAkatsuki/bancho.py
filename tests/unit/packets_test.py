@@ -1,8 +1,78 @@
 from __future__ import annotations
 
+import struct
+from types import SimpleNamespace
+
 import pytest
 
 import app.packets
+
+
+def _packet(packet_id: int, payload: bytes | bytearray = b"") -> bytes:
+    payload = bytes(payload)
+    return struct.pack("<HxI", packet_id, len(payload)) + payload
+
+
+def _slot(
+    *,
+    status: int,
+    team: int,
+    mods: int = 0,
+    player_id: int | None = None,
+) -> SimpleNamespace:
+    return SimpleNamespace(
+        status=status,
+        team=team,
+        mods=mods,
+        player=None if player_id is None else SimpleNamespace(id=player_id),
+    )
+
+
+def _make_match() -> SimpleNamespace:
+    return SimpleNamespace(
+        id=7,
+        in_progress=True,
+        mods=64,
+        name="party",
+        passwd="secret",
+        map_name="Camellia - Exit This Earth's Atomosphere",
+        map_id=33852,
+        map_md5="60b725f10c9c85c70d97880dfe8191b3",
+        slots=[
+            _slot(status=4, team=1, mods=64, player_id=1001),
+            _slot(status=8, team=2, mods=16, player_id=32),
+            *[_slot(status=1, team=0) for _ in range(14)],
+        ],
+        host=SimpleNamespace(id=32),
+        mode=0,
+        win_condition=2,
+        team_type=2,
+        freemods=True,
+        seed=123_456,
+    )
+
+
+def _expected_match_payload(*, send_pw: bool) -> bytes:
+    payload = bytearray(struct.pack("<HbbI", 7, True, 0, 64))
+    payload += app.packets.write_string("party")
+    payload += app.packets.write_string("secret") if send_pw else b"\x0b\x00"
+    payload += app.packets.write_string("Camellia - Exit This Earth's Atomosphere")
+    payload += (33852).to_bytes(4, "little", signed=True)
+    payload += app.packets.write_string("60b725f10c9c85c70d97880dfe8191b3")
+
+    payload.extend([4, 8] + [1] * 14)
+    payload.extend([1, 2] + [0] * 14)
+    payload += (1001).to_bytes(4, "little")
+    payload += (32).to_bytes(4, "little")
+
+    payload += (32).to_bytes(4, "little")
+    payload.extend((0, 2, 2, 1))
+
+    for mods in [64, 16] + [0] * 14:
+        payload += mods.to_bytes(4, "little")
+
+    payload += (123_456).to_bytes(4, "little")
+    return bytes(payload)
 
 
 @pytest.mark.parametrize(
@@ -143,10 +213,9 @@ def test_write_spectator_left(test_input, expected):
     assert app.packets.spectator_left(test_input) == expected
 
 
-@pytest.mark.xfail(reason="need to implement proper writing")
-@pytest.mark.parametrize(("test_input", "expected"), [({}, b"")])
-def test_write_spectate_frames(test_input, expected):
-    assert app.packets.spectate_frames(test_input) == expected
+def test_write_spectate_frames():
+    payload = b"\x03\x00\x01raw-spectator-frame-data"
+    assert app.packets.spectate_frames(payload) == _packet(15, payload)
 
 
 def test_write_version_update():
@@ -179,28 +248,31 @@ def test_write_notification(test_input, expected):
     assert app.packets.notification(test_input) == expected
 
 
-@pytest.mark.xfail(reason="need to remove bancho.py match object")
 @pytest.mark.parametrize(
-    ("test_input", "expected"),
+    ("send_pw", "expected_payload"),
     [
-        ({"m": None, "send_pw": False}, b""),
-        ({"m": None, "send_pw": True}, b""),
+        (True, _expected_match_payload(send_pw=True)),
+        (False, _expected_match_payload(send_pw=False)),
     ],
 )
-def test_write_update_match(test_input, expected):
-    assert app.packets.update_match(test_input) == expected
+def test_write_update_match(send_pw, expected_payload):
+    assert app.packets.update_match(_make_match(), send_pw) == _packet(
+        26,
+        expected_payload,
+    )
 
 
-@pytest.mark.xfail(reason="need to remove bancho.py match object")
-@pytest.mark.parametrize(
-    ("test_input", "expected"),
-    [
-        ({}, b""),
-        ({}, b""),
-    ],
-)
-def test_write_new_match(test_input, expected):
-    assert app.packets.new_match(test_input) == expected
+def test_write_match_payload():
+    assert app.packets.write_match(_make_match()) == _expected_match_payload(
+        send_pw=True,
+    )
+
+
+def test_write_new_match():
+    assert app.packets.new_match(_make_match()) == _packet(
+        27,
+        _expected_match_payload(send_pw=True),
+    )
 
 
 @pytest.mark.parametrize(
@@ -218,16 +290,11 @@ def test_write_toggle_block_non_friend_pm():
     assert app.packets.toggle_block_non_friend_dm() == b'"\x00\x00\x00\x00\x00\x00'
 
 
-@pytest.mark.xfail(reason="need to remove bancho.py match object")
-@pytest.mark.parametrize(
-    ("test_input", "expected"),
-    [
-        ({}, b""),
-        ({}, b""),
-    ],
-)
-def test_write_match_join_success(test_input, expected):
-    assert app.packets.match_join_success(test_input) == expected
+def test_write_match_join_success():
+    assert app.packets.match_join_success(_make_match()) == _packet(
+        36,
+        _expected_match_payload(send_pw=True),
+    )
 
 
 def test_write_match_join_fail():
@@ -256,16 +323,11 @@ def test_write_fellow_spectator_left(test_input, expected):
     assert app.packets.fellow_spectator_left(test_input) == expected
 
 
-@pytest.mark.xfail(reason="need to remove bancho.py match object")
-@pytest.mark.parametrize(
-    ("test_input", "expected"),
-    [
-        ({}, b""),
-        ({}, b""),
-    ],
-)
-def test_write_match_start(test_input, expected):
-    assert app.packets.match_start(test_input) == expected
+def test_write_match_start():
+    assert app.packets.match_start(_make_match()) == _packet(
+        46,
+        _expected_match_payload(send_pw=True),
+    )
 
 
 @pytest.mark.parametrize(
@@ -522,16 +584,20 @@ def test_write_restart_server(test_input, expected):
     assert app.packets.restart_server(test_input) == expected
 
 
-@pytest.mark.xfail(reason="need to remove bancho.py match object")
-@pytest.mark.parametrize(
-    ("test_input", "expected"),
-    [
-        ({"p": None, "t_name": "cover"}, b""),
-        ({"p": None, "t_name": "cover"}, b""),
-    ],
-)
-def test_write_match_invite(test_input, expected):
-    assert app.packets.match_invite(**test_input) == expected
+def test_write_match_invite():
+    player = SimpleNamespace(
+        id=1001,
+        name="cmyui",
+        match=SimpleNamespace(embed="[osump://7/secret party]"),
+    )
+    msg = "Come join my game: [osump://7/secret party]."
+
+    expected_payload = bytearray(app.packets.write_string("cmyui"))
+    expected_payload += app.packets.write_string(msg)
+    expected_payload += app.packets.write_string("cover")
+    expected_payload += (1001).to_bytes(4, "little", signed=True)
+
+    assert app.packets.match_invite(player, "cover") == _packet(88, expected_payload)
 
 
 def test_channel_info_end():
