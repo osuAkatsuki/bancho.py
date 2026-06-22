@@ -11,13 +11,13 @@ import pytest
 from app.constants.clientflags import ClientFlags
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
+from app.constants.score_statuses import SubmissionStatus
 from app.objects.player import ClientDetails
 from app.objects.player import ModeData
 from app.objects.player import OsuStream
 from app.objects.player import OsuVersion
 from app.objects.score import Grade
 from app.objects.score import Score
-from app.objects.score import SubmissionStatus
 from app.usecases import score_submission
 
 

@@ -49,6 +49,7 @@ from app.constants.clientflags import LastFMFlags
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
 from app.constants.privileges import Privileges
+from app.constants.score_statuses import SubmissionStatus
 from app.logging import Ansi
 from app.logging import log
 from app.objects import models
@@ -57,7 +58,6 @@ from app.objects.beatmap import RankedStatus
 from app.objects.beatmap import ensure_osu_file_is_available
 from app.objects.player import Player
 from app.objects.score import Score
-from app.objects.score import SubmissionStatus
 from app.repositories import clans as clans_repo
 from app.repositories import comments as comments_repo
 from app.repositories import favourites as favourites_repo

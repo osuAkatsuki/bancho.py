@@ -8,11 +8,11 @@ from datetime import datetime
 from typing import Any
 from typing import Protocol
 
+from app.constants.score_statuses import SubmissionStatus
 from app.objects.player import ClientDetails
 from app.objects.player import ModeData
 from app.objects.score import Grade
 from app.objects.score import Score
-from app.objects.score import SubmissionStatus
 from app.repositories.achievements import Achievement
 from app.repositories.user_achievements import UserAchievement
 

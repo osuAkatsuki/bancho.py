@@ -23,7 +23,6 @@ if TYPE_CHECKING:
     from app.objects.player import Player
 
 BEATMAPS_PATH = Path.cwd() / ".data/osu"
-__all__ = ("Grade", "Score", "SubmissionStatus")
 
 
 @unique
