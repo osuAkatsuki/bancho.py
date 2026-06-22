@@ -1393,6 +1393,10 @@ class MatchCreate(BasePacket):
             player.enqueue(app.packets.match_join_fail())
             return
 
+        if player.match:
+            player.enqueue(app.packets.match_join_fail())
+            player.leave_match()
+
         # create the channel and add it
         # to the global channel list as
         # an instanced channel.

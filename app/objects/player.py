@@ -572,9 +572,29 @@ class Player:
 
         log(f"Unsilenced {self}.", Ansi.LCYAN)
 
+    def _special_case_disconnected_rejoin(self, match: Match, passwd: str) -> bool:
+        """This method will allow user to rejoin a match they were disconnected from. If everything's working properly, this method should never be called."""
+
+        reverse_slot_search = match.get_slot(self)
+        lobby = app.state.sessions.channels.get_by_name("#lobby")
+        if reverse_slot_search is None:
+            # recoverable, reset user state before perform normal join.
+            self.match = None
+            self.leave_channel(match.chat)
+            self.join_channel(lobby) if lobby else None
+            return self.join_match(match, passwd)
+
+        # user is in the match, but was disconnected.
+        self.join_channel(match.chat)
+        self.leave_channel(lobby) if lobby else None
+        self.enqueue(app.packets.match_join_success(match))
+        return True
+
     def join_match(self, match: Match, passwd: str) -> bool:
         """Attempt to add `self` to `match`."""
         if self.match:
+            if self.match.id == match.id:
+                return self._special_case_disconnected_rejoin(match, passwd)
             log(f"{self} tried to join multiple matches?")
             self.enqueue(app.packets.match_join_fail())
             return False
@@ -634,16 +654,20 @@ class Player:
             return
 
         slot = self.match.get_slot(self)
-        assert slot is not None
-
-        if slot.status == SlotStatus.locked:
-            # player was kicked, keep the slot locked.
-            new_status = SlotStatus.locked
+        if slot is None:
+            log(
+                f"{self} tried leaving a match, but slot couldn't be found?",
+                Ansi.LYELLOW,
+            )
         else:
-            # player left, open the slot for new players to join.
-            new_status = SlotStatus.open
+            if slot.status == SlotStatus.locked:
+                # player was kicked, keep the slot locked.
+                new_status = SlotStatus.locked
+            else:
+                # player left, open the slot for new players to join.
+                new_status = SlotStatus.open
 
-        slot.reset(new_status=new_status)
+            slot.reset(new_status=new_status)
 
         self.leave_channel(self.match.chat)
 
