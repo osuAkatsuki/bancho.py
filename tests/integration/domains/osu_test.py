@@ -11,6 +11,8 @@ from fastapi import status
 from httpx import AsyncClient
 
 from app import encryption
+from app.repositories import scores as scores_repo
+from app.repositories import users as users_repo
 from testing.sample_data import sample_beatmap_data
 
 
@@ -46,6 +48,8 @@ async def test_score_submission(
         },
     )
     assert response.status_code == status.HTTP_200_OK
+    user = await users_repo.fetch_one(name=username)
+    assert user is not None
 
     osu_version = "20230814"
     utc_offset = -5
@@ -237,7 +241,16 @@ async def test_score_submission(
 
     # ASSERT
     assert response.status_code == status.HTTP_200_OK
+    submitted_scores = await scores_repo.fetch_many(user_id=user["id"])
+    assert len(submitted_scores) == 1
+    submitted_score = submitted_scores[0]
+
     assert (
         response.read()
-        == b"beatmapId:315|beatmapSetId:141|beatmapPlaycount:1|beatmapPasscount:1|approvedDate:2014-05-18 15:41:48|\n|chartId:beatmap|chartUrl:https://osu.cmyui.xyz/s/141|chartName:Beatmap Ranking|rankBefore:|rankAfter:1|rankedScoreBefore:|rankedScoreAfter:26810|totalScoreBefore:|totalScoreAfter:26810|maxComboBefore:|maxComboAfter:52|accuracyBefore:|accuracyAfter:81.94|ppBefore:|ppAfter:10.448|onlineScoreId:1|\n|chartId:overall|chartUrl:https://cmyui.xyz/u/3|chartName:Overall Ranking|rankBefore:|rankAfter:1|rankedScoreBefore:|rankedScoreAfter:26810|totalScoreBefore:|totalScoreAfter:26810|maxComboBefore:|maxComboAfter:52|accuracyBefore:|accuracyAfter:81.94|ppBefore:|ppAfter:11|achievements-new:osu-skill-pass-4+Insanity Approaches+You're not twitching, you're just ready./all-intro-hidden+Blindsight+I can see just perfectly"
+        == (
+            "beatmapId:315|beatmapSetId:141|beatmapPlaycount:1|beatmapPasscount:1|approvedDate:2014-05-18 15:41:48|\n"
+            "|chartId:beatmap|chartUrl:https://osu.cmyui.xyz/s/141|chartName:Beatmap Ranking|rankBefore:|rankAfter:1|rankedScoreBefore:|rankedScoreAfter:26810|totalScoreBefore:|totalScoreAfter:26810|maxComboBefore:|maxComboAfter:52|accuracyBefore:|accuracyAfter:81.94|ppBefore:|ppAfter:10.448|"
+            f"onlineScoreId:{submitted_score['id']}|\n"
+            f"|chartId:overall|chartUrl:https://cmyui.xyz/u/{user['id']}|chartName:Overall Ranking|rankBefore:|rankAfter:1|rankedScoreBefore:|rankedScoreAfter:26810|totalScoreBefore:|totalScoreAfter:26810|maxComboBefore:|maxComboAfter:52|accuracyBefore:|accuracyAfter:81.94|ppBefore:|ppAfter:11|achievements-new:osu-skill-pass-4+Insanity Approaches+You're not twitching, you're just ready./all-intro-hidden+Blindsight+I can see just perfectly"
+        ).encode()
     )

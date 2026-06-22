@@ -102,6 +102,8 @@ warn_requird_dynamic_aliases = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
 
 [tool.isort]
 add_imports = ["from __future__ import annotations"]
