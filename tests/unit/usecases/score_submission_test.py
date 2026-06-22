@@ -482,6 +482,37 @@ def test_apply_score_stats_replaces_previous_best_ranked_score_and_grades() -> N
     assert "max_combo" not in updates
 
 
+def test_apply_score_stats_keeps_grade_counts_when_previous_best_grade_matches() -> (
+    None
+):
+    score = _score()
+    score.score = 30_000
+    score.grade = Grade.S
+    previous_best = Score()
+    previous_best.score = 20_000
+    previous_best.grade = Grade.S
+    score.prev_best = previous_best
+    stats = ModeData(
+        tscore=0,
+        rscore=50_000,
+        pp=0,
+        acc=0.0,
+        plays=0,
+        playtime=0,
+        max_combo=100,
+        total_hits=0,
+        rank=0,
+        grades=_grade_counts(s=2),
+    )
+
+    updates = score_submission.apply_score_stats(score, stats)
+
+    assert stats.rscore == 60_000
+    assert stats.grades[Grade.S] == 2
+    assert updates["rscore"] == 60_000
+    assert "s_count" not in updates
+
+
 def test_apply_weighted_performance_stats_calculates_accuracy_and_pp() -> None:
     stats = ModeData(
         tscore=0,
