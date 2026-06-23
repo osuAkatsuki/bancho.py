@@ -9,7 +9,6 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
-from typing import Literal
 from typing import Protocol
 
 from app._typing import UNSET
@@ -17,6 +16,7 @@ from app._typing import _UnsetSentinel
 from app.constants.beatmap_statuses import RankedStatus
 from app.constants.gamemodes import GameMode
 from app.constants.score_statuses import SubmissionStatus
+from app.constants.scoring_metrics import ScoringMetric
 from app.objects.player import ClientDetails
 from app.objects.player import ModeData
 from app.objects.player import Player
@@ -27,7 +27,6 @@ from app.repositories.user_achievements import UserAchievement
 
 StatsUpdates = dict[str, Any]
 BestScorePerformance = Mapping[str, float]
-FirstPlaceScoringMetric = Literal["score", "pp"]
 MIN_REPLAY_SIZE = 24
 VANILLA_GAME_MODES = (
     GameMode.VANILLA_OSU,
@@ -112,7 +111,7 @@ class ScoresRepository(Protocol):
         *,
         map_md5: str,
         mode: int,
-        scoring_metric: FirstPlaceScoringMetric,
+        scoring_metric: ScoringMetric,
     ) -> Mapping[str, Any] | None: ...
 
 
@@ -359,7 +358,7 @@ def notify_score_submitter_of_personal_best(
     return performance
 
 
-def first_place_scoring_metric(score: Score) -> FirstPlaceScoringMetric:
+def first_place_scoring_metric(score: Score) -> ScoringMetric:
     return "pp" if score.mode >= GameMode.RELAX_OSU else "score"
 
 

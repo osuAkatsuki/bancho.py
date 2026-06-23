@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections.abc import Mapping
 from datetime import datetime
 from typing import Any
-from typing import Literal
 from typing import TypedDict
 from typing import cast
 
@@ -25,6 +24,7 @@ from app._typing import _UnsetSentinel
 from app.constants.beatmap_statuses import RankedStatus
 from app.constants.privileges import Privileges
 from app.constants.score_statuses import SubmissionStatus
+from app.constants.scoring_metrics import ScoringMetric
 from app.repositories import Base
 from app.repositories.maps import MapsTable
 
@@ -92,9 +92,6 @@ READ_PARAMS = (
     ScoresTable.perfect,
     ScoresTable.online_checksum,
 )
-
-FirstPlaceScoringMetric = Literal["score", "pp"]
-LeaderboardScoringMetric = Literal["pp", "score"]
 
 
 class Score(TypedDict):
@@ -233,7 +230,7 @@ async def fetch_previous_first_place(
     *,
     map_md5: str,
     mode: int,
-    scoring_metric: FirstPlaceScoringMetric,
+    scoring_metric: ScoringMetric,
 ) -> PreviousFirstPlace | None:
     previous_first_place = await app.state.services.database.fetch_one(
         "SELECT u.id, name FROM users u "
@@ -256,7 +253,7 @@ async def fetch_beatmap_leaderboard_scores(
     map_md5: str,
     mode: int,
     user_id: int,
-    scoring_metric: LeaderboardScoringMetric,
+    scoring_metric: ScoringMetric,
     mods: int | None = None,
     friend_ids: set[int] | None = None,
     country: str | None = None,
@@ -306,7 +303,7 @@ async def fetch_personal_best_leaderboard_score(
     map_md5: str,
     mode: int,
     user_id: int,
-    scoring_metric: LeaderboardScoringMetric,
+    scoring_metric: ScoringMetric,
 ) -> LeaderboardScore | None:
     personal_best_score_row = await app.state.services.database.fetch_one(
         f"SELECT id, {scoring_metric} AS _score, "
@@ -333,7 +330,7 @@ async def fetch_personal_best_leaderboard_rank(
     *,
     map_md5: str,
     mode: int,
-    scoring_metric: LeaderboardScoringMetric,
+    scoring_metric: ScoringMetric,
     score: int | float,
 ) -> int:
     higher_scores = await app.state.services.database.fetch_val(

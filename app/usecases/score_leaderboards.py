@@ -3,15 +3,14 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
-from typing import Literal
 from typing import Protocol
 
 from app.constants.leaderboard_types import LeaderboardType
 from app.constants.mods import Mods
+from app.constants.scoring_metrics import ScoringMetric
 from app.objects.player import Player
 
 LeaderboardScore = dict[str, Any]
-LeaderboardScoringMetric = Literal["pp", "score"]
 
 
 class ScoresRepository(Protocol):
@@ -21,7 +20,7 @@ class ScoresRepository(Protocol):
         map_md5: str,
         mode: int,
         user_id: int,
-        scoring_metric: LeaderboardScoringMetric,
+        scoring_metric: ScoringMetric,
         mods: int | None = None,
         friend_ids: set[int] | None = None,
         country: str | None = None,
@@ -34,7 +33,7 @@ class ScoresRepository(Protocol):
         map_md5: str,
         mode: int,
         user_id: int,
-        scoring_metric: LeaderboardScoringMetric,
+        scoring_metric: ScoringMetric,
     ) -> LeaderboardScore | None: ...
 
     async def fetch_personal_best_leaderboard_rank(
@@ -42,7 +41,7 @@ class ScoresRepository(Protocol):
         *,
         map_md5: str,
         mode: int,
-        scoring_metric: LeaderboardScoringMetric,
+        scoring_metric: ScoringMetric,
         score: int | float,
     ) -> int: ...
 
@@ -60,7 +59,7 @@ async def fetch_leaderboard_scores(
     mode: int,
     mods: Mods,
     player: Player,
-    scoring_metric: LeaderboardScoringMetric,
+    scoring_metric: ScoringMetric,
     scores: ScoresRepository,
 ) -> LeaderboardScores:
     mods_filter = mods.value if leaderboard_type == LeaderboardType.Mods else None
