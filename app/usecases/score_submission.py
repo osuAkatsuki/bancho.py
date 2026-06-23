@@ -26,7 +26,7 @@ from app.objects.player import Player
 from app.objects.score import Grade
 from app.objects.score import Score
 from app.repositories.achievements import Achievement
-from app.repositories.scores import CurrentFirstPlaceScore
+from app.repositories.scores import FirstPlaceScore
 from app.repositories.scores import ScorePerformanceRow
 from app.repositories.user_achievements import UserAchievement
 
@@ -150,13 +150,13 @@ class ScoresRepository(Protocol):
         mode: int,
     ) -> Sequence[ScorePerformanceRow]: ...
 
-    async def fetch_current_first_place_score(
+    async def fetch_first_place_score(
         self,
         *,
         map_md5: str,
         mode: int,
         scoring_metric: ScoringMetric,
-    ) -> CurrentFirstPlaceScore | None: ...
+    ) -> FirstPlaceScore | None: ...
 
 
 class StatsRepository(Protocol):
@@ -210,7 +210,7 @@ class ScoreSubmissionPersistenceResult:
     score_id: int
     previous_stats: ModeData
     current_stats: ModeData
-    previous_first_place_score: CurrentFirstPlaceScore | None
+    previous_first_place_score: FirstPlaceScore | None
     unlocked_achievements: Sequence[Achievement]
     should_update_rank: bool
     should_publish_user_stats: bool
@@ -370,7 +370,7 @@ async def save_replay_file(
     restriction_admin: Player,
     log_missing_replay: Callable[[str], None],
 ) -> None:
-    replay_data = await read_validated_replay_file(
+    replay_data = await read_and_validate_replay_file(
         score,
         replay_file=replay_file,
         restriction_admin=restriction_admin,
@@ -379,7 +379,7 @@ async def save_replay_file(
     write_replay_file(score, replay_data=replay_data, replays_path=replays_path)
 
 
-async def read_validated_replay_file(
+async def read_and_validate_replay_file(
     score: Score,
     *,
     replay_file: ReplayFile,
@@ -474,42 +474,50 @@ async def fetch_previous_first_place_score(
     score: Score,
     *,
     scores: ScoresRepository,
-) -> CurrentFirstPlaceScore | None:
+) -> FirstPlaceScore | None:
     assert score.bmap is not None
-
-    if not score_should_announce_first_place(score):
-        return None
 
     # Before persistence, the current first-place row is the previous #1 for
     # this submission.
-    return await scores.fetch_current_first_place_score(
+    return await scores.fetch_first_place_score(
         map_md5=score.bmap.md5,
         mode=score.mode.value,
         scoring_metric=first_place_scoring_metric(score),
     )
 
 
-async def announce_first_place(
+def announce_first_place(
     score: Score,
     *,
-    scores: ScoresRepository,
+    previous_first_place_score: FirstPlaceScore | None,
     announce_channel: AnnouncementChannel | None,
     domain: str,
 ) -> None:
-    previous_first_place_score = await fetch_previous_first_place_score(
-        score,
-        scores=scores,
-    )
-    announcement = build_first_place_announcement(
-        score,
-        previous_first_place_score=previous_first_place_score,
-        domain=domain,
-    )
-    send_first_place_announcement(
-        score,
-        announcement=announcement,
-        announce_channel=announce_channel,
-    )
+    assert score.bmap is not None
+    assert score.player is not None
+
+    if not score_should_announce_first_place(score):
+        return
+
+    performance = format_score_submission_performance(score)
+    ann = [
+        f"\x01ACTION achieved #1 on {score.bmap.embed}",
+        f"with {score.acc:.2f}% for {performance}.",
+    ]
+
+    if score.mods:
+        ann.insert(1, f"+{score.mods!r}")
+
+    if previous_first_place_score:
+        if score.player.id != previous_first_place_score["id"]:
+            ann.append(
+                f"(Previous #1: [https://{domain}/u/"
+                f"{previous_first_place_score['id']} "
+                f"{previous_first_place_score['name']}])",
+            )
+
+    assert announce_channel is not None
+    announce_channel.send(" ".join(ann), sender=score.player, to_self=True)
 
 
 def capture_score_submission_state(score: Score) -> ScoreSubmissionStateSnapshot:
@@ -544,52 +552,6 @@ def restore_score_submission_state(
         score.player.recent_scores[score.mode] = snapshot.recent_score
     else:
         score.player.recent_scores.pop(score.mode, None)
-
-
-def build_first_place_announcement(
-    score: Score,
-    *,
-    previous_first_place_score: CurrentFirstPlaceScore | None,
-    domain: str,
-) -> str | None:
-    assert score.bmap is not None
-    assert score.player is not None
-
-    if not score_should_announce_first_place(score):
-        return None
-
-    performance = format_score_submission_performance(score)
-    ann = [
-        f"\x01ACTION achieved #1 on {score.bmap.embed}",
-        f"with {score.acc:.2f}% for {performance}.",
-    ]
-
-    if score.mods:
-        ann.insert(1, f"+{score.mods!r}")
-
-    if previous_first_place_score:
-        if score.player.id != previous_first_place_score["id"]:
-            ann.append(
-                f"(Previous #1: [https://{domain}/u/"
-                f"{previous_first_place_score['id']} "
-                f"{previous_first_place_score['name']}])",
-            )
-
-    return " ".join(ann)
-
-
-def send_first_place_announcement(
-    score: Score,
-    *,
-    announcement: str | None,
-    announce_channel: AnnouncementChannel | None,
-) -> None:
-    if announcement is None:
-        return
-
-    assert score.player is not None
-    assert announce_channel is not None
-    announce_channel.send(announcement, sender=score.player, to_self=True)
 
 
 def apply_score_base_stats(score: Score, stats: ModeData) -> ScoreStatsUpdates:
@@ -850,9 +812,11 @@ async def persist_score_submission(
 
     try:
         async with database.transaction():
-            previous_first_place_score = await fetch_previous_first_place_score(
-                score,
-                scores=scores,
+            should_announce_first_place = score_should_announce_first_place(score)
+            previous_first_place_score = (
+                await fetch_previous_first_place_score(score, scores=scores)
+                if should_announce_first_place
+                else None
             )
             score_id = await persist_submitted_score(score, scores)
             stats_result = await persist_score_submission_stats(

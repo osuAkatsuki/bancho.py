@@ -669,7 +669,7 @@ async def osuSubmitModularSelector(
 
         # TODO: re-implement pp caps for non-whitelisted players?
 
-        replay_data = await score_submission_usecases.read_validated_replay_file(
+        replay_data = await score_submission_usecases.read_and_validate_replay_file(
             score,
             replay_file=replay_file,
             restriction_admin=app.state.sessions.bot,
@@ -719,18 +719,12 @@ async def osuSubmitModularSelector(
             send_notification=send_personal_best_notification,
         )
 
-        first_place_announcement = (
-            score_submission_usecases.build_first_place_announcement(
-                score,
-                previous_first_place_score=stats_result.previous_first_place_score,
-                domain=app.settings.DOMAIN,
-            )
-        )
         announce_chan = app.state.sessions.channels.get_by_name("#announce")
-        score_submission_usecases.send_first_place_announcement(
+        score_submission_usecases.announce_first_place(
             score,
-            announcement=first_place_announcement,
+            previous_first_place_score=stats_result.previous_first_place_score,
             announce_channel=announce_chan,
+            domain=app.settings.DOMAIN,
         )
 
     response = await score_submission_usecases.build_score_submission_response(

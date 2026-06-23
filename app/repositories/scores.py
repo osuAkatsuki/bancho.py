@@ -121,7 +121,7 @@ class Score(TypedDict):
     online_checksum: str
 
 
-class CurrentFirstPlaceScore(TypedDict):
+class FirstPlaceScore(TypedDict):
     id: int
     name: str
 
@@ -264,12 +264,12 @@ async def fetch_weighted_best_performances(
     return cast(list[ScorePerformanceRow], scores)
 
 
-async def fetch_current_first_place_score(
+async def fetch_first_place_score(
     *,
     map_md5: str,
     mode: int,
     scoring_metric: ScoringMetric,
-) -> CurrentFirstPlaceScore | None:
+) -> FirstPlaceScore | None:
     leaderboard_value = ScoresTable.pp if scoring_metric == "pp" else ScoresTable.score
     select_stmt = (
         select(UsersTable.id, UsersTable.name)
@@ -285,8 +285,8 @@ async def fetch_current_first_place_score(
         .limit(1)
     )
 
-    current_first_place_score = await app.state.services.database.fetch_one(select_stmt)
-    return cast(CurrentFirstPlaceScore | None, current_first_place_score)
+    first_place_score = await app.state.services.database.fetch_one(select_stmt)
+    return cast(FirstPlaceScore | None, first_place_score)
 
 
 async def fetch_beatmap_leaderboard_scores(

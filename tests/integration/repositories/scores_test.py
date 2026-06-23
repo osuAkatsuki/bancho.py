@@ -99,11 +99,11 @@ async def test_fetch_beatmap_leaderboard_scores_orders_by_pp_and_formats_clan_na
     ]
 
 
-async def test_fetch_current_first_place_score_uses_metric_and_ignores_restricted_users() -> (
+async def test_fetch_first_place_score_uses_metric_and_ignores_restricted_users() -> (
     None
 ):
     beatmap = await factories.create_map()
-    current_first_place_player = await factories.create_user()
+    first_place_player = await factories.create_user()
     higher_score_player = await factories.create_user()
     restricted_higher_pp_player = await factories.create_user()
     await users_repo.partial_update(
@@ -112,7 +112,7 @@ async def test_fetch_current_first_place_score_uses_metric_and_ignores_restricte
     )
 
     await factories.create_score(
-        player_id=current_first_place_player["id"],
+        player_id=first_place_player["id"],
         map_md5=beatmap["md5"],
         score=800_000,
         pp=300.0,
@@ -133,15 +133,15 @@ async def test_fetch_current_first_place_score_uses_metric_and_ignores_restricte
         mods=0,
     )
 
-    current_first_place_score = await scores_repo.fetch_current_first_place_score(
+    first_place_score = await scores_repo.fetch_first_place_score(
         map_md5=beatmap["md5"],
         mode=0,
         scoring_metric="pp",
     )
 
-    assert current_first_place_score == {
-        "id": current_first_place_player["id"],
-        "name": current_first_place_player["name"],
+    assert first_place_score == {
+        "id": first_place_player["id"],
+        "name": first_place_player["name"],
     }
 
 
