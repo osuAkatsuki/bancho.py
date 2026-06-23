@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from datetime import datetime
 from typing import Any
+from typing import NotRequired
 from typing import TypedDict
 from typing import cast
 
@@ -124,7 +125,27 @@ class PreviousFirstPlace(TypedDict):
     name: str
 
 
-LeaderboardScore = dict[str, Any]
+class BestScorePerformance(TypedDict):
+    pp: float
+    acc: float
+
+
+class LeaderboardScore(TypedDict):
+    id: int
+    _score: int | float
+    max_combo: NotRequired[int]
+    n50: NotRequired[int]
+    n100: NotRequired[int]
+    n300: NotRequired[int]
+    nmiss: NotRequired[int]
+    nkatu: NotRequired[int]
+    ngeki: NotRequired[int]
+    perfect: NotRequired[int]
+    mods: NotRequired[int]
+    time: NotRequired[int]
+    userid: NotRequired[int]
+    name: NotRequired[str]
+    rank: NotRequired[int]
 
 
 async def create(
@@ -204,7 +225,7 @@ async def fetch_weighted_best_performances(
     *,
     user_id: int,
     mode: int,
-) -> list[Mapping[str, float]]:
+) -> list[BestScorePerformance]:
     select_stmt = (
         select(ScoresTable.pp, ScoresTable.acc)
         .join(MapsTable, ScoresTable.map_md5 == MapsTable.md5)
@@ -223,7 +244,7 @@ async def fetch_weighted_best_performances(
     )
 
     scores = await app.state.services.database.fetch_all(select_stmt)
-    return cast(list[Mapping[str, float]], scores)
+    return cast(list[BestScorePerformance], scores)
 
 
 async def fetch_previous_first_place(
@@ -295,7 +316,7 @@ async def fetch_beatmap_leaderboard_scores(
     query.append("ORDER BY _score DESC LIMIT :limit")
 
     score_rows = await app.state.services.database.fetch_all(" ".join(query), params)
-    return [dict(row) for row in score_rows]
+    return [cast(LeaderboardScore, dict(row)) for row in score_rows]
 
 
 async def fetch_personal_best_leaderboard_score(
@@ -322,7 +343,9 @@ async def fetch_personal_best_leaderboard_score(
         },
     )
     return (
-        dict(personal_best_score_row) if personal_best_score_row is not None else None
+        cast(LeaderboardScore, dict(personal_best_score_row))
+        if personal_best_score_row is not None
+        else None
     )
 
 

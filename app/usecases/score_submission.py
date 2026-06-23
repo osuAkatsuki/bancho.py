@@ -10,6 +10,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 from typing import Protocol
+from typing import TypedDict
 
 from app._typing import UNSET
 from app._typing import _UnsetSentinel
@@ -23,11 +24,32 @@ from app.objects.player import Player
 from app.objects.score import Grade
 from app.objects.score import Score
 from app.repositories.achievements import Achievement
+from app.repositories.scores import BestScorePerformance
+from app.repositories.scores import PreviousFirstPlace
 from app.repositories.user_achievements import UserAchievement
 
-StatsUpdates = dict[str, Any]
-BestScorePerformance = Mapping[str, float]
-BeatmapPlayStatsUpdates = dict[str, int]
+
+class StatsUpdates(TypedDict, total=False):
+    plays: int
+    playtime: int
+    tscore: int
+    total_hits: int
+    max_combo: int
+    xh_count: int
+    x_count: int
+    sh_count: int
+    s_count: int
+    a_count: int
+    rscore: int
+    acc: float
+    pp: int
+
+
+class BeatmapPlayStatsUpdates(TypedDict):
+    plays: int
+    passes: int
+
+
 MIN_REPLAY_SIZE = 24
 VANILLA_GAME_MODES = (
     GameMode.VANILLA_OSU,
@@ -35,13 +57,6 @@ VANILLA_GAME_MODES = (
     GameMode.VANILLA_CATCH,
     GameMode.VANILLA_MANIA,
 )
-GRADE_STATS_COLUMNS = {
-    Grade.XH: "xh_count",
-    Grade.X: "x_count",
-    Grade.SH: "sh_count",
-    Grade.S: "s_count",
-    Grade.A: "a_count",
-}
 
 
 class AchievementsService(Protocol):
@@ -113,7 +128,7 @@ class ScoresRepository(Protocol):
         map_md5: str,
         mode: int,
         scoring_metric: ScoringMetric,
-    ) -> Mapping[str, Any] | None: ...
+    ) -> PreviousFirstPlace | None: ...
 
 
 class StatsRepository(Protocol):
@@ -457,12 +472,31 @@ def grade_count_deltas(score: Score) -> dict[Grade, int]:
     return deltas
 
 
+def set_grade_count_update(
+    updates: StatsUpdates,
+    grade: Grade,
+    value: int,
+) -> None:
+    if grade == Grade.XH:
+        updates["xh_count"] = value
+    elif grade == Grade.X:
+        updates["x_count"] = value
+    elif grade == Grade.SH:
+        updates["sh_count"] = value
+    elif grade == Grade.S:
+        updates["s_count"] = value
+    elif grade == Grade.A:
+        updates["a_count"] = value
+    else:
+        raise ValueError(f"Unexpected grade count update for {grade!r}")
+
+
 def apply_ranked_score_stats(score: Score, stats: ModeData) -> StatsUpdates:
     updates: StatsUpdates = {}
 
     for grade, delta in grade_count_deltas(score).items():
         stats.grades[grade] += delta
-        updates[GRADE_STATS_COLUMNS[grade]] = stats.grades[grade]
+        set_grade_count_update(updates, grade, stats.grades[grade])
 
     stats.rscore += ranked_score_delta(score)
     updates["rscore"] = stats.rscore

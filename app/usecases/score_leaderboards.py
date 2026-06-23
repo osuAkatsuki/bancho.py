@@ -2,15 +2,13 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any
 from typing import Protocol
 
 from app.constants.leaderboard_types import LeaderboardType
 from app.constants.mods import Mods
 from app.constants.scoring_metrics import ScoringMetric
 from app.objects.player import Player
-
-LeaderboardScore = dict[str, Any]
+from app.repositories.scores import LeaderboardScore
 
 
 class ScoresRepository(Protocol):

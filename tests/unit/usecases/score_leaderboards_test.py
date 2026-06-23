@@ -1,26 +1,54 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import TypedDict
 
 from app.constants.leaderboard_types import LeaderboardType
 from app.constants.mods import Mods
+from app.constants.scoring_metrics import ScoringMetric
+from app.repositories.scores import LeaderboardScore
 from app.usecases import score_leaderboards
+
+
+class _LeaderboardFetch(TypedDict):
+    map_md5: str
+    mode: int
+    user_id: int
+    scoring_metric: ScoringMetric
+    mods: int | None
+    friend_ids: set[int] | None
+    country: str | None
+    limit: int
+
+
+class _PersonalBestFetch(TypedDict):
+    map_md5: str
+    mode: int
+    user_id: int
+    scoring_metric: ScoringMetric
+
+
+class _RankFetch(TypedDict):
+    map_md5: str
+    mode: int
+    scoring_metric: ScoringMetric
+    score: int | float
 
 
 class _FakeScoresRepository:
     def __init__(
         self,
         *,
-        score_rows: list[dict[str, object]],
-        personal_best_score_row: dict[str, object] | None = None,
+        score_rows: list[LeaderboardScore],
+        personal_best_score_row: LeaderboardScore | None = None,
         personal_best_rank: int = 1,
     ) -> None:
         self.score_rows = score_rows
         self.personal_best_score_row = personal_best_score_row
         self.personal_best_rank = personal_best_rank
-        self.leaderboard_fetches: list[dict[str, object]] = []
-        self.personal_best_fetches: list[dict[str, object]] = []
-        self.rank_fetches: list[dict[str, object]] = []
+        self.leaderboard_fetches: list[_LeaderboardFetch] = []
+        self.personal_best_fetches: list[_PersonalBestFetch] = []
+        self.rank_fetches: list[_RankFetch] = []
 
     async def fetch_beatmap_leaderboard_scores(
         self,
@@ -28,12 +56,12 @@ class _FakeScoresRepository:
         map_md5: str,
         mode: int,
         user_id: int,
-        scoring_metric: str,
+        scoring_metric: ScoringMetric,
         mods: int | None = None,
         friend_ids: set[int] | None = None,
         country: str | None = None,
         limit: int = 50,
-    ) -> list[dict[str, object]]:
+    ) -> list[LeaderboardScore]:
         self.leaderboard_fetches.append(
             {
                 "map_md5": map_md5,
@@ -54,8 +82,8 @@ class _FakeScoresRepository:
         map_md5: str,
         mode: int,
         user_id: int,
-        scoring_metric: str,
-    ) -> dict[str, object] | None:
+        scoring_metric: ScoringMetric,
+    ) -> LeaderboardScore | None:
         self.personal_best_fetches.append(
             {
                 "map_md5": map_md5,
@@ -71,7 +99,7 @@ class _FakeScoresRepository:
         *,
         map_md5: str,
         mode: int,
-        scoring_metric: str,
+        scoring_metric: ScoringMetric,
         score: int | float,
     ) -> int:
         self.rank_fetches.append(
