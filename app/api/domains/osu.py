@@ -629,6 +629,9 @@ async def osuSubmitModularSelector(
         if not score.player.restricted:
             app.state.sessions.players.enqueue(app.packets.user_stats(score.player))
 
+    replay_data: bytes | None = None
+    persistence_result: score_submission_usecases.ScoreSubmissionPersistenceResult
+
     # hold a lock around (check if submitted, submission) to ensure no duplicates
     # are submitted to the database, and potentially award duplicate score/pp/etc.
     async with app.state.score_submission_locks[score.client_checksum]:
@@ -663,67 +666,87 @@ async def osuSubmitModularSelector(
 
         # TODO: re-implement pp caps for non-whitelisted players?
 
+        replay_data = await score_submission_usecases.read_submitted_replay_file(
+            score,
+            replay_file=replay_file,
+        )
+        if (
+            replay_data is not None
+            and not score_submission_usecases.replay_data_is_valid(
+                replay_data,
+            )
+        ):
+            await score_submission_usecases.restrict_player_for_missing_replay(
+                score,
+                restriction_admin=app.state.sessions.bot,
+            )
+            replay_data = None
+
         """ Score submission checks completed; submit the score. """
 
         if app.state.services.datadog:
             app.state.services.datadog.increment("bancho.submitted_scores")  # type: ignore[no-untyped-call]
 
-        def send_personal_best_notification(player: Player, message: str) -> None:
-            player.enqueue(app.packets.notification(message))
-
         if score.status == SubmissionStatus.BEST:
             if app.state.services.datadog:
                 app.state.services.datadog.increment("bancho.submitted_scores_best")  # type: ignore[no-untyped-call]
 
-            score_submission_usecases.notify_score_submitter_of_personal_best(
-                score,
-                send_notification=send_personal_best_notification,
-            )
+        persistence_result = await score_submission_usecases.persist_score_submission(
+            score,
+            database=app.state.services.database,
+            scores=scores_repo,
+            stats=stats_repo,
+            maps=maps_repo,
+            achievements=achievements_usecases,
+            user_achievements=user_achievements_usecases,
+        )
 
-            announce_chan = app.state.sessions.channels.get_by_name("#announce")
-            await score_submission_usecases.announce_first_place(
-                score,
-                scores=scores_repo,
-                announce_channel=announce_chan,
-                domain=app.settings.DOMAIN,
-            )
-
-        await score_submission_usecases.persist_submitted_score(score, scores_repo)
-
-    def log_missing_replay(message: str) -> None:
-        log(message, Ansi.LRED)
-
-    await score_submission_usecases.save_replay_file(
+    score_submission_usecases.write_replay_file(
         score,
-        replay_file=replay_file,
+        replay_data=replay_data,
         replays_path=REPLAYS_PATH,
-        restriction_admin=app.state.sessions.bot,
-        log_missing_replay=log_missing_replay,
     )
 
-    def publish_user_stats(player: Player) -> None:
-        app.state.sessions.players.enqueue(app.packets.user_stats(player))
+    assert score.player is not None
 
-    stats_result = await score_submission_usecases.persist_score_submission_stats(
-        score,
-        stats=stats_repo,
-        scores=scores_repo,
-        maps=maps_repo,
-        publish_user_stats=publish_user_stats,
-    )
+    if persistence_result.should_update_rank:
+        persistence_result.current_stats.rank = await score.player.update_rank(
+            score.mode,
+        )
 
-    response = await score_submission_usecases.build_score_submission_response(
+    if persistence_result.is_public_submission:
+        app.state.sessions.players.enqueue(app.packets.user_stats(score.player))
+
+    score.player.recent_scores[score.mode] = score
+
+    def send_personal_best_notification(player: Player, message: str) -> None:
+        player.enqueue(app.packets.notification(message))
+
+    if score.status == SubmissionStatus.BEST:
+        score_submission_usecases.notify_score_submitter_of_personal_best(
+            score,
+            send_notification=send_personal_best_notification,
+        )
+
+        announce_chan = app.state.sessions.channels.get_by_name("#announce")
+        score_submission_usecases.announce_first_place(
+            score,
+            previous_first_place_score=persistence_result.previous_first_place_score,
+            announce_channel=announce_chan,
+            domain=app.settings.DOMAIN,
+        )
+
+    response = score_submission_usecases.build_score_submission_response(
         score=score,
-        previous_stats=stats_result.previous_stats,
-        current_stats=stats_result.current_stats,
+        previous_stats=persistence_result.previous_stats,
+        current_stats=persistence_result.current_stats,
         domain=app.settings.DOMAIN,
-        achievements=achievements_usecases,
-        user_achievements=user_achievements_usecases,
+        unlocked_achievements=persistence_result.unlocked_achievements,
     )
 
     log(
         f"[{score.mode!r}] {score.player} submitted a score! "
-        f"({score.status!r}, {score.pp:,.2f}pp / {stats_result.current_stats.pp:,}pp)",
+        f"({score.status!r}, {score.pp:,.2f}pp / {persistence_result.current_stats.pp:,}pp)",
         Ansi.LGREEN,
     )
 
