@@ -589,27 +589,6 @@ def test_announce_first_place_requires_announce_channel() -> None:
         )
 
 
-class _FailingAchievements:
-    async def fetch_many(self) -> list[Achievement]:
-        raise AssertionError("achievements should not be fetched")
-
-
-class _FailingUserAchievements:
-    async def fetch_many(
-        self,
-        *,
-        user_id: int,
-    ) -> list[UserAchievement]:
-        raise AssertionError("user achievements should not be fetched")
-
-    async def create(
-        self,
-        user_id: int,
-        achievement_id: int,
-    ) -> UserAchievement:
-        raise AssertionError("user achievements should not be created")
-
-
 class _FakeAchievements:
     async def fetch_many(self) -> list[Achievement]:
         return [
@@ -1798,72 +1777,60 @@ def test_build_submission_charts_includes_previous_best_values() -> None:
     )
 
 
-async def test_build_score_submission_response_returns_error_for_failed_score() -> None:
+def test_build_score_submission_response_returns_error_for_failed_score() -> None:
     score = _score()
     score.passed = False
     previous_stats, current_stats = _stats()
 
-    response = await score_submission.build_score_submission_response(
+    response = score_submission.build_score_submission_response(
         score=score,
         previous_stats=previous_stats,
         current_stats=current_stats,
         domain="cmyui.xyz",
-        achievements=_FailingAchievements(),
-        user_achievements=_FailingUserAchievements(),
+        unlocked_achievements=[],
     )
 
     assert response == b"error: no"
 
 
-@pytest.mark.parametrize(
-    ("awards_ranked_pp", "restricted"),
-    [
-        (False, False),
-        (True, True),
-    ],
-)
-async def test_build_score_submission_response_skips_achievements_when_score_is_not_eligible(
-    awards_ranked_pp: bool,
-    restricted: bool,
-) -> None:
+def test_build_score_submission_response_formats_empty_achievements() -> None:
     score = _score()
-    score.bmap.awards_ranked_pp = awards_ranked_pp
-    score.player.restricted = restricted
     previous_stats, current_stats = _stats()
 
-    response = await score_submission.build_score_submission_response(
+    response = score_submission.build_score_submission_response(
         score=score,
         previous_stats=previous_stats,
         current_stats=current_stats,
         domain="cmyui.xyz",
-        achievements=_FailingAchievements(),
-        user_achievements=_FailingUserAchievements(),
+        unlocked_achievements=[],
     )
 
     assert b"achievements-new:" in response
     assert b"osu-skill-pass-4" not in response
 
 
-async def test_build_score_submission_response_unlocks_matching_new_achievements() -> (
-    None
-):
+def test_build_score_submission_response_formats_unlocked_achievements() -> None:
     score = _score()
     previous_stats, current_stats = _stats()
-    user_achievements = _FakeUserAchievements()
+    achievements = [
+        {
+            "id": 1,
+            "file": "osu-skill-pass-4",
+            "name": "Insanity Approaches",
+            "desc": "You're not twitching, you're just ready.",
+            "cond": lambda score, mode_vn: True,
+        },
+    ]
 
-    response = await score_submission.build_score_submission_response(
+    response = score_submission.build_score_submission_response(
         score=score,
         previous_stats=previous_stats,
         current_stats=current_stats,
         domain="cmyui.xyz",
-        achievements=_FakeAchievements(),
-        user_achievements=user_achievements,
+        unlocked_achievements=achievements,
     )
 
-    assert user_achievements.created_achievement_ids == [1]
     assert (
         b"achievements-new:osu-skill-pass-4+Insanity Approaches+You're not twitching, you're just ready."
         in response
     )
-    assert b"osu-combo-500" not in response
-    assert b"all-intro-hidden" not in response

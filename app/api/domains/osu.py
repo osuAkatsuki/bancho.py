@@ -733,13 +733,11 @@ async def osuSubmitModularSelector(
             domain=app.settings.DOMAIN,
         )
 
-    response = await score_submission_usecases.build_score_submission_response(
+    response = score_submission_usecases.build_score_submission_response(
         score=score,
         previous_stats=persistence_result.previous_stats,
         current_stats=persistence_result.current_stats,
         domain=app.settings.DOMAIN,
-        achievements=achievements_usecases,
-        user_achievements=user_achievements_usecases,
         unlocked_achievements=persistence_result.unlocked_achievements,
     )
 

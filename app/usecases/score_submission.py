@@ -984,15 +984,13 @@ def build_submission_charts(
     return "|".join(submission_charts).encode()
 
 
-async def build_score_submission_response(
+def build_score_submission_response(
     *,
     score: Score,
     previous_stats: ModeData,
     current_stats: ModeData,
     domain: str,
-    achievements: AchievementsService,
-    user_achievements: UserAchievementsService,
-    unlocked_achievements: Sequence[Achievement] | None = None,
+    unlocked_achievements: Sequence[Achievement],
 ) -> bytes:
     if not score.passed:  # TODO: check if this is correct
         return b"error: no"
@@ -1000,22 +998,10 @@ async def build_score_submission_response(
     assert score.bmap is not None
     assert score.player is not None
 
-    if unlocked_achievements is not None:
-        achievements_to_display = unlocked_achievements
-    elif score_can_unlock_achievements(score):
-        unlocked_achievements = await unlock_new_achievements(
-            score=score,
-            achievements=achievements,
-            user_achievements=user_achievements,
-        )
-        achievements_to_display = unlocked_achievements
-    else:
-        achievements_to_display = []
-
     return build_submission_charts(
         score=score,
         previous_stats=previous_stats,
         current_stats=current_stats,
-        achievements=achievements_to_display,
+        achievements=unlocked_achievements,
         domain=domain,
     )
