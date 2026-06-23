@@ -25,6 +25,7 @@ from app.objects.player import OsuVersion
 from app.objects.score import Grade
 from app.objects.score import Score
 from app.repositories.achievements import Achievement
+from app.repositories.scores import DuplicateScoreError
 from app.repositories.scores import FirstPlaceScore
 from app.repositories.scores import ScorePerformanceRow
 from app.repositories.user_achievements import UserAchievement
@@ -759,6 +760,7 @@ class _FakeScoresRepository:
         best_scores: list[ScorePerformanceRow] | None = None,
         first_place_score: FirstPlaceScore | None = None,
         duplicate_score: _CreatedScore | None = None,
+        raise_duplicate_on_create: bool = False,
     ) -> None:
         self.calls: list[str] = []
         self.previous_best_updates: list[_PreviousBestUpdate] = []
@@ -766,6 +768,7 @@ class _FakeScoresRepository:
         self.best_scores = best_scores if best_scores is not None else []
         self.first_place_score = first_place_score
         self.duplicate_score = duplicate_score
+        self.raise_duplicate_on_create = raise_duplicate_on_create
         self.fetches: list[_ScorePerformanceFetch] = []
         self.first_place_score_fetches: list[_FirstPlaceScoreFetch] = []
         self.online_checksum_fetches: list[str] = []
@@ -776,6 +779,8 @@ class _FakeScoresRepository:
     ) -> _CreatedScore:
         self.calls.append("create")
         self.created_scores.append(cast(_CreatedScoreFields, score_fields))
+        if self.raise_duplicate_on_create:
+            raise DuplicateScoreError
         return {"id": 123}
 
     async def mark_previous_best_scores_submitted(
@@ -1479,6 +1484,74 @@ async def test_submit_score_rejects_duplicate_inside_submission_lock(tmp_path) -
     assert scores.online_checksum_fetches == [request.score_data[2]]
     assert request.replay_file.read_count == 0
     assert metrics == []
+
+
+async def test_submit_score_maps_duplicate_insert_to_duplicate_submission(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    score = _score()
+    score.id = None
+    player = _FakePlayer(stats=_mode_data())
+    request = _score_submission_request(score, player=player)
+
+    def calculate_performance(self: Score, beatmap_id: int) -> tuple[float, float]:
+        return 10.448, 4.2
+
+    async def calculate_status(self: Score) -> None:
+        self.status = SubmissionStatus.SUBMITTED
+
+    async def calculate_placement(self: Score) -> int:
+        return 2
+
+    monkeypatch.setattr(Score, "calculate_performance", calculate_performance)
+    monkeypatch.setattr(Score, "calculate_status", calculate_status)
+    monkeypatch.setattr(Score, "calculate_placement", calculate_placement)
+
+    lock = _FakeScoreSubmissionLock()
+    locks = _FakeScoreSubmissionLocks(lock)
+    database = _FakeDatabaseTransactions()
+    scores = _FakeScoresRepository(raise_duplicate_on_create=True)
+    metrics: list[str] = []
+
+    async def record_submission_integrity_failure() -> None:
+        raise AssertionError("valid integrity should not be logged")
+
+    result = await score_submission.submit_score(
+        request,
+        replays_path=tmp_path,
+        restriction_admin=player,
+        fetch_beatmap=_FakeBeatmapFetcher(score.bmap),
+        authenticate_player=_FakePlayerAuthenticator(player),
+        score_submission_locks=locks,
+        database=database,
+        scores=scores,
+        stats=_FakeStatsRepository(),
+        maps=_FakeMapsRepository(),
+        achievements=_FakeAchievements(),
+        user_achievements=_FakeUserAchievements(),
+        ensure_osu_file_is_available=_FakeOsuFileAvailability(),
+        publish_user_stats=lambda player: None,
+        send_personal_best_notification=lambda player, message: None,
+        announce_channel=_FakeAnnounceChannel(),
+        domain="osu.cmyui.xyz",
+        increment_metric=metrics.append,
+        record_submission_integrity_failure=record_submission_integrity_failure,
+    )
+
+    assert result == score_submission.ScoreSubmissionError(
+        code=score_submission.ScoreSubmissionErrorCode.DUPLICATE_SUBMISSION,
+        user_message="Score has already been submitted.",
+    )
+    assert lock.calls == ["lock_enter", "lock_exit"]
+    assert locks.online_checksums == [request.score_data[2]]
+    assert scores.online_checksum_fetches == [request.score_data[2]]
+    assert scores.calls == ["fetch_one_by_online_checksum", "create"]
+    assert database.calls == ["transaction", "transaction_enter", "transaction_exit"]
+    assert database.transactions[0].exception_type is DuplicateScoreError
+    assert player.recent_scores == {}
+    assert not (tmp_path / "123.osr").exists()
+    assert metrics == ["bancho.submitted_scores"]
 
 
 async def test_submit_score_returns_error_when_beatmap_is_missing(tmp_path) -> None:

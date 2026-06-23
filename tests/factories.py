@@ -111,7 +111,11 @@ async def create_score(
     mods: int = 64,
     status: int = 2,
     mode: int = 0,
+    online_checksum: str | None = None,
 ) -> scores_repo.Score:
+    if online_checksum is None:
+        online_checksum = secrets.token_hex(16)
+
     return await scores_repo.create(
         map_md5=map_md5,
         score=score,
@@ -133,5 +137,5 @@ async def create_score(
         client_flags=0,
         user_id=player_id,
         perfect=0,
-        online_checksum=secrets.token_hex(16),
+        online_checksum=online_checksum,
     )

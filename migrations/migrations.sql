@@ -475,3 +475,8 @@ create index users_country_index
 # v5.2.2
 create index scores_fetch_leaderboard_generic_index
 	on scores (map_md5, status, mode);
+
+# v5.3.1
+drop index scores_online_checksum_index on scores;
+create unique index scores_online_checksum_unique
+	on scores (online_checksum);

@@ -31,6 +31,7 @@ from app.objects.player import Player
 from app.objects.score import Grade
 from app.objects.score import Score
 from app.repositories.achievements import Achievement
+from app.repositories.scores import DuplicateScoreError
 from app.repositories.scores import FirstPlaceScore
 from app.repositories.scores import ScorePerformanceRow
 from app.repositories.user_achievements import UserAchievement
@@ -1105,15 +1106,21 @@ async def submit_score(
         if score.status == SubmissionStatus.BEST:
             increment_metric("bancho.submitted_scores_best")
 
-        persistence_result = await persist_score_submission(
-            score,
-            database=database,
-            scores=scores,
-            stats=stats,
-            maps=maps,
-            achievements=achievements,
-            user_achievements=user_achievements,
-        )
+        try:
+            persistence_result = await persist_score_submission(
+                score,
+                database=database,
+                scores=scores,
+                stats=stats,
+                maps=maps,
+                achievements=achievements,
+                user_achievements=user_achievements,
+            )
+        except DuplicateScoreError:
+            return ScoreSubmissionError(
+                code=ScoreSubmissionErrorCode.DUPLICATE_SUBMISSION,
+                user_message="Score has already been submitted.",
+            )
 
     write_replay_file(
         score,

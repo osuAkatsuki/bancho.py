@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import TypedDict
 from typing import cast
 
+import pymysql
 from sqlalchemy import Column
 from sqlalchemy import DateTime
 from sqlalchemy import Index
@@ -29,6 +30,10 @@ from app.repositories import Base
 from app.repositories.clans import ClansTable
 from app.repositories.maps import MapsTable
 from app.repositories.users import UsersTable
+
+
+class DuplicateScoreError(Exception):
+    """Raised when a submitted score already exists."""
 
 
 class ScoresTable(Base):
@@ -66,7 +71,7 @@ class ScoresTable(Base):
         Index("scores_mode_index", mode),
         Index("scores_play_time_index", play_time),
         Index("scores_userid_index", userid),
-        Index("scores_online_checksum_index", online_checksum),
+        Index("scores_online_checksum_unique", online_checksum, unique=True),
     )
 
 
@@ -211,7 +216,10 @@ async def create(
         perfect=perfect,
         online_checksum=online_checksum,
     )
-    rec_id = await app.state.services.database.execute(insert_stmt)
+    try:
+        rec_id = await app.state.services.database.execute(insert_stmt)
+    except pymysql.err.IntegrityError as exc:
+        raise DuplicateScoreError from exc
 
     select_stmt = select(*READ_PARAMS).where(ScoresTable.id == rec_id)
     _score = await app.state.services.database.fetch_one(select_stmt)
