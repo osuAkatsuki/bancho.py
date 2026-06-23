@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from datetime import datetime
+from typing import Literal
 from typing import TypedDict
 from typing import cast
 
@@ -21,6 +22,7 @@ import app.state.services
 from app._typing import UNSET
 from app._typing import _UnsetSentinel
 from app.constants.beatmap_statuses import RankedStatus
+from app.constants.privileges import Privileges
 from app.constants.score_statuses import SubmissionStatus
 from app.repositories import Base
 from app.repositories.maps import MapsTable
@@ -90,6 +92,8 @@ READ_PARAMS = (
     ScoresTable.online_checksum,
 )
 
+FirstPlaceScoringMetric = Literal["score", "pp"]
+
 
 class Score(TypedDict):
     id: int
@@ -114,6 +118,11 @@ class Score(TypedDict):
     userid: int
     perfect: int
     online_checksum: str
+
+
+class PreviousFirstPlace(TypedDict):
+    id: int
+    name: str
 
 
 async def create(
@@ -213,6 +222,28 @@ async def fetch_weighted_best_performances(
 
     scores = await app.state.services.database.fetch_all(select_stmt)
     return cast(list[Mapping[str, float]], scores)
+
+
+async def fetch_previous_first_place(
+    *,
+    map_md5: str,
+    mode: int,
+    scoring_metric: FirstPlaceScoringMetric,
+) -> PreviousFirstPlace | None:
+    previous_first_place = await app.state.services.database.fetch_one(
+        "SELECT u.id, name FROM users u "
+        "INNER JOIN scores s ON u.id = s.userid "
+        "WHERE s.map_md5 = :map_md5 AND s.mode = :mode "
+        "AND s.status = :status AND u.priv & :unrestricted_priv "
+        f"ORDER BY s.{scoring_metric} DESC LIMIT 1",
+        {
+            "map_md5": map_md5,
+            "mode": mode,
+            "status": SubmissionStatus.BEST.value,
+            "unrestricted_priv": Privileges.UNRESTRICTED.value,
+        },
+    )
+    return cast(PreviousFirstPlace | None, previous_first_place)
 
 
 async def fetch_one(id: int) -> Score | None:

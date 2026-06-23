@@ -7,11 +7,15 @@ from collections.abc import Mapping
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import Any
+from typing import Literal
 from typing import Protocol
 
 from app._typing import UNSET
 from app._typing import _UnsetSentinel
+from app.constants.beatmap_statuses import RankedStatus
+from app.constants.gamemodes import GameMode
 from app.constants.score_statuses import SubmissionStatus
 from app.objects.player import ClientDetails
 from app.objects.player import ModeData
@@ -23,6 +27,14 @@ from app.repositories.user_achievements import UserAchievement
 
 StatsUpdates = dict[str, Any]
 BestScorePerformance = Mapping[str, float]
+FirstPlaceScoringMetric = Literal["score", "pp"]
+MIN_REPLAY_SIZE = 24
+VANILLA_GAME_MODES = (
+    GameMode.VANILLA_OSU,
+    GameMode.VANILLA_TAIKO,
+    GameMode.VANILLA_CATCH,
+    GameMode.VANILLA_MANIA,
+)
 GRADE_STATS_COLUMNS = {
     Grade.XH: "xh_count",
     Grade.X: "x_count",
@@ -44,6 +56,14 @@ class UserAchievementsService(Protocol):
         user_id: int,
         achievement_id: int,
     ) -> UserAchievement: ...
+
+
+class ReplayFile(Protocol):
+    async def read(self) -> bytes: ...
+
+
+class AnnouncementChannel(Protocol):
+    def send(self, msg: str, sender: Player, to_self: bool = False) -> None: ...
 
 
 class ScoresRepository(Protocol):
@@ -86,6 +106,14 @@ class ScoresRepository(Protocol):
         user_id: int,
         mode: int,
     ) -> Sequence[BestScorePerformance]: ...
+
+    async def fetch_previous_first_place(
+        self,
+        *,
+        map_md5: str,
+        mode: int,
+        scoring_metric: FirstPlaceScoringMetric,
+    ) -> Mapping[str, Any] | None: ...
 
 
 class StatsRepository(Protocol):
@@ -266,6 +294,122 @@ async def persist_submitted_score(score: Score, scores: ScoresRepository) -> int
     score_id = int(created_score["id"])
     score.id = score_id
     return score_id
+
+
+async def save_replay_file(
+    score: Score,
+    *,
+    replay_file: ReplayFile,
+    replays_path: Path,
+    restriction_admin: Player,
+    log_missing_replay: Callable[[str], None],
+) -> None:
+    assert score.player is not None
+
+    if not score.passed:
+        return
+
+    replay_data = await replay_file.read()
+
+    if len(replay_data) >= MIN_REPLAY_SIZE:
+        assert score.id is not None
+        replay_disk_file = replays_path / f"{score.id}.osr"
+        replay_disk_file.write_bytes(replay_data)
+        return
+
+    log_missing_replay(f"{score.player} submitted a score without a replay!")
+
+    if not score.player.restricted:
+        await score.player.restrict(
+            admin=restriction_admin,
+            reason="submitted score with no replay",
+        )
+        if score.player.is_online:
+            score.player.logout()
+
+
+def format_score_submission_performance(score: Score) -> str:
+    assert score.bmap is not None
+
+    if score.bmap.status == RankedStatus.Loved and score.mode in VANILLA_GAME_MODES:
+        return f"{score.score:,} score"
+
+    return f"{score.pp:,.2f}pp"
+
+
+def notify_score_submitter_of_personal_best(
+    score: Score,
+    *,
+    send_notification: Callable[[Player, str], None],
+) -> str | None:
+    assert score.bmap is not None
+    assert score.player is not None
+
+    if score.status != SubmissionStatus.BEST:
+        return None
+
+    if not score.bmap.has_leaderboard:
+        return None
+
+    performance = format_score_submission_performance(score)
+    send_notification(
+        score.player,
+        f"You achieved #{score.rank}! ({performance})",
+    )
+    return performance
+
+
+def first_place_scoring_metric(score: Score) -> FirstPlaceScoringMetric:
+    return "pp" if score.mode >= GameMode.RELAX_OSU else "score"
+
+
+async def announce_first_place(
+    score: Score,
+    *,
+    scores: ScoresRepository,
+    announce_channel: AnnouncementChannel | None,
+    domain: str,
+) -> None:
+    assert score.bmap is not None
+    assert score.player is not None
+
+    if score.status != SubmissionStatus.BEST:
+        return
+
+    if not score.bmap.has_leaderboard:
+        return
+
+    if score.rank != 1:
+        return
+
+    if score.player.restricted:
+        return
+
+    performance = format_score_submission_performance(score)
+    ann = [
+        f"\x01ACTION achieved #1 on {score.bmap.embed}",
+        f"with {score.acc:.2f}% for {performance}.",
+    ]
+
+    if score.mods:
+        ann.insert(1, f"+{score.mods!r}")
+
+    # If there was previously a score on the map, add old #1.
+    prev_n1 = await scores.fetch_previous_first_place(
+        map_md5=score.bmap.md5,
+        mode=score.mode.value,
+        scoring_metric=first_place_scoring_metric(score),
+    )
+
+    if prev_n1:
+        if score.player.id != prev_n1["id"]:
+            ann.append(
+                f"(Previous #1: [https://{domain}/u/{prev_n1['id']} "
+                f"{prev_n1['name']}])",
+            )
+
+    assert announce_channel is not None
+    announce_channel.send(" ".join(ann), sender=score.player, to_self=True)
 
 
 def apply_score_base_stats(score: Score, stats: ModeData) -> StatsUpdates:

@@ -670,85 +670,38 @@ async def osuSubmitModularSelector(
         if app.state.services.datadog:
             app.state.services.datadog.increment("bancho.submitted_scores")  # type: ignore[no-untyped-call]
 
+        def send_personal_best_notification(player: Player, message: str) -> None:
+            player.enqueue(app.packets.notification(message))
+
         if score.status == SubmissionStatus.BEST:
             if app.state.services.datadog:
                 app.state.services.datadog.increment("bancho.submitted_scores_best")  # type: ignore[no-untyped-call]
 
-            if score.bmap.has_leaderboard:
-                if score.bmap.status == RankedStatus.Loved and score.mode in (
-                    GameMode.VANILLA_OSU,
-                    GameMode.VANILLA_TAIKO,
-                    GameMode.VANILLA_CATCH,
-                    GameMode.VANILLA_MANIA,
-                ):
-                    performance = f"{score.score:,} score"
-                else:
-                    performance = f"{score.pp:,.2f}pp"
+            score_submission_usecases.notify_score_submitter_of_personal_best(
+                score,
+                send_notification=send_personal_best_notification,
+            )
 
-                score.player.enqueue(
-                    app.packets.notification(
-                        f"You achieved #{score.rank}! ({performance})",
-                    ),
-                )
-
-                if score.rank == 1 and not score.player.restricted:
-                    announce_chan = app.state.sessions.channels.get_by_name("#announce")
-
-                    ann = [
-                        f"\x01ACTION achieved #1 on {score.bmap.embed}",
-                        f"with {score.acc:.2f}% for {performance}.",
-                    ]
-
-                    if score.mods:
-                        ann.insert(1, f"+{score.mods!r}")
-
-                    scoring_metric = (
-                        "pp" if score.mode >= GameMode.RELAX_OSU else "score"
-                    )
-
-                    # If there was previously a score on the map, add old #1.
-                    prev_n1 = await app.state.services.database.fetch_one(
-                        "SELECT u.id, name FROM users u "
-                        "INNER JOIN scores s ON u.id = s.userid "
-                        "WHERE s.map_md5 = :map_md5 AND s.mode = :mode "
-                        "AND s.status = 2 AND u.priv & 1 "
-                        f"ORDER BY s.{scoring_metric} DESC LIMIT 1",
-                        {"map_md5": score.bmap.md5, "mode": score.mode},
-                    )
-
-                    if prev_n1:
-                        if score.player.id != prev_n1["id"]:
-                            ann.append(
-                                f"(Previous #1: [https://{app.settings.DOMAIN}/u/"
-                                "{id} {name}])".format(
-                                    id=prev_n1["id"],
-                                    name=prev_n1["name"],
-                                ),
-                            )
-
-                    assert announce_chan is not None
-                    announce_chan.send(" ".join(ann), sender=score.player, to_self=True)
+            announce_chan = app.state.sessions.channels.get_by_name("#announce")
+            await score_submission_usecases.announce_first_place(
+                score,
+                scores=scores_repo,
+                announce_channel=announce_chan,
+                domain=app.settings.DOMAIN,
+            )
 
         await score_submission_usecases.persist_submitted_score(score, scores_repo)
 
-    if score.passed:
-        replay_data = await replay_file.read()
+    def log_missing_replay(message: str) -> None:
+        log(message, Ansi.LRED)
 
-        MIN_REPLAY_SIZE = 24
-
-        if len(replay_data) >= MIN_REPLAY_SIZE:
-            replay_disk_file = REPLAYS_PATH / f"{score.id}.osr"
-            replay_disk_file.write_bytes(replay_data)
-        else:
-            log(f"{score.player} submitted a score without a replay!", Ansi.LRED)
-
-            if not score.player.restricted:
-                await score.player.restrict(
-                    admin=app.state.sessions.bot,
-                    reason="submitted score with no replay",
-                )
-                if score.player.is_online:
-                    score.player.logout()
+    await score_submission_usecases.save_replay_file(
+        score,
+        replay_file=replay_file,
+        replays_path=REPLAYS_PATH,
+        restriction_admin=app.state.sessions.bot,
+        log_missing_replay=log_missing_replay,
+    )
 
     def publish_user_stats(player: Player) -> None:
         app.state.sessions.players.enqueue(app.packets.user_stats(player))

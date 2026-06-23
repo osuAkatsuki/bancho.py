@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import pytest
 
 from app._typing import UNSET
+from app.constants.beatmap_statuses import RankedStatus
 from app.constants.clientflags import ClientFlags
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
@@ -76,8 +77,10 @@ def _score() -> Score:
         plays=1,
         passes=1,
         last_update="2014-05-18 15:41:48",
+        status=RankedStatus.Ranked,
         has_leaderboard=True,
         awards_ranked_pp=True,
+        embed="[https://osu.cmyui.xyz/b/315 test map]",
         set=SimpleNamespace(url="https://osu.cmyui.xyz/s/141"),
     )
     return score
@@ -153,6 +156,399 @@ def _stats() -> tuple[ModeData, ModeData]:
         grades={},
     )
     return previous, current
+
+
+class _FakeReplayFile:
+    def __init__(self, data: bytes) -> None:
+        self.data = data
+        self.read_count = 0
+
+    async def read(self) -> bytes:
+        self.read_count += 1
+        return self.data
+
+
+class _FakeReplayPlayer:
+    def __init__(self, *, restricted: bool = False, online: bool = True) -> None:
+        self.id = 6
+        self.name = "test-user"
+        self.restricted = restricted
+        self.is_online = online
+        self.restriction_reasons: list[str] = []
+        self.restriction_admins: list[object] = []
+        self.logged_out = False
+
+    def __repr__(self) -> str:
+        return f"<{self.name} ({self.id})>"
+
+    async def restrict(self, admin: object, reason: str) -> None:
+        self.restriction_admins.append(admin)
+        self.restriction_reasons.append(reason)
+
+    def logout(self) -> None:
+        self.logged_out = True
+        self.is_online = False
+
+
+class _FakeAnnounceChannel:
+    def __init__(self) -> None:
+        self.messages: list[tuple[str, object, bool]] = []
+
+    def send(self, msg: str, sender: object, to_self: bool = False) -> None:
+        self.messages.append((msg, sender, to_self))
+
+
+class _FakeFirstPlaceScoresRepository:
+    def __init__(self, previous_first_place: dict[str, object] | None = None) -> None:
+        self.previous_first_place = previous_first_place
+        self.calls: list[dict[str, object]] = []
+
+    async def fetch_previous_first_place(
+        self,
+        *,
+        map_md5: str,
+        mode: int,
+        scoring_metric: str,
+    ) -> dict[str, object] | None:
+        self.calls.append(
+            {
+                "map_md5": map_md5,
+                "mode": mode,
+                "scoring_metric": scoring_metric,
+            },
+        )
+        return self.previous_first_place
+
+
+async def test_save_replay_file_writes_passed_replay(tmp_path) -> None:
+    score = _score()
+    player = _FakeReplayPlayer()
+    score.player = player
+    replay_data = b"x" * score_submission.MIN_REPLAY_SIZE
+    replay_file = _FakeReplayFile(replay_data)
+    missing_replay_logs: list[str] = []
+
+    await score_submission.save_replay_file(
+        score,
+        replay_file=replay_file,
+        replays_path=tmp_path,
+        restriction_admin=player,
+        log_missing_replay=missing_replay_logs.append,
+    )
+
+    assert (tmp_path / "42.osr").read_bytes() == replay_data
+    assert replay_file.read_count == 1
+    assert missing_replay_logs == []
+    assert player.restriction_reasons == []
+    assert not player.logged_out
+
+
+async def test_save_replay_file_does_not_read_failed_score(tmp_path) -> None:
+    score = _score()
+    player = _FakeReplayPlayer()
+    score.player = player
+    score.passed = False
+    replay_file = _FakeReplayFile(b"")
+    missing_replay_logs: list[str] = []
+
+    await score_submission.save_replay_file(
+        score,
+        replay_file=replay_file,
+        replays_path=tmp_path,
+        restriction_admin=player,
+        log_missing_replay=missing_replay_logs.append,
+    )
+
+    assert replay_file.read_count == 0
+    assert list(tmp_path.iterdir()) == []
+    assert missing_replay_logs == []
+    assert player.restriction_reasons == []
+
+
+async def test_save_replay_file_restricts_unrestricted_player_without_replay(
+    tmp_path,
+) -> None:
+    score = _score()
+    player = _FakeReplayPlayer()
+    admin = _FakeReplayPlayer()
+    score.player = player
+    replay_file = _FakeReplayFile(b"x" * (score_submission.MIN_REPLAY_SIZE - 1))
+    missing_replay_logs: list[str] = []
+
+    await score_submission.save_replay_file(
+        score,
+        replay_file=replay_file,
+        replays_path=tmp_path,
+        restriction_admin=admin,
+        log_missing_replay=missing_replay_logs.append,
+    )
+
+    assert list(tmp_path.iterdir()) == []
+    assert missing_replay_logs == [
+        "<test-user (6)> submitted a score without a replay!",
+    ]
+    assert player.restriction_admins == [admin]
+    assert player.restriction_reasons == ["submitted score with no replay"]
+    assert player.logged_out
+
+
+async def test_save_replay_file_does_not_restrict_restricted_player_without_replay(
+    tmp_path,
+) -> None:
+    score = _score()
+    player = _FakeReplayPlayer(restricted=True)
+    score.player = player
+    replay_file = _FakeReplayFile(b"x" * (score_submission.MIN_REPLAY_SIZE - 1))
+    missing_replay_logs: list[str] = []
+
+    await score_submission.save_replay_file(
+        score,
+        replay_file=replay_file,
+        replays_path=tmp_path,
+        restriction_admin=player,
+        log_missing_replay=missing_replay_logs.append,
+    )
+
+    assert list(tmp_path.iterdir()) == []
+    assert missing_replay_logs == [
+        "<test-user (6)> submitted a score without a replay!",
+    ]
+    assert player.restriction_reasons == []
+    assert not player.logged_out
+
+
+def test_notify_score_submitter_sends_pp_notification() -> None:
+    score = _score()
+    notifications: list[tuple[object, str]] = []
+
+    performance = score_submission.notify_score_submitter_of_personal_best(
+        score,
+        send_notification=lambda player, message: notifications.append(
+            (player, message),
+        ),
+    )
+
+    assert performance == "10.45pp"
+    assert notifications == [
+        (score.player, "You achieved #1! (10.45pp)"),
+    ]
+
+
+def test_notify_score_submitter_uses_score_for_vanilla_loved() -> None:
+    score = _score()
+    score.bmap.status = RankedStatus.Loved
+    score.mode = GameMode.VANILLA_OSU
+    score.score = 1_234_567
+    notifications: list[tuple[object, str]] = []
+
+    performance = score_submission.notify_score_submitter_of_personal_best(
+        score,
+        send_notification=lambda player, message: notifications.append(
+            (player, message),
+        ),
+    )
+
+    assert performance == "1,234,567 score"
+    assert notifications == [
+        (score.player, "You achieved #1! (1,234,567 score)"),
+    ]
+
+
+def test_notify_score_submitter_uses_pp_for_relax_loved() -> None:
+    score = _score()
+    score.bmap.status = RankedStatus.Loved
+    notifications: list[tuple[object, str]] = []
+
+    performance = score_submission.notify_score_submitter_of_personal_best(
+        score,
+        send_notification=lambda player, message: notifications.append(
+            (player, message),
+        ),
+    )
+
+    assert performance == "10.45pp"
+    assert notifications == [
+        (score.player, "You achieved #1! (10.45pp)"),
+    ]
+
+
+def test_notify_score_submitter_skips_non_best_score() -> None:
+    score = _score()
+    score.status = SubmissionStatus.SUBMITTED
+    notifications: list[tuple[object, str]] = []
+
+    performance = score_submission.notify_score_submitter_of_personal_best(
+        score,
+        send_notification=lambda player, message: notifications.append(
+            (player, message),
+        ),
+    )
+
+    assert performance is None
+    assert notifications == []
+
+
+def test_notify_score_submitter_skips_no_leaderboard() -> None:
+    score = _score()
+    score.bmap.has_leaderboard = False
+    notifications: list[tuple[object, str]] = []
+
+    performance = score_submission.notify_score_submitter_of_personal_best(
+        score,
+        send_notification=lambda player, message: notifications.append(
+            (player, message),
+        ),
+    )
+
+    assert performance is None
+    assert notifications == []
+
+
+async def test_announce_first_place_sends_message_with_previous_first_place() -> None:
+    score = _score()
+    scores = _FakeFirstPlaceScoresRepository(
+        {"id": 9, "name": "old-user"},
+    )
+    channel = _FakeAnnounceChannel()
+
+    await score_submission.announce_first_place(
+        score,
+        scores=scores,
+        announce_channel=channel,
+        domain="osu.cmyui.xyz",
+    )
+
+    assert scores.calls == [
+        {
+            "map_md5": "1cf5b2c2edfafd055536d2cefcb89c0e",
+            "mode": GameMode.RELAX_OSU.value,
+            "scoring_metric": "pp",
+        },
+    ]
+    assert channel.messages == [
+        (
+            "\x01ACTION achieved #1 on [https://osu.cmyui.xyz/b/315 test map] "
+            "+HDRX with 81.94% for 10.45pp. "
+            "(Previous #1: [https://osu.cmyui.xyz/u/9 old-user])",
+            score.player,
+            True,
+        ),
+    ]
+
+
+async def test_announce_first_place_omits_previous_holder_for_same_player() -> None:
+    score = _score()
+    score.mods = Mods.NOMOD
+    scores = _FakeFirstPlaceScoresRepository(
+        {"id": 6, "name": "test-user"},
+    )
+    channel = _FakeAnnounceChannel()
+
+    await score_submission.announce_first_place(
+        score,
+        scores=scores,
+        announce_channel=channel,
+        domain="osu.cmyui.xyz",
+    )
+
+    assert channel.messages == [
+        (
+            "\x01ACTION achieved #1 on [https://osu.cmyui.xyz/b/315 test map] "
+            "with 81.94% for 10.45pp.",
+            score.player,
+            True,
+        ),
+    ]
+
+
+async def test_announce_first_place_uses_score_for_vanilla_loved_score() -> None:
+    score = _score()
+    score.bmap.status = RankedStatus.Loved
+    score.mode = GameMode.VANILLA_OSU
+    score.mods = Mods.NOMOD
+    score.score = 1_234_567
+    scores = _FakeFirstPlaceScoresRepository()
+    channel = _FakeAnnounceChannel()
+
+    await score_submission.announce_first_place(
+        score,
+        scores=scores,
+        announce_channel=channel,
+        domain="osu.cmyui.xyz",
+    )
+
+    assert scores.calls == [
+        {
+            "map_md5": "1cf5b2c2edfafd055536d2cefcb89c0e",
+            "mode": GameMode.VANILLA_OSU.value,
+            "scoring_metric": "score",
+        },
+    ]
+    assert channel.messages == [
+        (
+            "\x01ACTION achieved #1 on [https://osu.cmyui.xyz/b/315 test map] "
+            "with 81.94% for 1,234,567 score.",
+            score.player,
+            True,
+        ),
+    ]
+
+
+@pytest.mark.parametrize(
+    "condition",
+    [
+        "non_best",
+        "rank_two",
+        "restricted",
+        "no_leaderboard",
+    ],
+)
+async def test_announce_first_place_skips_ineligible_scores(condition: str) -> None:
+    score = _score()
+    if condition == "non_best":
+        score.status = SubmissionStatus.SUBMITTED
+    elif condition == "rank_two":
+        score.rank = 2
+    elif condition == "restricted":
+        score.player.restricted = True
+    elif condition == "no_leaderboard":
+        score.bmap.has_leaderboard = False
+
+    scores = _FakeFirstPlaceScoresRepository(
+        {"id": 9, "name": "old-user"},
+    )
+    channel = _FakeAnnounceChannel()
+
+    await score_submission.announce_first_place(
+        score,
+        scores=scores,
+        announce_channel=channel,
+        domain="osu.cmyui.xyz",
+    )
+
+    assert scores.calls == []
+    assert channel.messages == []
+
+
+async def test_announce_first_place_requires_announce_channel() -> None:
+    score = _score()
+    scores = _FakeFirstPlaceScoresRepository()
+
+    with pytest.raises(AssertionError):
+        await score_submission.announce_first_place(
+            score,
+            scores=scores,
+            announce_channel=None,
+            domain="osu.cmyui.xyz",
+        )
+
+    assert scores.calls == [
+        {
+            "map_md5": "1cf5b2c2edfafd055536d2cefcb89c0e",
+            "mode": GameMode.RELAX_OSU.value,
+            "scoring_metric": "pp",
+        },
+    ]
 
 
 class _FailingAchievements:
