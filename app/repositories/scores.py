@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from datetime import datetime
+from typing import Any
 from typing import Literal
 from typing import TypedDict
 from typing import cast
@@ -93,6 +94,7 @@ READ_PARAMS = (
 )
 
 FirstPlaceScoringMetric = Literal["score", "pp"]
+LeaderboardScoringMetric = Literal["pp", "score"]
 
 
 class Score(TypedDict):
@@ -123,6 +125,9 @@ class Score(TypedDict):
 class PreviousFirstPlace(TypedDict):
     id: int
     name: str
+
+
+LeaderboardScore = dict[str, Any]
 
 
 async def create(
@@ -244,6 +249,110 @@ async def fetch_previous_first_place(
         },
     )
     return cast(PreviousFirstPlace | None, previous_first_place)
+
+
+async def fetch_beatmap_leaderboard_scores(
+    *,
+    map_md5: str,
+    mode: int,
+    user_id: int,
+    scoring_metric: LeaderboardScoringMetric,
+    mods: int | None = None,
+    friend_ids: set[int] | None = None,
+    country: str | None = None,
+    limit: int = 50,
+) -> list[LeaderboardScore]:
+    query = [
+        f"SELECT s.id, s.{scoring_metric} AS _score, "
+        "s.max_combo, s.n50, s.n100, s.n300, "
+        "s.nmiss, s.nkatu, s.ngeki, s.perfect, s.mods, "
+        "UNIX_TIMESTAMP(s.play_time) time, u.id userid, "
+        "COALESCE(CONCAT('[', c.tag, '] ', u.name), u.name) AS name "
+        "FROM scores s "
+        "INNER JOIN users u ON u.id = s.userid "
+        "LEFT JOIN clans c ON c.id = u.clan_id "
+        "WHERE s.map_md5 = :map_md5 AND s.status = :status "
+        "AND (u.priv & :unrestricted_priv OR u.id = :user_id) "
+        "AND mode = :mode",
+    ]
+
+    params: dict[str, Any] = {
+        "map_md5": map_md5,
+        "user_id": user_id,
+        "mode": mode,
+        "status": SubmissionStatus.BEST.value,
+        "unrestricted_priv": Privileges.UNRESTRICTED.value,
+        "limit": limit,
+    }
+
+    if mods is not None:
+        query.append("AND s.mods = :mods")
+        params["mods"] = mods
+    if friend_ids is not None:
+        query.append("AND s.userid IN :friends")
+        params["friends"] = friend_ids
+    if country is not None:
+        query.append("AND u.country = :country")
+        params["country"] = country
+
+    query.append("ORDER BY _score DESC LIMIT :limit")
+
+    score_rows = await app.state.services.database.fetch_all(" ".join(query), params)
+    return [dict(row) for row in score_rows]
+
+
+async def fetch_personal_best_leaderboard_score(
+    *,
+    map_md5: str,
+    mode: int,
+    user_id: int,
+    scoring_metric: LeaderboardScoringMetric,
+) -> LeaderboardScore | None:
+    personal_best_score_row = await app.state.services.database.fetch_one(
+        f"SELECT id, {scoring_metric} AS _score, "
+        "max_combo, n50, n100, n300, "
+        "nmiss, nkatu, ngeki, perfect, mods, "
+        "UNIX_TIMESTAMP(play_time) time "
+        "FROM scores "
+        "WHERE map_md5 = :map_md5 AND mode = :mode "
+        "AND userid = :user_id AND status = :status "
+        "ORDER BY _score DESC LIMIT 1",
+        {
+            "map_md5": map_md5,
+            "mode": mode,
+            "user_id": user_id,
+            "status": SubmissionStatus.BEST.value,
+        },
+    )
+    return (
+        dict(personal_best_score_row) if personal_best_score_row is not None else None
+    )
+
+
+async def fetch_personal_best_leaderboard_rank(
+    *,
+    map_md5: str,
+    mode: int,
+    scoring_metric: LeaderboardScoringMetric,
+    score: int | float,
+) -> int:
+    higher_scores = await app.state.services.database.fetch_val(
+        "SELECT COUNT(*) FROM scores s "
+        "INNER JOIN users u ON u.id = s.userid "
+        "WHERE s.map_md5 = :map_md5 AND s.mode = :mode "
+        "AND s.status = :status AND u.priv & :unrestricted_priv "
+        f"AND s.{scoring_metric} > :score",
+        {
+            "map_md5": map_md5,
+            "mode": mode,
+            "score": score,
+            "status": SubmissionStatus.BEST.value,
+            "unrestricted_priv": Privileges.UNRESTRICTED.value,
+        },
+        column=0,
+    )
+    assert higher_scores is not None
+    return int(higher_scores) + 1
 
 
 async def fetch_one(id: int) -> Score | None:
