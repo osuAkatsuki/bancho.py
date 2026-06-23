@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 from typing import Protocol
 from typing import cast
@@ -25,6 +26,11 @@ DIALECT = MySQLDialect()
 MySQLRow = dict[str, Any]
 MySQLParams = dict[str, Any] | None
 MySQLQuery = ClauseElement | str
+
+
+def _record_to_row(record: Record) -> MySQLRow:
+    mapping = cast(Mapping[str, Any], getattr(record, "_mapping"))
+    return dict(mapping)
 
 
 class _DatabaseClient(Protocol):
@@ -102,7 +108,7 @@ class Database:
                 },
             )
 
-        return dict(row) if row is not None else None
+        return _record_to_row(row) if row is not None else None
 
     async def fetch_all(
         self,
@@ -126,7 +132,7 @@ class Database:
                 },
             )
 
-        return [dict(row) for row in rows]
+        return [_record_to_row(row) for row in rows]
 
     async def fetch_val(
         self,
