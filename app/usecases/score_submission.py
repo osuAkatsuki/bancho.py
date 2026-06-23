@@ -523,6 +523,33 @@ def apply_weighted_performance_stats(
     }
 
 
+async def update_public_score_submission_state(
+    score: Score,
+    *,
+    maps: MapsRepository,
+    publish_user_stats: Callable[[Player], None],
+) -> None:
+    assert score.bmap is not None
+    assert score.player is not None
+
+    if score.player.restricted:
+        return
+
+    # enqueue new stats info to all other users
+    publish_user_stats(score.player)
+
+    # update beatmap with new stats
+    score.bmap.plays += 1
+    if score.passed:
+        score.bmap.passes += 1
+
+    await maps.partial_update(
+        score.bmap.id,
+        plays=score.bmap.plays,
+        passes=score.bmap.passes,
+    )
+
+
 async def persist_score_submission_stats(
     score: Score,
     *,
@@ -587,20 +614,11 @@ async def persist_score_submission_stats(
         pp=stats_updates.get("pp", UNSET),
     )
 
-    if not score.player.restricted:
-        # enqueue new stats info to all other users
-        publish_user_stats(score.player)
-
-        # update beatmap with new stats
-        score.bmap.plays += 1
-        if score.passed:
-            score.bmap.passes += 1
-
-        await maps.partial_update(
-            score.bmap.id,
-            plays=score.bmap.plays,
-            passes=score.bmap.passes,
-        )
+    await update_public_score_submission_state(
+        score,
+        maps=maps,
+        publish_user_stats=publish_user_stats,
+    )
 
     # update their recent score
     score.player.recent_scores[score.mode] = score

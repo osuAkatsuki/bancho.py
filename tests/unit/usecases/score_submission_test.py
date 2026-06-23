@@ -809,6 +809,93 @@ async def test_persist_submitted_score_creates_non_best_score_without_demoting()
     assert scores.created_scores[0]["status"] == SubmissionStatus.SUBMITTED.value
 
 
+async def test_update_public_score_submission_state_publishes_passed_score() -> None:
+    score = _score()
+    stats = _mode_data()
+    player = _FakePlayer(stats=stats)
+    score.player = player
+    score.bmap.plays = 1
+    score.bmap.passes = 1
+    maps = _FakeMapsRepository()
+    publish_user_stats = _FakeUserStatsPublisher()
+
+    await score_submission.update_public_score_submission_state(
+        score,
+        maps=maps,
+        publish_user_stats=publish_user_stats,
+    )
+
+    assert publish_user_stats.published_players == [player]
+    assert score.bmap.plays == 2
+    assert score.bmap.passes == 2
+    assert maps.partial_updates == [
+        {
+            "id": 315,
+            "updates": {
+                "plays": 2,
+                "passes": 2,
+            },
+        },
+    ]
+
+
+async def test_update_public_score_submission_state_does_not_count_failed_pass() -> (
+    None
+):
+    score = _score()
+    score.passed = False
+    stats = _mode_data()
+    player = _FakePlayer(stats=stats)
+    score.player = player
+    score.bmap.plays = 1
+    score.bmap.passes = 1
+    maps = _FakeMapsRepository()
+    publish_user_stats = _FakeUserStatsPublisher()
+
+    await score_submission.update_public_score_submission_state(
+        score,
+        maps=maps,
+        publish_user_stats=publish_user_stats,
+    )
+
+    assert publish_user_stats.published_players == [player]
+    assert score.bmap.plays == 2
+    assert score.bmap.passes == 1
+    assert maps.partial_updates == [
+        {
+            "id": 315,
+            "updates": {
+                "plays": 2,
+                "passes": 1,
+            },
+        },
+    ]
+
+
+async def test_update_public_score_submission_state_skips_restricted_player() -> (
+    None
+):
+    score = _score()
+    stats = _mode_data()
+    player = _FakePlayer(stats=stats, restricted=True)
+    score.player = player
+    score.bmap.plays = 1
+    score.bmap.passes = 1
+    maps = _FakeMapsRepository()
+    publish_user_stats = _FakeUserStatsPublisher()
+
+    await score_submission.update_public_score_submission_state(
+        score,
+        maps=maps,
+        publish_user_stats=publish_user_stats,
+    )
+
+    assert publish_user_stats.published_players == []
+    assert score.bmap.plays == 1
+    assert score.bmap.passes == 1
+    assert maps.partial_updates == []
+
+
 async def test_persist_score_submission_stats_updates_ranked_best_score_side_effects() -> (
     None
 ):
@@ -873,18 +960,6 @@ async def test_persist_score_submission_stats_updates_ranked_best_score_side_eff
             },
         },
     ]
-    assert publish_user_stats.published_players == [player]
-    assert score.bmap.plays == 2
-    assert score.bmap.passes == 2
-    assert maps_repo.partial_updates == [
-        {
-            "id": 315,
-            "updates": {
-                "plays": 2,
-                "passes": 2,
-            },
-        },
-    ]
     assert player.recent_scores[GameMode.RELAX_OSU] is score
 
 
@@ -931,18 +1006,6 @@ async def test_persist_score_submission_stats_updates_failed_score_without_weigh
                 "playtime": 18,
                 "tscore": 26_820,
                 "total_hits": 109,
-            },
-        },
-    ]
-    assert publish_user_stats.published_players == [player]
-    assert score.bmap.plays == 2
-    assert score.bmap.passes == 1
-    assert maps_repo.partial_updates == [
-        {
-            "id": 315,
-            "updates": {
-                "plays": 2,
-                "passes": 1,
             },
         },
     ]
