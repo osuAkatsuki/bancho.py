@@ -9,6 +9,7 @@ from collections.abc import Sequence
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
 from datetime import datetime
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 from typing import NotRequired
@@ -23,6 +24,7 @@ from app.constants.score_statuses import SubmissionStatus
 from app.constants.scoring_metrics import ScoringMetric
 from app.logging import Ansi
 from app.logging import log
+from app.objects.beatmap import Beatmap
 from app.objects.player import ClientDetails
 from app.objects.player import ModeData
 from app.objects.player import Player
@@ -83,6 +85,25 @@ class DatabaseTransactions(Protocol):
 
 class OsuFileAvailabilityChecker(Protocol):
     def __call__(self, beatmap_id: int, *, expected_md5: str) -> Awaitable[bool]: ...
+
+
+class BeatmapFetcher(Protocol):
+    def __call__(self, md5: str) -> Awaitable[Beatmap | None]: ...
+
+
+class PlayerAuthenticator(Protocol):
+    def __call__(
+        self,
+        username: str,
+        password_md5: str,
+    ) -> Awaitable[Player | None]: ...
+
+
+class ScoreSubmissionLocks(Protocol):
+    def __getitem__(
+        self,
+        online_checksum: str,
+    ) -> AbstractAsyncContextManager[Any]: ...
 
 
 MIN_REPLAY_SIZE = 24
@@ -230,10 +251,37 @@ class ScoreSubmissionPersistenceResult:
 
 @dataclass(frozen=True)
 class SubmittedScore:
+    score: Score
     score_id: int
     previous_stats: ModeData
     current_stats: ModeData
     unlocked_achievements: Sequence[Achievement]
+
+
+class ScoreSubmissionErrorCode(StrEnum):
+    BEATMAP_NOT_FOUND = "beatmap_not_found"
+    PLAYER_NOT_FOUND = "player_not_found"
+    DUPLICATE_SUBMISSION = "duplicate_submission"
+
+
+@dataclass(frozen=True)
+class ScoreSubmissionError:
+    code: ScoreSubmissionErrorCode
+    user_message: str | None = None
+
+
+@dataclass(frozen=True)
+class ScoreSubmissionRequest:
+    score_data: Sequence[str]
+    password_md5: str
+    osu_version: str
+    client_hash: str
+    unique_ids: str
+    storyboard_md5: str | None
+    updated_beatmap_hash: str
+    score_time: int
+    fail_time: int
+    replay_file: ReplayFile
 
 
 @dataclass(frozen=True)
@@ -244,10 +292,6 @@ class ScoreSubmissionStateSnapshot:
     beatmap_passes: int
     had_recent_score: bool
     recent_score: Score | None
-
-
-class DuplicateScoreSubmissionError(Exception):
-    """Raised when the client retries a score that is already persisted."""
 
 
 def parse_unique_id_hashes(unique_ids: str) -> UniqueIdHashes:
@@ -344,6 +388,33 @@ def validate_submission_integrity(
     )
 
 
+def score_submission_beatmap_md5(request: ScoreSubmissionRequest) -> str:
+    return request.score_data[0]
+
+
+def score_submission_username(request: ScoreSubmissionRequest) -> str:
+    username = request.score_data[1]
+
+    # if the client has supporter, a space is appended
+    # but usernames may also end with a space, which must be preserved
+    if username[-1] == " ":
+        username = username[:-1]
+
+    return username
+
+
+def build_score_from_submission_request(
+    request: ScoreSubmissionRequest,
+    *,
+    beatmap: Beatmap,
+    player: Player,
+) -> Score:
+    score = Score.from_submission(list(request.score_data[2:]))
+    score.bmap = beatmap
+    score.player = player
+    return score
+
+
 def update_submitter_status_mode(
     score: Score,
     *,
@@ -391,16 +462,18 @@ async def calculate_score_submission_status(
     score.time_elapsed = score_time if score.passed else fail_time
 
 
-async def reject_duplicate_score_submission(
+async def score_submission_is_duplicate(
     score: Score,
     *,
     scores: ScoresRepository,
-) -> None:
+) -> bool:
     assert score.player is not None
 
     if await scores.fetch_one_by_online_checksum(score.client_checksum):
         log(f"{score.player} submitted a duplicate score.", Ansi.LYELLOW)
-        raise DuplicateScoreSubmissionError
+        return True
+
+    return False
 
 
 async def persist_submitted_score(score: Score, scores: ScoresRepository) -> int:
@@ -917,20 +990,13 @@ async def persist_score_submission(
 
 
 async def submit_score(
-    score: Score,
+    request: ScoreSubmissionRequest,
     *,
-    osu_version: str,
-    client_hash: str,
-    unique_ids: str,
-    storyboard_md5: str | None,
-    submission_beatmap_md5: str,
-    updated_beatmap_hash: str,
-    score_time: int,
-    fail_time: int,
-    replay_file: ReplayFile,
     replays_path: Path,
-    score_submission_lock: AbstractAsyncContextManager[Any],
     restriction_admin: Player,
+    fetch_beatmap: BeatmapFetcher,
+    authenticate_player: PlayerAuthenticator,
+    score_submission_locks: ScoreSubmissionLocks,
     database: DatabaseTransactions,
     scores: ScoresRepository,
     stats: StatsRepository,
@@ -944,20 +1010,39 @@ async def submit_score(
     domain: str,
     increment_metric: Callable[[str], None],
     record_submission_integrity_failure: Callable[[], Awaitable[None]],
-) -> SubmittedScore:
-    assert score.bmap is not None
-    assert score.player is not None
+) -> SubmittedScore | ScoreSubmissionError:
+    beatmap_md5 = score_submission_beatmap_md5(request)
+    beatmap = await fetch_beatmap(beatmap_md5)
+    if beatmap is None:
+        return ScoreSubmissionError(
+            code=ScoreSubmissionErrorCode.BEATMAP_NOT_FOUND,
+            user_message="Beatmap not found.",
+        )
+
+    username = score_submission_username(request)
+    player = await authenticate_player(username, request.password_md5)
+    if player is None:
+        return ScoreSubmissionError(
+            code=ScoreSubmissionErrorCode.PLAYER_NOT_FOUND,
+            user_message="Player could not be authenticated.",
+        )
+
+    score = build_score_from_submission_request(
+        request,
+        beatmap=beatmap,
+        player=player,
+    )
 
     try:
         validate_submission_integrity(
-            client_details=score.player.client_details,
-            osu_version=osu_version,
-            client_hash=client_hash,
-            unique_ids=unique_ids,
+            client_details=player.client_details,
+            osu_version=request.osu_version,
+            client_hash=request.client_hash,
+            unique_ids=request.unique_ids,
             score=score,
-            storyboard_md5=storyboard_md5,
-            submission_beatmap_md5=submission_beatmap_md5,
-            updated_beatmap_hash=updated_beatmap_hash,
+            storyboard_md5=request.storyboard_md5,
+            submission_beatmap_md5=beatmap_md5,
+            updated_beatmap_hash=request.updated_beatmap_hash,
         )
 
     except (ValueError, AssertionError):
@@ -978,7 +1063,7 @@ async def submit_score(
 
     # we should update their activity no matter
     # what the result of the score submission is.
-    score.player.update_latest_activity_soon()
+    player.update_latest_activity_soon()
 
     update_submitter_status_mode(score, publish_user_stats=publish_user_stats)
 
@@ -986,13 +1071,17 @@ async def submit_score(
 
     # hold a lock around (check if submitted, submission) to ensure no duplicates
     # are submitted to the database, and potentially award duplicate score/pp/etc.
-    async with score_submission_lock:
-        await reject_duplicate_score_submission(score, scores=scores)
+    async with score_submission_locks[score.client_checksum]:
+        if await score_submission_is_duplicate(score, scores=scores):
+            return ScoreSubmissionError(
+                code=ScoreSubmissionErrorCode.DUPLICATE_SUBMISSION,
+                user_message="Score has already been submitted.",
+            )
 
         await calculate_score_submission_status(
             score,
-            score_time=score_time,
-            fail_time=fail_time,
+            score_time=request.score_time,
+            fail_time=request.fail_time,
             ensure_osu_file_is_available=ensure_osu_file_is_available,
         )
 
@@ -1000,7 +1089,7 @@ async def submit_score(
 
         replay_data = await read_submitted_replay_file(
             score,
-            replay_file=replay_file,
+            replay_file=request.replay_file,
         )
         if replay_data is not None and not replay_data_is_valid(replay_data):
             await restrict_player_for_missing_replay(
@@ -1033,14 +1122,14 @@ async def submit_score(
     )
 
     if persistence_result.should_update_rank:
-        persistence_result.current_stats.rank = await score.player.update_rank(
+        persistence_result.current_stats.rank = await player.update_rank(
             score.mode,
         )
 
     if persistence_result.is_public_submission:
-        publish_user_stats(score.player)
+        publish_user_stats(player)
 
-    score.player.recent_scores[score.mode] = score
+    player.recent_scores[score.mode] = score
 
     if score.status == SubmissionStatus.BEST:
         notify_score_submitter_of_personal_best(
@@ -1061,6 +1150,7 @@ async def submit_score(
     )
 
     return SubmittedScore(
+        score=score,
         score_id=persistence_result.score_id,
         previous_stats=persistence_result.previous_stats,
         current_stats=persistence_result.current_stats,

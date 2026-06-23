@@ -15,6 +15,7 @@ from app.objects.player import ModeData
 from app.objects.score import Grade
 from app.objects.score import Score
 from app.repositories.achievements import Achievement
+from app.usecases import score_submission
 
 
 def _score() -> Score:
@@ -252,3 +253,23 @@ def test_build_score_submission_response_formats_unlocked_achievements() -> None
         b"achievements-new:osu-skill-pass-4+Insanity Approaches+You're not twitching, you're just ready."
         in response
     )
+
+
+@pytest.mark.parametrize(
+    ("error_code", "expected_response"),
+    [
+        (
+            score_submission.ScoreSubmissionErrorCode.BEATMAP_NOT_FOUND,
+            b"error: beatmap",
+        ),
+        (score_submission.ScoreSubmissionErrorCode.PLAYER_NOT_FOUND, b""),
+        (score_submission.ScoreSubmissionErrorCode.DUPLICATE_SUBMISSION, b"error: no"),
+    ],
+)
+def test_build_score_submission_error_response_maps_domain_errors_to_osu_protocol(
+    error_code: score_submission.ScoreSubmissionErrorCode,
+    expected_response: bytes,
+) -> None:
+    error = score_submission.ScoreSubmissionError(code=error_code)
+
+    assert osu.build_score_submission_error_response(error) == expected_response

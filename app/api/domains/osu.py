@@ -631,6 +631,59 @@ def build_score_submission_response(
     )
 
 
+def build_score_submission_error_response(
+    error: score_submission_usecases.ScoreSubmissionError,
+) -> bytes:
+    if (
+        error.code
+        is score_submission_usecases.ScoreSubmissionErrorCode.BEATMAP_NOT_FOUND
+    ):
+        return b"error: beatmap"
+    if (
+        error.code
+        is score_submission_usecases.ScoreSubmissionErrorCode.PLAYER_NOT_FOUND
+    ):
+        # Player is not online, return nothing so that their
+        # client will retry submission when they log in.
+        return b""
+    if (
+        error.code
+        is score_submission_usecases.ScoreSubmissionErrorCode.DUPLICATE_SUBMISSION
+    ):
+        return b"error: no"
+
+    raise ValueError(f"Unexpected score submission error: {error.code!r}")
+
+
+async def fetch_score_submission_beatmap(md5: str) -> Beatmap | None:
+    return await Beatmap.from_md5(md5)
+
+
+async def authenticate_score_submitter(
+    username: str,
+    password_md5: str,
+) -> Player | None:
+    return await app.state.sessions.players.from_login(username, password_md5)
+
+
+async def record_score_submission_integrity_failure() -> None:
+    stacktrace = app.utils.get_appropriate_stacktrace()
+    await app.state.services.log_strange_occurrence(stacktrace)
+
+
+def increment_score_submission_metric(metric: str) -> None:
+    if app.state.services.datadog:
+        app.state.services.datadog.increment(metric)  # type: ignore[no-untyped-call]
+
+
+def send_personal_best_notification(player: Player, message: str) -> None:
+    player.enqueue(app.packets.notification(message))
+
+
+def publish_score_submitter_stats(player: Player) -> None:
+    app.state.sessions.players.enqueue(app.packets.user_stats(player))
+
+
 @router.post("/web/osu-submit-modular-selector.php")
 async def osuSubmitModularSelector(
     request: Request,
@@ -677,83 +730,43 @@ async def osuSubmitModularSelector(
         osu_version,
     )
 
-    # fetch map & player
-
-    bmap_md5 = score_data[0]
-    bmap = await Beatmap.from_md5(bmap_md5)
-    if not bmap:
-        # Map does not exist, most likely unsubmitted.
-        return Response(b"error: beatmap")
-
-    # if the client has supporter, a space is appended
-    # but usernames may also end with a space, which must be preserved
-    username = score_data[1]
-    if username[-1] == " ":
-        username = username[:-1]
-
-    player = await app.state.sessions.players.from_login(username, pw_md5)
-    if not player:
-        # Player is not online, return nothing so that their
-        # client will retry submission when they log in.
-        return Response(b"")
-
-    # parse the score from the remaining data
-    score = Score.from_submission(score_data[2:])
-
-    # attach bmap & player
-    score.bmap = bmap
-    score.player = player
-
-    async def record_submission_integrity_failure() -> None:
-        stacktrace = app.utils.get_appropriate_stacktrace()
-        await app.state.services.log_strange_occurrence(stacktrace)
-
-    def increment_score_submission_metric(metric: str) -> None:
-        if app.state.services.datadog:
-            app.state.services.datadog.increment(metric)  # type: ignore[no-untyped-call]
-
-    def send_personal_best_notification(player: Player, message: str) -> None:
-        player.enqueue(app.packets.notification(message))
-
-    def publish_user_stats(player: Player) -> None:
-        app.state.sessions.players.enqueue(app.packets.user_stats(player))
-
-    try:
-        submitted_score = await score_submission_usecases.submit_score(
-            score,
+    submitted_score = await score_submission_usecases.submit_score(
+        score_submission_usecases.ScoreSubmissionRequest(
+            score_data=score_data,
+            password_md5=pw_md5,
             osu_version=osu_version,
             client_hash=client_hash_decoded,
             unique_ids=unique_ids,
             storyboard_md5=storyboard_md5,
-            submission_beatmap_md5=bmap_md5,
             updated_beatmap_hash=updated_beatmap_hash,
             score_time=score_time,
             fail_time=fail_time,
             replay_file=replay_file,
-            replays_path=REPLAYS_PATH,
-            score_submission_lock=app.state.score_submission_locks[
-                score.client_checksum
-            ],
-            restriction_admin=app.state.sessions.bot,
-            database=app.state.services.database,
-            scores=scores_repo,
-            stats=stats_repo,
-            maps=maps_repo,
-            achievements=achievements_usecases,
-            user_achievements=user_achievements_usecases,
-            ensure_osu_file_is_available=ensure_osu_file_is_available,
-            publish_user_stats=publish_user_stats,
-            send_personal_best_notification=send_personal_best_notification,
-            announce_channel=app.state.sessions.channels.get_by_name("#announce"),
-            domain=app.settings.DOMAIN,
-            increment_metric=increment_score_submission_metric,
-            record_submission_integrity_failure=record_submission_integrity_failure,
-        )
-    except score_submission_usecases.DuplicateScoreSubmissionError:
-        return Response(b"error: no")
+        ),
+        replays_path=REPLAYS_PATH,
+        restriction_admin=app.state.sessions.bot,
+        fetch_beatmap=fetch_score_submission_beatmap,
+        authenticate_player=authenticate_score_submitter,
+        score_submission_locks=app.state.score_submission_locks,
+        database=app.state.services.database,
+        scores=scores_repo,
+        stats=stats_repo,
+        maps=maps_repo,
+        achievements=achievements_usecases,
+        user_achievements=user_achievements_usecases,
+        ensure_osu_file_is_available=ensure_osu_file_is_available,
+        publish_user_stats=publish_score_submitter_stats,
+        send_personal_best_notification=send_personal_best_notification,
+        announce_channel=app.state.sessions.channels.get_by_name("#announce"),
+        domain=app.settings.DOMAIN,
+        increment_metric=increment_score_submission_metric,
+        record_submission_integrity_failure=record_score_submission_integrity_failure,
+    )
+    if isinstance(submitted_score, score_submission_usecases.ScoreSubmissionError):
+        return Response(build_score_submission_error_response(submitted_score))
 
     response = build_score_submission_response(
-        score=score,
+        score=submitted_score.score,
         previous_stats=submitted_score.previous_stats,
         current_stats=submitted_score.current_stats,
         domain=app.settings.DOMAIN,
