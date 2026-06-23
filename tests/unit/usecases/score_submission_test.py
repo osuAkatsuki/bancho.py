@@ -24,8 +24,8 @@ from app.objects.player import OsuVersion
 from app.objects.score import Grade
 from app.objects.score import Score
 from app.repositories.achievements import Achievement
-from app.repositories.scores import BestScorePerformance
 from app.repositories.scores import PreviousFirstPlace
+from app.repositories.scores import ScorePerformanceRow
 from app.repositories.user_achievements import UserAchievement
 from app.usecases import score_submission
 
@@ -718,7 +718,7 @@ class _FakeScoresRepository:
 class _FakeScorePerformanceRepository:
     def __init__(
         self,
-        best_scores: list[BestScorePerformance] | None = None,
+        best_scores: list[ScorePerformanceRow] | None = None,
     ) -> None:
         self.best_scores = best_scores if best_scores is not None else []
         self.fetches: list[_ScorePerformanceFetch] = []
@@ -728,7 +728,7 @@ class _FakeScorePerformanceRepository:
         *,
         user_id: int,
         mode: int,
-    ) -> list[BestScorePerformance]:
+    ) -> list[ScorePerformanceRow]:
         self.fetches.append({"user_id": user_id, "mode": mode})
         return self.best_scores
 
@@ -739,7 +739,7 @@ class _FailingScorePerformanceRepository:
         *,
         user_id: int,
         mode: int,
-    ) -> list[BestScorePerformance]:
+    ) -> list[ScorePerformanceRow]:
         raise AssertionError("weighted best scores should not be fetched")
 
 

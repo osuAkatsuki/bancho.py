@@ -6,8 +6,8 @@ from typing import TypedDict
 from app.constants.leaderboard_types import LeaderboardType
 from app.constants.mods import Mods
 from app.constants.scoring_metrics import ScoringMetric
-from app.repositories.scores import BeatmapLeaderboardScore
-from app.repositories.scores import PersonalBestLeaderboardScore
+from app.repositories.scores import BeatmapLeaderboardScoreRow
+from app.repositories.scores import PersonalBestLeaderboardScoreRow
 from app.usecases import score_leaderboards
 
 
@@ -40,8 +40,8 @@ class _FakeScoresRepository:
     def __init__(
         self,
         *,
-        score_rows: list[BeatmapLeaderboardScore],
-        personal_best_score_row: PersonalBestLeaderboardScore | None = None,
+        score_rows: list[BeatmapLeaderboardScoreRow],
+        personal_best_score_row: PersonalBestLeaderboardScoreRow | None = None,
         personal_best_rank: int = 1,
     ) -> None:
         self.score_rows = score_rows
@@ -62,7 +62,7 @@ class _FakeScoresRepository:
         friend_ids: set[int] | None = None,
         country: str | None = None,
         limit: int = 50,
-    ) -> list[BeatmapLeaderboardScore]:
+    ) -> list[BeatmapLeaderboardScoreRow]:
         self.leaderboard_fetches.append(
             {
                 "map_md5": map_md5,
@@ -84,7 +84,7 @@ class _FakeScoresRepository:
         mode: int,
         user_id: int,
         scoring_metric: ScoringMetric,
-    ) -> PersonalBestLeaderboardScore | None:
+    ) -> PersonalBestLeaderboardScoreRow | None:
         self.personal_best_fetches.append(
             {
                 "map_md5": map_md5,
@@ -118,7 +118,7 @@ def _beatmap_leaderboard_score(
     *,
     id: int,
     score: int | float,
-) -> BeatmapLeaderboardScore:
+) -> BeatmapLeaderboardScoreRow:
     return {
         "id": id,
         "_score": score,
@@ -141,7 +141,7 @@ def _personal_best_leaderboard_score(
     *,
     id: int,
     score: int | float,
-) -> PersonalBestLeaderboardScore:
+) -> PersonalBestLeaderboardScoreRow:
     return {
         "id": id,
         "_score": score,

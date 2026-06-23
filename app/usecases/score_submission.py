@@ -25,8 +25,8 @@ from app.objects.player import Player
 from app.objects.score import Grade
 from app.objects.score import Score
 from app.repositories.achievements import Achievement
-from app.repositories.scores import BestScorePerformance
 from app.repositories.scores import PreviousFirstPlace
+from app.repositories.scores import ScorePerformanceRow
 from app.repositories.user_achievements import UserAchievement
 
 
@@ -54,8 +54,13 @@ class GradeCountStatsUpdates(TypedDict):
     a_count: NotRequired[int]
 
 
-class RankedScoreStatsUpdates(GradeCountStatsUpdates):
+class RankedScoreStatsUpdates(TypedDict):
     rscore: int
+    xh_count: NotRequired[int]
+    x_count: NotRequired[int]
+    sh_count: NotRequired[int]
+    s_count: NotRequired[int]
+    a_count: NotRequired[int]
 
 
 class WeightedPerformanceStatsUpdates(TypedDict):
@@ -138,7 +143,7 @@ class ScoresRepository(Protocol):
         *,
         user_id: int,
         mode: int,
-    ) -> Sequence[BestScorePerformance]: ...
+    ) -> Sequence[ScorePerformanceRow]: ...
 
     async def fetch_previous_first_place(
         self,
@@ -561,14 +566,14 @@ def apply_score_stats(score: Score, stats: ModeData) -> ScoreStatsUpdates:
     return updates
 
 
-def calculate_weighted_accuracy(best_scores: Sequence[BestScorePerformance]) -> float:
+def calculate_weighted_accuracy(best_scores: Sequence[ScorePerformanceRow]) -> float:
     # Calculate new total weighted accuracy.
     weighted_acc = sum(row["acc"] * 0.95**i for i, row in enumerate(best_scores))
     bonus_acc = 100.0 / (20 * (1 - 0.95 ** len(best_scores)))
     return (weighted_acc * bonus_acc) / 100
 
 
-def calculate_weighted_pp(best_scores: Sequence[BestScorePerformance]) -> int:
+def calculate_weighted_pp(best_scores: Sequence[ScorePerformanceRow]) -> int:
     # Calculate new total weighted pp.
     weighted_pp = sum(row["pp"] * 0.95**i for i, row in enumerate(best_scores))
     bonus_pp = 416.6667 * (1 - 0.9994 ** len(best_scores))
@@ -577,7 +582,7 @@ def calculate_weighted_pp(best_scores: Sequence[BestScorePerformance]) -> int:
 
 def apply_weighted_performance_stats(
     stats: ModeData,
-    best_scores: Sequence[BestScorePerformance],
+    best_scores: Sequence[ScorePerformanceRow],
 ) -> WeightedPerformanceStatsUpdates:
     stats.acc = calculate_weighted_accuracy(best_scores)
     stats.pp = calculate_weighted_pp(best_scores)

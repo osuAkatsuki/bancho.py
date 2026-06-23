@@ -3,14 +3,30 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol
+from typing import TypedDict
 
 from app.constants.leaderboard_types import LeaderboardType
 from app.constants.mods import Mods
 from app.constants.scoring_metrics import ScoringMetric
 from app.objects.player import Player
-from app.repositories.scores import BeatmapLeaderboardScore
-from app.repositories.scores import PersonalBestLeaderboardScore
-from app.repositories.scores import RankedPersonalBestLeaderboardScore
+from app.repositories.scores import BeatmapLeaderboardScoreRow
+from app.repositories.scores import PersonalBestLeaderboardScoreRow
+
+
+class PersonalBestLeaderboardScoreListing(TypedDict):
+    id: int
+    _score: int | float
+    max_combo: int
+    n50: int
+    n100: int
+    n300: int
+    nmiss: int
+    nkatu: int
+    ngeki: int
+    perfect: int
+    mods: int
+    time: int
+    rank: int
 
 
 class ScoresRepository(Protocol):
@@ -25,7 +41,7 @@ class ScoresRepository(Protocol):
         friend_ids: set[int] | None = None,
         country: str | None = None,
         limit: int = 50,
-    ) -> Sequence[BeatmapLeaderboardScore]: ...
+    ) -> Sequence[BeatmapLeaderboardScoreRow]: ...
 
     async def fetch_personal_best_leaderboard_score(
         self,
@@ -34,7 +50,7 @@ class ScoresRepository(Protocol):
         mode: int,
         user_id: int,
         scoring_metric: ScoringMetric,
-    ) -> PersonalBestLeaderboardScore | None: ...
+    ) -> PersonalBestLeaderboardScoreRow | None: ...
 
     async def fetch_personal_best_leaderboard_rank(
         self,
@@ -48,8 +64,8 @@ class ScoresRepository(Protocol):
 
 @dataclass(frozen=True)
 class LeaderboardScores:
-    score_rows: list[BeatmapLeaderboardScore]
-    personal_best_score_row: RankedPersonalBestLeaderboardScore | None
+    score_rows: list[BeatmapLeaderboardScoreRow]
+    personal_best_score_row: PersonalBestLeaderboardScoreListing | None
 
 
 async def fetch_leaderboard_scores(
@@ -107,7 +123,7 @@ async def fetch_leaderboard_scores(
             scoring_metric=scoring_metric,
             score=personal_best_score_row["_score"],
         )
-        ranked_personal_best_score_row = RankedPersonalBestLeaderboardScore(
+        ranked_personal_best_score_row = PersonalBestLeaderboardScoreListing(
             **personal_best_score_row,
             rank=rank,
         )
