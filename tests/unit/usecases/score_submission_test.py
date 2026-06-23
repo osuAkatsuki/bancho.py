@@ -809,53 +809,35 @@ async def test_persist_submitted_score_creates_non_best_score_without_demoting()
     assert scores.created_scores[0]["status"] == SubmissionStatus.SUBMITTED.value
 
 
-async def test_increment_beatmap_play_counts_counts_passed_score() -> None:
+def test_apply_beatmap_play_stats_counts_passed_score() -> None:
     score = _score()
     score.bmap.plays = 1
     score.bmap.passes = 1
-    maps = _FakeMapsRepository()
 
-    await score_submission.increment_beatmap_play_counts(
-        score,
-        maps=maps,
-    )
+    updates = score_submission.apply_beatmap_play_stats(score)
 
     assert score.bmap.plays == 2
     assert score.bmap.passes == 2
-    assert maps.partial_updates == [
-        {
-            "id": 315,
-            "updates": {
-                "plays": 2,
-                "passes": 2,
-            },
-        },
-    ]
+    assert updates == {
+        "plays": 2,
+        "passes": 2,
+    }
 
 
-async def test_increment_beatmap_play_counts_does_not_count_failed_pass() -> None:
+def test_apply_beatmap_play_stats_does_not_count_failed_pass() -> None:
     score = _score()
     score.passed = False
     score.bmap.plays = 1
     score.bmap.passes = 1
-    maps = _FakeMapsRepository()
 
-    await score_submission.increment_beatmap_play_counts(
-        score,
-        maps=maps,
-    )
+    updates = score_submission.apply_beatmap_play_stats(score)
 
     assert score.bmap.plays == 2
     assert score.bmap.passes == 1
-    assert maps.partial_updates == [
-        {
-            "id": 315,
-            "updates": {
-                "plays": 2,
-                "passes": 1,
-            },
-        },
-    ]
+    assert updates == {
+        "plays": 2,
+        "passes": 1,
+    }
 
 
 async def test_persist_score_submission_stats_updates_ranked_best_score_side_effects() -> (

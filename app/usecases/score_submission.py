@@ -27,6 +27,7 @@ from app.repositories.user_achievements import UserAchievement
 
 StatsUpdates = dict[str, Any]
 BestScorePerformance = Mapping[str, float]
+BeatmapPlayStatsUpdates = dict[str, int]
 MIN_REPLAY_SIZE = 24
 VANILLA_GAME_MODES = (
     GameMode.VANILLA_OSU,
@@ -522,11 +523,7 @@ def apply_weighted_performance_stats(
     }
 
 
-async def increment_beatmap_play_counts(
-    score: Score,
-    *,
-    maps: MapsRepository,
-) -> None:
+def apply_beatmap_play_stats(score: Score) -> BeatmapPlayStatsUpdates:
     assert score.bmap is not None
 
     # update beatmap with new stats
@@ -534,11 +531,10 @@ async def increment_beatmap_play_counts(
     if score.passed:
         score.bmap.passes += 1
 
-    await maps.partial_update(
-        score.bmap.id,
-        plays=score.bmap.plays,
-        passes=score.bmap.passes,
-    )
+    return {
+        "plays": score.bmap.plays,
+        "passes": score.bmap.passes,
+    }
 
 
 async def persist_score_submission_stats(
@@ -608,7 +604,13 @@ async def persist_score_submission_stats(
     if not score.player.restricted:
         # enqueue new stats info to all other users
         publish_user_stats(score.player)
-        await increment_beatmap_play_counts(score, maps=maps)
+
+        beatmap_updates = apply_beatmap_play_stats(score)
+        await maps.partial_update(
+            score.bmap.id,
+            plays=beatmap_updates["plays"],
+            passes=beatmap_updates["passes"],
+        )
 
     # update their recent score
     score.player.recent_scores[score.mode] = score
