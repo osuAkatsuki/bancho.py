@@ -666,11 +666,21 @@ async def osuSubmitModularSelector(
 
         # TODO: re-implement pp caps for non-whitelisted players?
 
-        replay_data = await score_submission_usecases.read_and_validate_replay_file(
+        replay_data = await score_submission_usecases.read_submitted_replay_file(
             score,
             replay_file=replay_file,
-            restriction_admin=app.state.sessions.bot,
         )
+        if (
+            replay_data is not None
+            and not score_submission_usecases.replay_data_is_valid(
+                replay_data,
+            )
+        ):
+            await score_submission_usecases.restrict_player_for_missing_replay(
+                score,
+                restriction_admin=app.state.sessions.bot,
+            )
+            replay_data = None
 
         """ Score submission checks completed; submit the score. """
 

@@ -287,85 +287,92 @@ class _FakeFirstPlaceScoresRepository:
         return self.first_place_score
 
 
-async def test_save_replay_file_writes_passed_replay(tmp_path) -> None:
+async def test_read_submitted_replay_file_returns_passed_replay() -> None:
     score = _score()
     player = _FakeReplayPlayer()
     score.player = player
     replay_data = b"x" * score_submission.MIN_REPLAY_SIZE
     replay_file = _FakeReplayFile(replay_data)
 
-    await score_submission.save_replay_file(
+    submitted_replay = await score_submission.read_submitted_replay_file(
         score,
         replay_file=replay_file,
-        replays_path=tmp_path,
-        restriction_admin=player,
     )
 
-    assert (tmp_path / "42.osr").read_bytes() == replay_data
+    assert submitted_replay == replay_data
     assert replay_file.read_count == 1
-    assert player.restriction_reasons == []
-    assert not player.logged_out
 
 
-async def test_save_replay_file_does_not_read_failed_score(tmp_path) -> None:
+async def test_read_submitted_replay_file_does_not_read_failed_score() -> None:
     score = _score()
     player = _FakeReplayPlayer()
     score.player = player
     score.passed = False
     replay_file = _FakeReplayFile(b"")
 
-    await score_submission.save_replay_file(
+    submitted_replay = await score_submission.read_submitted_replay_file(
         score,
         replay_file=replay_file,
-        replays_path=tmp_path,
-        restriction_admin=player,
     )
 
+    assert submitted_replay is None
     assert replay_file.read_count == 0
-    assert list(tmp_path.iterdir()) == []
-    assert player.restriction_reasons == []
 
 
-async def test_save_replay_file_restricts_unrestricted_player_without_replay(
-    tmp_path,
-) -> None:
+def test_replay_data_is_valid_requires_minimum_replay_size() -> None:
+    assert score_submission.replay_data_is_valid(
+        b"x" * score_submission.MIN_REPLAY_SIZE,
+    )
+    assert not score_submission.replay_data_is_valid(
+        b"x" * (score_submission.MIN_REPLAY_SIZE - 1),
+    )
+
+
+async def test_restrict_player_for_missing_replay_restricts_unrestricted_player() -> (
+    None
+):
     score = _score()
     player = _FakeReplayPlayer()
     admin = _FakeReplayPlayer()
     score.player = player
-    replay_file = _FakeReplayFile(b"x" * (score_submission.MIN_REPLAY_SIZE - 1))
 
-    await score_submission.save_replay_file(
+    await score_submission.restrict_player_for_missing_replay(
         score,
-        replay_file=replay_file,
-        replays_path=tmp_path,
         restriction_admin=admin,
     )
 
-    assert list(tmp_path.iterdir()) == []
     assert player.restriction_admins == [admin]
     assert player.restriction_reasons == ["submitted score with no replay"]
     assert player.logged_out
 
 
-async def test_save_replay_file_does_not_restrict_restricted_player_without_replay(
-    tmp_path,
-) -> None:
+async def test_restrict_player_for_missing_replay_does_not_restrict_restricted_player() -> (
+    None
+):
     score = _score()
     player = _FakeReplayPlayer(restricted=True)
     score.player = player
-    replay_file = _FakeReplayFile(b"x" * (score_submission.MIN_REPLAY_SIZE - 1))
 
-    await score_submission.save_replay_file(
+    await score_submission.restrict_player_for_missing_replay(
         score,
-        replay_file=replay_file,
-        replays_path=tmp_path,
         restriction_admin=player,
     )
 
-    assert list(tmp_path.iterdir()) == []
     assert player.restriction_reasons == []
     assert not player.logged_out
+
+
+def test_write_replay_file_writes_replay_data(tmp_path) -> None:
+    score = _score()
+    replay_data = b"x" * score_submission.MIN_REPLAY_SIZE
+
+    score_submission.write_replay_file(
+        score,
+        replay_data=replay_data,
+        replays_path=tmp_path,
+    )
+
+    assert (tmp_path / "42.osr").read_bytes() == replay_data
 
 
 def test_notify_score_submitter_sends_pp_notification() -> None:

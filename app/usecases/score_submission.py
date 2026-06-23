@@ -364,37 +364,27 @@ async def persist_submitted_score(score: Score, scores: ScoresRepository) -> int
     return score_id
 
 
-async def save_replay_file(
+async def read_submitted_replay_file(
     score: Score,
     *,
     replay_file: ReplayFile,
-    replays_path: Path,
-    restriction_admin: Player,
-) -> None:
-    replay_data = await read_and_validate_replay_file(
-        score,
-        replay_file=replay_file,
-        restriction_admin=restriction_admin,
-    )
-    write_replay_file(score, replay_data=replay_data, replays_path=replays_path)
-
-
-async def read_and_validate_replay_file(
-    score: Score,
-    *,
-    replay_file: ReplayFile,
-    restriction_admin: Player,
 ) -> bytes | None:
-    assert score.player is not None
-
     if not score.passed:
         return None
 
-    replay_data = await replay_file.read()
+    return await replay_file.read()
 
-    if len(replay_data) >= MIN_REPLAY_SIZE:
-        return replay_data
 
+def replay_data_is_valid(replay_data: bytes) -> bool:
+    return len(replay_data) >= MIN_REPLAY_SIZE
+
+
+async def restrict_player_for_missing_replay(
+    score: Score,
+    *,
+    restriction_admin: Player,
+) -> None:
+    assert score.player is not None
     log(f"{score.player} submitted a score without a replay!", Ansi.LRED)
 
     if not score.player.restricted:
@@ -404,8 +394,6 @@ async def read_and_validate_replay_file(
         )
         if score.player.is_online:
             score.player.logout()
-
-    return None
 
 
 def write_replay_file(
