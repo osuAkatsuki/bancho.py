@@ -252,7 +252,7 @@ create index scores_play_time_index
 	on scores (play_time);
 create index scores_userid_index
 	on scores (userid);
-create unique index scores_online_checksum_unique
+create index scores_online_checksum_index
 	on scores (online_checksum);
 create index scores_fetch_leaderboard_generic_index
 	on scores (map_md5, status, mode);

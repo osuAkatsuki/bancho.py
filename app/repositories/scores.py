@@ -71,7 +71,7 @@ class ScoresTable(Base):
         Index("scores_mode_index", mode),
         Index("scores_play_time_index", play_time),
         Index("scores_userid_index", userid),
-        Index("scores_online_checksum_unique", online_checksum, unique=True),
+        Index("scores_online_checksum_index", online_checksum),
     )
 
 

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import pytest
-
 from app.repositories import scores as scores_repo
 from app.repositories import users as users_repo
 from tests import factories
@@ -163,25 +161,6 @@ async def test_fetch_one_by_online_checksum_returns_matching_score() -> None:
     assert fetched_score is not None
     assert fetched_score["id"] == score["id"]
     assert missing_score is None
-
-
-async def test_create_rejects_duplicate_online_checksum() -> None:
-    beatmap = await factories.create_map()
-    player = await factories.create_user()
-    online_checksum = "duplicated-online-score-checksum"
-
-    await factories.create_score(
-        player_id=player["id"],
-        map_md5=beatmap["md5"],
-        online_checksum=online_checksum,
-    )
-
-    with pytest.raises(scores_repo.DuplicateScoreError):
-        await factories.create_score(
-            player_id=player["id"],
-            map_md5=beatmap["md5"],
-            online_checksum=online_checksum,
-        )
 
 
 async def test_fetch_personal_best_leaderboard_rank_ignores_restricted_scores() -> None:
