@@ -990,7 +990,7 @@ async def test_persist_score_submission_stats_updates_ranked_best_score_side_eff
     assert result.current_stats.pp == 148
     assert result.current_stats.rank == 0
     assert result.should_update_rank
-    assert result.should_publish_user_stats
+    assert result.is_public_submission
     assert player.updated_rank_modes == []
     assert scores_repo.fetches == [
         {
@@ -1035,7 +1035,7 @@ async def test_persist_score_submission_stats_updates_ranked_best_score_side_eff
         previous_first_place_score=None,
         unlocked_achievements=[],
         should_update_rank=result.should_update_rank,
-        should_publish_user_stats=result.should_publish_user_stats,
+        is_public_submission=result.is_public_submission,
     )
     await score_submission.apply_score_submission_side_effects(
         score,
@@ -1082,7 +1082,7 @@ async def test_persist_score_submission_stats_updates_failed_score_without_weigh
     assert result.current_stats.tscore == 26_820
     assert result.current_stats.total_hits == 109
     assert not result.should_update_rank
-    assert result.should_publish_user_stats
+    assert result.is_public_submission
     assert player.updated_rank_modes == []
     assert stats_repo.partial_updates == [
         {
@@ -1126,7 +1126,7 @@ async def test_persist_score_submission_stats_skips_public_side_effects_for_rest
     )
 
     assert stats_repo.partial_updates != []
-    assert not result.should_publish_user_stats
+    assert not result.is_public_submission
     assert publish_user_stats.published_players == []
     assert score.bmap.plays == 1
     assert score.bmap.passes == 1
@@ -1193,7 +1193,7 @@ async def test_persist_score_submission_wraps_db_writes_in_transaction() -> None
     assert result.previous_first_place_score == {"id": 9, "name": "old-user"}
     assert [achievement["id"] for achievement in result.unlocked_achievements] == [1]
     assert result.should_update_rank
-    assert result.should_publish_user_stats
+    assert result.is_public_submission
     assert player.updated_rank_modes == []
     assert player.recent_scores == {}
 

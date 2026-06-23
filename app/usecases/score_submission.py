@@ -204,7 +204,7 @@ class ScoreStatsPersistenceResult:
     previous_stats: ModeData
     current_stats: ModeData
     should_update_rank: bool
-    should_publish_user_stats: bool
+    is_public_submission: bool
 
 
 @dataclass(frozen=True)
@@ -215,7 +215,7 @@ class ScoreSubmissionPersistenceResult:
     previous_first_place_score: FirstPlaceScore | None
     unlocked_achievements: Sequence[Achievement]
     should_update_rank: bool
-    should_publish_user_stats: bool
+    is_public_submission: bool
 
 
 @dataclass(frozen=True)
@@ -760,8 +760,8 @@ async def persist_score_submission_stats(
         pp=stats_updates.get("pp", UNSET),
     )
 
-    should_publish_user_stats = not score.player.restricted
-    if should_publish_user_stats:
+    is_public_submission = not score.player.restricted
+    if is_public_submission:
         beatmap_updates = apply_beatmap_play_stats(score)
         await maps.partial_update(
             score.bmap.id,
@@ -773,7 +773,7 @@ async def persist_score_submission_stats(
         previous_stats=previous_stats,
         current_stats=current_stats,
         should_update_rank=should_update_rank,
-        should_publish_user_stats=should_publish_user_stats,
+        is_public_submission=is_public_submission,
     )
 
 
@@ -831,7 +831,7 @@ async def persist_score_submission(
         previous_first_place_score=previous_first_place_score,
         unlocked_achievements=unlocked_achievements,
         should_update_rank=stats_result.should_update_rank,
-        should_publish_user_stats=stats_result.should_publish_user_stats,
+        is_public_submission=stats_result.is_public_submission,
     )
 
 
@@ -848,7 +848,7 @@ async def apply_score_submission_side_effects(
             score.mode,
         )
 
-    if persistence_result.should_publish_user_stats:
+    if persistence_result.is_public_submission:
         publish_user_stats(score.player)
 
     # update their recent score
