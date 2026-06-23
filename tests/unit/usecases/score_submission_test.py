@@ -5,6 +5,8 @@ from datetime import date
 from datetime import datetime
 from ipaddress import IPv4Address
 from types import SimpleNamespace
+from typing import TypedDict
+from typing import cast
 
 import pytest
 
@@ -14,13 +16,74 @@ from app.constants.clientflags import ClientFlags
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
 from app.constants.score_statuses import SubmissionStatus
+from app.constants.scoring_metrics import ScoringMetric
 from app.objects.player import ClientDetails
 from app.objects.player import ModeData
 from app.objects.player import OsuStream
 from app.objects.player import OsuVersion
 from app.objects.score import Grade
 from app.objects.score import Score
+from app.repositories.achievements import Achievement
+from app.repositories.scores import PreviousFirstPlace
+from app.repositories.scores import ScorePerformanceRow
+from app.repositories.user_achievements import UserAchievement
 from app.usecases import score_submission
+
+
+class _PreviousFirstPlaceFetch(TypedDict):
+    map_md5: str
+    mode: int
+    scoring_metric: ScoringMetric
+
+
+class _CreatedScore(TypedDict):
+    id: int
+
+
+class _PreviousBestUpdate(TypedDict):
+    map_md5: str
+    user_id: int
+    mode: int
+
+
+class _CreatedScoreFields(TypedDict):
+    map_md5: str
+    score: int
+    pp: float
+    acc: float
+    max_combo: int
+    mods: int
+    n300: int
+    n100: int
+    n50: int
+    nmiss: int
+    ngeki: int
+    nkatu: int
+    grade: str
+    status: int
+    mode: int
+    play_time: datetime
+    time_elapsed: int
+    client_flags: int
+    user_id: int
+    perfect: int
+    online_checksum: str
+
+
+class _ScorePerformanceFetch(TypedDict):
+    user_id: int
+    mode: int
+
+
+class _StatsPartialUpdate(TypedDict):
+    player_id: int
+    mode: int
+    updates: dict[str, object]
+
+
+class _MapPartialUpdate(TypedDict):
+    id: int
+    updates: dict[str, object]
 
 
 def _md5(value: str) -> str:
@@ -199,17 +262,17 @@ class _FakeAnnounceChannel:
 
 
 class _FakeFirstPlaceScoresRepository:
-    def __init__(self, previous_first_place: dict[str, object] | None = None) -> None:
+    def __init__(self, previous_first_place: PreviousFirstPlace | None = None) -> None:
         self.previous_first_place = previous_first_place
-        self.calls: list[dict[str, object]] = []
+        self.calls: list[_PreviousFirstPlaceFetch] = []
 
     async def fetch_previous_first_place(
         self,
         *,
         map_md5: str,
         mode: int,
-        scoring_metric: str,
-    ) -> dict[str, object] | None:
+        scoring_metric: ScoringMetric,
+    ) -> PreviousFirstPlace | None:
         self.calls.append(
             {
                 "map_md5": map_md5,
@@ -552,7 +615,7 @@ async def test_announce_first_place_requires_announce_channel() -> None:
 
 
 class _FailingAchievements:
-    async def fetch_many(self) -> list[dict[str, object]]:
+    async def fetch_many(self) -> list[Achievement]:
         raise AssertionError("achievements should not be fetched")
 
 
@@ -561,19 +624,19 @@ class _FailingUserAchievements:
         self,
         *,
         user_id: int,
-    ) -> list[dict[str, int]]:
+    ) -> list[UserAchievement]:
         raise AssertionError("user achievements should not be fetched")
 
     async def create(
         self,
         user_id: int,
         achievement_id: int,
-    ) -> dict[str, int]:
+    ) -> UserAchievement:
         raise AssertionError("user achievements should not be created")
 
 
 class _FakeAchievements:
-    async def fetch_many(self) -> list[dict[str, object]]:
+    async def fetch_many(self) -> list[Achievement]:
         return [
             {
                 "id": 1,
@@ -607,7 +670,7 @@ class _FakeUserAchievements:
         self,
         *,
         user_id: int,
-    ) -> list[dict[str, int]]:
+    ) -> list[UserAchievement]:
         assert user_id == 6
         return [{"userid": 6, "achid": 3}]
 
@@ -615,7 +678,7 @@ class _FakeUserAchievements:
         self,
         user_id: int,
         achievement_id: int,
-    ) -> dict[str, int]:
+    ) -> UserAchievement:
         assert user_id == 6
         self.created_achievement_ids.append(achievement_id)
         return {"userid": user_id, "achid": achievement_id}
@@ -624,15 +687,15 @@ class _FakeUserAchievements:
 class _FakeScoresRepository:
     def __init__(self) -> None:
         self.calls: list[str] = []
-        self.previous_best_updates: list[dict[str, int | str]] = []
-        self.created_scores: list[dict[str, object]] = []
+        self.previous_best_updates: list[_PreviousBestUpdate] = []
+        self.created_scores: list[_CreatedScoreFields] = []
 
     async def create(
         self,
         **score_fields: object,
-    ) -> dict[str, object]:
+    ) -> _CreatedScore:
         self.calls.append("create")
-        self.created_scores.append(score_fields)
+        self.created_scores.append(cast(_CreatedScoreFields, score_fields))
         return {"id": 123}
 
     async def mark_previous_best_scores_submitted(
@@ -655,17 +718,17 @@ class _FakeScoresRepository:
 class _FakeScorePerformanceRepository:
     def __init__(
         self,
-        best_scores: list[dict[str, float]] | None = None,
+        best_scores: list[ScorePerformanceRow] | None = None,
     ) -> None:
         self.best_scores = best_scores if best_scores is not None else []
-        self.fetches: list[dict[str, int]] = []
+        self.fetches: list[_ScorePerformanceFetch] = []
 
     async def fetch_weighted_best_performances(
         self,
         *,
         user_id: int,
         mode: int,
-    ) -> list[dict[str, float]]:
+    ) -> list[ScorePerformanceRow]:
         self.fetches.append({"user_id": user_id, "mode": mode})
         return self.best_scores
 
@@ -676,20 +739,20 @@ class _FailingScorePerformanceRepository:
         *,
         user_id: int,
         mode: int,
-    ) -> list[dict[str, float]]:
+    ) -> list[ScorePerformanceRow]:
         raise AssertionError("weighted best scores should not be fetched")
 
 
 class _FakeStatsRepository:
     def __init__(self) -> None:
-        self.partial_updates: list[dict[str, object]] = []
+        self.partial_updates: list[_StatsPartialUpdate] = []
 
     async def partial_update(
         self,
         player_id: int,
         mode: int,
         **updates: object,
-    ) -> dict[str, object] | None:
+    ) -> None:
         self.partial_updates.append(
             {
                 "player_id": player_id,
@@ -699,18 +762,17 @@ class _FakeStatsRepository:
                 },
             },
         )
-        return None
 
 
 class _FakeMapsRepository:
     def __init__(self) -> None:
-        self.partial_updates: list[dict[str, object]] = []
+        self.partial_updates: list[_MapPartialUpdate] = []
 
     async def partial_update(
         self,
         id: int,
         **updates: object,
-    ) -> dict[str, object] | None:
+    ) -> None:
         self.partial_updates.append(
             {
                 "id": id,
@@ -719,7 +781,6 @@ class _FakeMapsRepository:
                 },
             },
         )
-        return None
 
 
 class _FakeUserStatsPublisher:
@@ -807,6 +868,37 @@ async def test_persist_submitted_score_creates_non_best_score_without_demoting()
     assert scores.calls == ["create"]
     assert scores.previous_best_updates == []
     assert scores.created_scores[0]["status"] == SubmissionStatus.SUBMITTED.value
+
+
+def test_apply_beatmap_play_stats_counts_passed_score() -> None:
+    score = _score()
+    score.bmap.plays = 1
+    score.bmap.passes = 1
+
+    updates = score_submission.apply_beatmap_play_stats(score)
+
+    assert score.bmap.plays == 2
+    assert score.bmap.passes == 2
+    assert updates == {
+        "plays": 2,
+        "passes": 2,
+    }
+
+
+def test_apply_beatmap_play_stats_does_not_count_failed_pass() -> None:
+    score = _score()
+    score.passed = False
+    score.bmap.plays = 1
+    score.bmap.passes = 1
+
+    updates = score_submission.apply_beatmap_play_stats(score)
+
+    assert score.bmap.plays == 2
+    assert score.bmap.passes == 1
+    assert updates == {
+        "plays": 2,
+        "passes": 1,
+    }
 
 
 async def test_persist_score_submission_stats_updates_ranked_best_score_side_effects() -> (
@@ -931,18 +1023,6 @@ async def test_persist_score_submission_stats_updates_failed_score_without_weigh
                 "playtime": 18,
                 "tscore": 26_820,
                 "total_hits": 109,
-            },
-        },
-    ]
-    assert publish_user_stats.published_players == [player]
-    assert score.bmap.plays == 2
-    assert score.bmap.passes == 1
-    assert maps_repo.partial_updates == [
-        {
-            "id": 315,
-            "updates": {
-                "plays": 2,
-                "passes": 1,
             },
         },
     ]

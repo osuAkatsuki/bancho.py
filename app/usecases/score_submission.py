@@ -9,25 +9,70 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
-from typing import Literal
+from typing import NotRequired
 from typing import Protocol
+from typing import TypedDict
 
 from app._typing import UNSET
 from app._typing import _UnsetSentinel
 from app.constants.beatmap_statuses import RankedStatus
 from app.constants.gamemodes import GameMode
 from app.constants.score_statuses import SubmissionStatus
+from app.constants.scoring_metrics import ScoringMetric
 from app.objects.player import ClientDetails
 from app.objects.player import ModeData
 from app.objects.player import Player
 from app.objects.score import Grade
 from app.objects.score import Score
 from app.repositories.achievements import Achievement
+from app.repositories.scores import PreviousFirstPlace
+from app.repositories.scores import ScorePerformanceRow
 from app.repositories.user_achievements import UserAchievement
 
-StatsUpdates = dict[str, Any]
-BestScorePerformance = Mapping[str, float]
-FirstPlaceScoringMetric = Literal["score", "pp"]
+
+class ScoreStatsUpdates(TypedDict):
+    plays: int
+    playtime: int
+    tscore: int
+    total_hits: int
+    max_combo: NotRequired[int]
+    xh_count: NotRequired[int]
+    x_count: NotRequired[int]
+    sh_count: NotRequired[int]
+    s_count: NotRequired[int]
+    a_count: NotRequired[int]
+    rscore: NotRequired[int]
+    acc: NotRequired[float]
+    pp: NotRequired[int]
+
+
+class GradeCountStatsUpdates(TypedDict):
+    xh_count: NotRequired[int]
+    x_count: NotRequired[int]
+    sh_count: NotRequired[int]
+    s_count: NotRequired[int]
+    a_count: NotRequired[int]
+
+
+class RankedScoreStatsUpdates(TypedDict):
+    rscore: int
+    xh_count: NotRequired[int]
+    x_count: NotRequired[int]
+    sh_count: NotRequired[int]
+    s_count: NotRequired[int]
+    a_count: NotRequired[int]
+
+
+class WeightedPerformanceStatsUpdates(TypedDict):
+    acc: float
+    pp: int
+
+
+class BeatmapPlayStatsUpdates(TypedDict):
+    plays: int
+    passes: int
+
+
 MIN_REPLAY_SIZE = 24
 VANILLA_GAME_MODES = (
     GameMode.VANILLA_OSU,
@@ -35,13 +80,6 @@ VANILLA_GAME_MODES = (
     GameMode.VANILLA_CATCH,
     GameMode.VANILLA_MANIA,
 )
-GRADE_STATS_COLUMNS = {
-    Grade.XH: "xh_count",
-    Grade.X: "x_count",
-    Grade.SH: "sh_count",
-    Grade.S: "s_count",
-    Grade.A: "a_count",
-}
 
 
 class AchievementsService(Protocol):
@@ -105,15 +143,15 @@ class ScoresRepository(Protocol):
         *,
         user_id: int,
         mode: int,
-    ) -> Sequence[BestScorePerformance]: ...
+    ) -> Sequence[ScorePerformanceRow]: ...
 
     async def fetch_previous_first_place(
         self,
         *,
         map_md5: str,
         mode: int,
-        scoring_metric: FirstPlaceScoringMetric,
-    ) -> Mapping[str, Any] | None: ...
+        scoring_metric: ScoringMetric,
+    ) -> PreviousFirstPlace | None: ...
 
 
 class StatsRepository(Protocol):
@@ -359,7 +397,7 @@ def notify_score_submitter_of_personal_best(
     return performance
 
 
-def first_place_scoring_metric(score: Score) -> FirstPlaceScoringMetric:
+def first_place_scoring_metric(score: Score) -> ScoringMetric:
     return "pp" if score.mode >= GameMode.RELAX_OSU else "score"
 
 
@@ -412,7 +450,7 @@ async def announce_first_place(
     announce_channel.send(" ".join(ann), sender=score.player, to_self=True)
 
 
-def apply_score_base_stats(score: Score, stats: ModeData) -> StatsUpdates:
+def apply_score_base_stats(score: Score, stats: ModeData) -> ScoreStatsUpdates:
     # Stats updated for all submitted scores.
     stats.playtime += score.time_elapsed // 1000
     stats.plays += 1
@@ -457,20 +495,41 @@ def grade_count_deltas(score: Score) -> dict[Grade, int]:
     return deltas
 
 
-def apply_ranked_score_stats(score: Score, stats: ModeData) -> StatsUpdates:
-    updates: StatsUpdates = {}
+def set_grade_count_update(
+    updates: GradeCountStatsUpdates,
+    grade: Grade,
+    value: int,
+) -> None:
+    if grade == Grade.XH:
+        updates["xh_count"] = value
+    elif grade == Grade.X:
+        updates["x_count"] = value
+    elif grade == Grade.SH:
+        updates["sh_count"] = value
+    elif grade == Grade.S:
+        updates["s_count"] = value
+    elif grade == Grade.A:
+        updates["a_count"] = value
+    else:
+        raise ValueError(f"Unexpected grade count update for {grade!r}")
+
+
+def apply_ranked_score_stats(score: Score, stats: ModeData) -> RankedScoreStatsUpdates:
+    grade_updates: GradeCountStatsUpdates = {}
 
     for grade, delta in grade_count_deltas(score).items():
         stats.grades[grade] += delta
-        updates[GRADE_STATS_COLUMNS[grade]] = stats.grades[grade]
+        set_grade_count_update(grade_updates, grade, stats.grades[grade])
 
     stats.rscore += ranked_score_delta(score)
-    updates["rscore"] = stats.rscore
 
-    return updates
+    return {
+        **grade_updates,
+        "rscore": stats.rscore,
+    }
 
 
-def apply_score_stats(score: Score, stats: ModeData) -> StatsUpdates:
+def apply_score_stats(score: Score, stats: ModeData) -> ScoreStatsUpdates:
     updates = apply_score_base_stats(score, stats)
 
     if not score.passed:
@@ -491,19 +550,30 @@ def apply_score_stats(score: Score, stats: ModeData) -> StatsUpdates:
         # Map is ranked or approved, and this is our (new)
         # best score on the map. Update the player's
         # ranked score and grade counts.
-        updates.update(apply_ranked_score_stats(score, stats))
+        ranked_updates = apply_ranked_score_stats(score, stats)
+        if "xh_count" in ranked_updates:
+            updates["xh_count"] = ranked_updates["xh_count"]
+        if "x_count" in ranked_updates:
+            updates["x_count"] = ranked_updates["x_count"]
+        if "sh_count" in ranked_updates:
+            updates["sh_count"] = ranked_updates["sh_count"]
+        if "s_count" in ranked_updates:
+            updates["s_count"] = ranked_updates["s_count"]
+        if "a_count" in ranked_updates:
+            updates["a_count"] = ranked_updates["a_count"]
+        updates["rscore"] = ranked_updates["rscore"]
 
     return updates
 
 
-def calculate_weighted_accuracy(best_scores: Sequence[BestScorePerformance]) -> float:
+def calculate_weighted_accuracy(best_scores: Sequence[ScorePerformanceRow]) -> float:
     # Calculate new total weighted accuracy.
     weighted_acc = sum(row["acc"] * 0.95**i for i, row in enumerate(best_scores))
     bonus_acc = 100.0 / (20 * (1 - 0.95 ** len(best_scores)))
     return (weighted_acc * bonus_acc) / 100
 
 
-def calculate_weighted_pp(best_scores: Sequence[BestScorePerformance]) -> int:
+def calculate_weighted_pp(best_scores: Sequence[ScorePerformanceRow]) -> int:
     # Calculate new total weighted pp.
     weighted_pp = sum(row["pp"] * 0.95**i for i, row in enumerate(best_scores))
     bonus_pp = 416.6667 * (1 - 0.9994 ** len(best_scores))
@@ -512,14 +582,28 @@ def calculate_weighted_pp(best_scores: Sequence[BestScorePerformance]) -> int:
 
 def apply_weighted_performance_stats(
     stats: ModeData,
-    best_scores: Sequence[BestScorePerformance],
-) -> StatsUpdates:
+    best_scores: Sequence[ScorePerformanceRow],
+) -> WeightedPerformanceStatsUpdates:
     stats.acc = calculate_weighted_accuracy(best_scores)
     stats.pp = calculate_weighted_pp(best_scores)
 
     return {
         "acc": stats.acc,
         "pp": stats.pp,
+    }
+
+
+def apply_beatmap_play_stats(score: Score) -> BeatmapPlayStatsUpdates:
+    assert score.bmap is not None
+
+    # update beatmap with new stats
+    score.bmap.plays += 1
+    if score.passed:
+        score.bmap.passes += 1
+
+    return {
+        "plays": score.bmap.plays,
+        "passes": score.bmap.passes,
     }
 
 
@@ -559,12 +643,12 @@ async def persist_score_submission_stats(
                 mode=score.mode.value,
             )
 
-            stats_updates.update(
-                apply_weighted_performance_stats(
-                    current_stats,
-                    best_scores,
-                ),
+            weighted_updates = apply_weighted_performance_stats(
+                current_stats,
+                best_scores,
             )
+            stats_updates["acc"] = weighted_updates["acc"]
+            stats_updates["pp"] = weighted_updates["pp"]
 
             # update global & country ranking
             current_stats.rank = await score.player.update_rank(score.mode)
@@ -591,15 +675,11 @@ async def persist_score_submission_stats(
         # enqueue new stats info to all other users
         publish_user_stats(score.player)
 
-        # update beatmap with new stats
-        score.bmap.plays += 1
-        if score.passed:
-            score.bmap.passes += 1
-
+        beatmap_updates = apply_beatmap_play_stats(score)
         await maps.partial_update(
             score.bmap.id,
-            plays=score.bmap.plays,
-            passes=score.bmap.passes,
+            plays=beatmap_updates["plays"],
+            passes=beatmap_updates["passes"],
         )
 
     # update their recent score

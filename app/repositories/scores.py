@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from datetime import datetime
-from typing import Literal
 from typing import TypedDict
 from typing import cast
 
@@ -13,6 +12,7 @@ from sqlalchemy import Integer
 from sqlalchemy import String
 from sqlalchemy import func
 from sqlalchemy import insert
+from sqlalchemy import or_
 from sqlalchemy import select
 from sqlalchemy import update
 from sqlalchemy.dialects.mysql import FLOAT
@@ -24,8 +24,11 @@ from app._typing import _UnsetSentinel
 from app.constants.beatmap_statuses import RankedStatus
 from app.constants.privileges import Privileges
 from app.constants.score_statuses import SubmissionStatus
+from app.constants.scoring_metrics import ScoringMetric
 from app.repositories import Base
+from app.repositories.clans import ClansTable
 from app.repositories.maps import MapsTable
+from app.repositories.users import UsersTable
 
 
 class ScoresTable(Base):
@@ -92,8 +95,6 @@ READ_PARAMS = (
     ScoresTable.online_checksum,
 )
 
-FirstPlaceScoringMetric = Literal["score", "pp"]
-
 
 class Score(TypedDict):
     id: int
@@ -123,6 +124,45 @@ class Score(TypedDict):
 class PreviousFirstPlace(TypedDict):
     id: int
     name: str
+
+
+class ScorePerformanceRow(TypedDict):
+    pp: float
+    acc: float
+
+
+class BeatmapLeaderboardScoreRow(TypedDict):
+    id: int
+    # score or pp, depending on the requested ScoringMetric.
+    leaderboard_value: int | float
+    max_combo: int
+    n50: int
+    n100: int
+    n300: int
+    nmiss: int
+    nkatu: int
+    ngeki: int
+    perfect: int
+    mods: int
+    time: int
+    userid: int
+    name: str
+
+
+class PersonalBestLeaderboardScoreRow(TypedDict):
+    id: int
+    # score or pp, depending on the requested ScoringMetric.
+    leaderboard_value: int | float
+    max_combo: int
+    n50: int
+    n100: int
+    n300: int
+    nmiss: int
+    nkatu: int
+    ngeki: int
+    perfect: int
+    mods: int
+    time: int
 
 
 async def create(
@@ -202,7 +242,7 @@ async def fetch_weighted_best_performances(
     *,
     user_id: int,
     mode: int,
-) -> list[Mapping[str, float]]:
+) -> list[ScorePerformanceRow]:
     select_stmt = (
         select(ScoresTable.pp, ScoresTable.acc)
         .join(MapsTable, ScoresTable.map_md5 == MapsTable.md5)
@@ -221,29 +261,158 @@ async def fetch_weighted_best_performances(
     )
 
     scores = await app.state.services.database.fetch_all(select_stmt)
-    return cast(list[Mapping[str, float]], scores)
+    return cast(list[ScorePerformanceRow], scores)
 
 
 async def fetch_previous_first_place(
     *,
     map_md5: str,
     mode: int,
-    scoring_metric: FirstPlaceScoringMetric,
+    scoring_metric: ScoringMetric,
 ) -> PreviousFirstPlace | None:
-    previous_first_place = await app.state.services.database.fetch_one(
-        "SELECT u.id, name FROM users u "
-        "INNER JOIN scores s ON u.id = s.userid "
-        "WHERE s.map_md5 = :map_md5 AND s.mode = :mode "
-        "AND s.status = :status AND u.priv & :unrestricted_priv "
-        f"ORDER BY s.{scoring_metric} DESC LIMIT 1",
-        {
-            "map_md5": map_md5,
-            "mode": mode,
-            "status": SubmissionStatus.BEST.value,
-            "unrestricted_priv": Privileges.UNRESTRICTED.value,
-        },
+    leaderboard_value = ScoresTable.pp if scoring_metric == "pp" else ScoresTable.score
+    select_stmt = (
+        select(UsersTable.id, UsersTable.name)
+        .select_from(UsersTable)
+        .join(ScoresTable, UsersTable.id == ScoresTable.userid)
+        .where(
+            ScoresTable.map_md5 == map_md5,
+            ScoresTable.mode == mode,
+            ScoresTable.status == SubmissionStatus.BEST.value,
+            UsersTable.priv.bitwise_and(Privileges.UNRESTRICTED.value) != 0,
+        )
+        .order_by(leaderboard_value.desc())
+        .limit(1)
     )
+
+    previous_first_place = await app.state.services.database.fetch_one(select_stmt)
     return cast(PreviousFirstPlace | None, previous_first_place)
+
+
+async def fetch_beatmap_leaderboard_scores(
+    *,
+    map_md5: str,
+    mode: int,
+    user_id: int,
+    scoring_metric: ScoringMetric,
+    mods: int | None = None,
+    friend_ids: set[int] | None = None,
+    country: str | None = None,
+    limit: int = 50,
+) -> list[BeatmapLeaderboardScoreRow]:
+    leaderboard_value = ScoresTable.pp if scoring_metric == "pp" else ScoresTable.score
+    select_stmt = (
+        select(
+            ScoresTable.id,
+            leaderboard_value.label("leaderboard_value"),
+            ScoresTable.max_combo,
+            ScoresTable.n50,
+            ScoresTable.n100,
+            ScoresTable.n300,
+            ScoresTable.nmiss,
+            ScoresTable.nkatu,
+            ScoresTable.ngeki,
+            ScoresTable.perfect,
+            ScoresTable.mods,
+            func.unix_timestamp(ScoresTable.play_time).label("time"),
+            UsersTable.id.label("userid"),
+            func.coalesce(
+                func.concat("[", ClansTable.tag, "] ", UsersTable.name),
+                UsersTable.name,
+            ).label("name"),
+        )
+        .select_from(ScoresTable)
+        .join(UsersTable, UsersTable.id == ScoresTable.userid)
+        .outerjoin(ClansTable, ClansTable.id == UsersTable.clan_id)
+        .where(
+            ScoresTable.map_md5 == map_md5,
+            ScoresTable.status == SubmissionStatus.BEST.value,
+            or_(
+                UsersTable.priv.bitwise_and(Privileges.UNRESTRICTED.value) != 0,
+                UsersTable.id == user_id,
+            ),
+            ScoresTable.mode == mode,
+        )
+        .order_by(leaderboard_value.desc())
+        .limit(limit)
+    )
+
+    if mods is not None:
+        select_stmt = select_stmt.where(ScoresTable.mods == mods)
+    if friend_ids is not None:
+        select_stmt = select_stmt.where(ScoresTable.userid.in_(friend_ids))
+    if country is not None:
+        select_stmt = select_stmt.where(UsersTable.country == country)
+
+    score_rows = await app.state.services.database.fetch_all(select_stmt)
+    return cast(list[BeatmapLeaderboardScoreRow], score_rows)
+
+
+async def fetch_personal_best_leaderboard_score(
+    *,
+    map_md5: str,
+    mode: int,
+    user_id: int,
+    scoring_metric: ScoringMetric,
+) -> PersonalBestLeaderboardScoreRow | None:
+    leaderboard_value = ScoresTable.pp if scoring_metric == "pp" else ScoresTable.score
+    select_stmt = (
+        select(
+            ScoresTable.id,
+            leaderboard_value.label("leaderboard_value"),
+            ScoresTable.max_combo,
+            ScoresTable.n50,
+            ScoresTable.n100,
+            ScoresTable.n300,
+            ScoresTable.nmiss,
+            ScoresTable.nkatu,
+            ScoresTable.ngeki,
+            ScoresTable.perfect,
+            ScoresTable.mods,
+            func.unix_timestamp(ScoresTable.play_time).label("time"),
+        )
+        .where(
+            ScoresTable.map_md5 == map_md5,
+            ScoresTable.mode == mode,
+            ScoresTable.userid == user_id,
+            ScoresTable.status == SubmissionStatus.BEST.value,
+        )
+        .order_by(leaderboard_value.desc())
+        .limit(1)
+    )
+
+    personal_best_score_row = await app.state.services.database.fetch_one(select_stmt)
+    return (
+        cast(PersonalBestLeaderboardScoreRow, personal_best_score_row)
+        if personal_best_score_row is not None
+        else None
+    )
+
+
+async def fetch_personal_best_leaderboard_rank(
+    *,
+    map_md5: str,
+    mode: int,
+    scoring_metric: ScoringMetric,
+    score: int | float,
+) -> int:
+    leaderboard_value = ScoresTable.pp if scoring_metric == "pp" else ScoresTable.score
+    select_stmt = (
+        select(func.count().label("count"))
+        .select_from(ScoresTable)
+        .join(UsersTable, UsersTable.id == ScoresTable.userid)
+        .where(
+            ScoresTable.map_md5 == map_md5,
+            ScoresTable.mode == mode,
+            ScoresTable.status == SubmissionStatus.BEST.value,
+            UsersTable.priv.bitwise_and(Privileges.UNRESTRICTED.value) != 0,
+            leaderboard_value > score,
+        )
+    )
+
+    higher_scores = await app.state.services.database.fetch_one(select_stmt)
+    assert higher_scores is not None
+    return int(higher_scores["count"]) + 1
 
 
 async def fetch_one(id: int) -> Score | None:
