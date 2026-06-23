@@ -835,26 +835,6 @@ async def persist_score_submission(
     )
 
 
-async def apply_score_submission_side_effects(
-    score: Score,
-    persistence_result: ScoreSubmissionPersistenceResult,
-    *,
-    publish_user_stats: Callable[[Player], None],
-) -> None:
-    assert score.player is not None
-
-    if persistence_result.should_update_rank:
-        persistence_result.current_stats.rank = await score.player.update_rank(
-            score.mode,
-        )
-
-    if persistence_result.is_public_submission:
-        publish_user_stats(score.player)
-
-    # update their recent score
-    score.player.recent_scores[score.mode] = score
-
-
 def chart_entry(
     name: str,
     before: float | int | None,

@@ -707,14 +707,17 @@ async def osuSubmitModularSelector(
         replays_path=REPLAYS_PATH,
     )
 
-    def publish_user_stats(player: Player) -> None:
-        app.state.sessions.players.enqueue(app.packets.user_stats(player))
+    assert score.player is not None
 
-    await score_submission_usecases.apply_score_submission_side_effects(
-        score,
-        persistence_result,
-        publish_user_stats=publish_user_stats,
-    )
+    if persistence_result.should_update_rank:
+        persistence_result.current_stats.rank = await score.player.update_rank(
+            score.mode,
+        )
+
+    if persistence_result.is_public_submission:
+        app.state.sessions.players.enqueue(app.packets.user_stats(score.player))
+
+    score.player.recent_scores[score.mode] = score
 
     def send_personal_best_notification(player: Player, message: str) -> None:
         player.enqueue(app.packets.notification(message))

@@ -810,14 +810,6 @@ class _FailingMapsRepository:
         raise RuntimeError("map update failed")
 
 
-class _FakeUserStatsPublisher:
-    def __init__(self) -> None:
-        self.published_players: list[object] = []
-
-    def __call__(self, player: object) -> None:
-        self.published_players.append(player)
-
-
 class _FakePlayer:
     def __init__(
         self,
@@ -949,7 +941,6 @@ async def test_persist_score_submission_stats_updates_ranked_best_score_side_eff
         ],
     )
     maps_repo = _FakeMapsRepository()
-    publish_user_stats = _FakeUserStatsPublisher()
 
     result = await score_submission.persist_score_submission_stats(
         score,
@@ -993,7 +984,6 @@ async def test_persist_score_submission_stats_updates_ranked_best_score_side_eff
             },
         },
     ]
-    assert publish_user_stats.published_players == []
     assert score.bmap.plays == 2
     assert score.bmap.passes == 2
     assert maps_repo.partial_updates == [
@@ -1006,26 +996,6 @@ async def test_persist_score_submission_stats_updates_ranked_best_score_side_eff
         },
     ]
     assert player.recent_scores == {}
-
-    persistence_result = score_submission.ScoreSubmissionPersistenceResult(
-        score_id=123,
-        previous_stats=result.previous_stats,
-        current_stats=result.current_stats,
-        previous_first_place_score=None,
-        unlocked_achievements=[],
-        should_update_rank=result.should_update_rank,
-        is_public_submission=result.is_public_submission,
-    )
-    await score_submission.apply_score_submission_side_effects(
-        score,
-        persistence_result,
-        publish_user_stats=publish_user_stats,
-    )
-
-    assert result.current_stats.rank == 7
-    assert player.updated_rank_modes == [GameMode.RELAX_OSU]
-    assert publish_user_stats.published_players == [player]
-    assert player.recent_scores[GameMode.RELAX_OSU] is score
 
 
 async def test_persist_score_submission_stats_updates_failed_score_without_weighted_stats() -> (
@@ -1046,7 +1016,6 @@ async def test_persist_score_submission_stats_updates_failed_score_without_weigh
     score.bmap.passes = 1
     stats_repo = _FakeStatsRepository()
     maps_repo = _FakeMapsRepository()
-    publish_user_stats = _FakeUserStatsPublisher()
 
     result = await score_submission.persist_score_submission_stats(
         score,
@@ -1075,11 +1044,10 @@ async def test_persist_score_submission_stats_updates_failed_score_without_weigh
             },
         },
     ]
-    assert publish_user_stats.published_players == []
     assert player.recent_scores == {}
 
 
-async def test_persist_score_submission_stats_skips_public_side_effects_for_restricted_player() -> (
+async def test_persist_score_submission_stats_skips_public_updates_for_restricted_player() -> (
     None
 ):
     score = _score()
@@ -1095,7 +1063,6 @@ async def test_persist_score_submission_stats_skips_public_side_effects_for_rest
     score.bmap.passes = 1
     stats_repo = _FakeStatsRepository()
     maps_repo = _FakeMapsRepository()
-    publish_user_stats = _FakeUserStatsPublisher()
 
     result = await score_submission.persist_score_submission_stats(
         score,
@@ -1106,7 +1073,6 @@ async def test_persist_score_submission_stats_skips_public_side_effects_for_rest
 
     assert stats_repo.partial_updates != []
     assert not result.is_public_submission
-    assert publish_user_stats.published_players == []
     assert score.bmap.plays == 1
     assert score.bmap.passes == 1
     assert maps_repo.partial_updates == []
