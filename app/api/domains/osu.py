@@ -629,9 +629,6 @@ async def osuSubmitModularSelector(
         if not score.player.restricted:
             app.state.sessions.players.enqueue(app.packets.user_stats(score.player))
 
-    def log_missing_replay(message: str) -> None:
-        log(message, Ansi.LRED)
-
     replay_data: bytes | None = None
     stats_result: score_submission_usecases.ScoreSubmissionPersistenceResult
 
@@ -673,7 +670,6 @@ async def osuSubmitModularSelector(
             score,
             replay_file=replay_file,
             restriction_admin=app.state.sessions.bot,
-            log_missing_replay=log_missing_replay,
         )
 
         """ Score submission checks completed; submit the score. """

@@ -20,6 +20,8 @@ from app.constants.beatmap_statuses import RankedStatus
 from app.constants.gamemodes import GameMode
 from app.constants.score_statuses import SubmissionStatus
 from app.constants.scoring_metrics import ScoringMetric
+from app.logging import Ansi
+from app.logging import log
 from app.objects.player import ClientDetails
 from app.objects.player import ModeData
 from app.objects.player import Player
@@ -368,13 +370,11 @@ async def save_replay_file(
     replay_file: ReplayFile,
     replays_path: Path,
     restriction_admin: Player,
-    log_missing_replay: Callable[[str], None],
 ) -> None:
     replay_data = await read_and_validate_replay_file(
         score,
         replay_file=replay_file,
         restriction_admin=restriction_admin,
-        log_missing_replay=log_missing_replay,
     )
     write_replay_file(score, replay_data=replay_data, replays_path=replays_path)
 
@@ -384,7 +384,6 @@ async def read_and_validate_replay_file(
     *,
     replay_file: ReplayFile,
     restriction_admin: Player,
-    log_missing_replay: Callable[[str], None],
 ) -> bytes | None:
     assert score.player is not None
 
@@ -396,7 +395,7 @@ async def read_and_validate_replay_file(
     if len(replay_data) >= MIN_REPLAY_SIZE:
         return replay_data
 
-    log_missing_replay(f"{score.player} submitted a score without a replay!")
+    log(f"{score.player} submitted a score without a replay!", Ansi.LRED)
 
     if not score.player.restricted:
         await score.player.restrict(
@@ -436,22 +435,21 @@ def notify_score_submitter_of_personal_best(
     score: Score,
     *,
     send_notification: Callable[[Player, str], None],
-) -> str | None:
+) -> None:
     assert score.bmap is not None
     assert score.player is not None
 
     if score.status != SubmissionStatus.BEST:
-        return None
+        return
 
     if not score.bmap.has_leaderboard:
-        return None
+        return
 
     performance = format_score_submission_performance(score)
     send_notification(
         score.player,
         f"You achieved #{score.rank}! ({performance})",
     )
-    return performance
 
 
 def first_place_scoring_metric(score: Score) -> ScoringMetric:

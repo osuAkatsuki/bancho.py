@@ -293,19 +293,16 @@ async def test_save_replay_file_writes_passed_replay(tmp_path) -> None:
     score.player = player
     replay_data = b"x" * score_submission.MIN_REPLAY_SIZE
     replay_file = _FakeReplayFile(replay_data)
-    missing_replay_logs: list[str] = []
 
     await score_submission.save_replay_file(
         score,
         replay_file=replay_file,
         replays_path=tmp_path,
         restriction_admin=player,
-        log_missing_replay=missing_replay_logs.append,
     )
 
     assert (tmp_path / "42.osr").read_bytes() == replay_data
     assert replay_file.read_count == 1
-    assert missing_replay_logs == []
     assert player.restriction_reasons == []
     assert not player.logged_out
 
@@ -316,19 +313,16 @@ async def test_save_replay_file_does_not_read_failed_score(tmp_path) -> None:
     score.player = player
     score.passed = False
     replay_file = _FakeReplayFile(b"")
-    missing_replay_logs: list[str] = []
 
     await score_submission.save_replay_file(
         score,
         replay_file=replay_file,
         replays_path=tmp_path,
         restriction_admin=player,
-        log_missing_replay=missing_replay_logs.append,
     )
 
     assert replay_file.read_count == 0
     assert list(tmp_path.iterdir()) == []
-    assert missing_replay_logs == []
     assert player.restriction_reasons == []
 
 
@@ -340,20 +334,15 @@ async def test_save_replay_file_restricts_unrestricted_player_without_replay(
     admin = _FakeReplayPlayer()
     score.player = player
     replay_file = _FakeReplayFile(b"x" * (score_submission.MIN_REPLAY_SIZE - 1))
-    missing_replay_logs: list[str] = []
 
     await score_submission.save_replay_file(
         score,
         replay_file=replay_file,
         replays_path=tmp_path,
         restriction_admin=admin,
-        log_missing_replay=missing_replay_logs.append,
     )
 
     assert list(tmp_path.iterdir()) == []
-    assert missing_replay_logs == [
-        "<test-user (6)> submitted a score without a replay!",
-    ]
     assert player.restriction_admins == [admin]
     assert player.restriction_reasons == ["submitted score with no replay"]
     assert player.logged_out
@@ -366,20 +355,15 @@ async def test_save_replay_file_does_not_restrict_restricted_player_without_repl
     player = _FakeReplayPlayer(restricted=True)
     score.player = player
     replay_file = _FakeReplayFile(b"x" * (score_submission.MIN_REPLAY_SIZE - 1))
-    missing_replay_logs: list[str] = []
 
     await score_submission.save_replay_file(
         score,
         replay_file=replay_file,
         replays_path=tmp_path,
         restriction_admin=player,
-        log_missing_replay=missing_replay_logs.append,
     )
 
     assert list(tmp_path.iterdir()) == []
-    assert missing_replay_logs == [
-        "<test-user (6)> submitted a score without a replay!",
-    ]
     assert player.restriction_reasons == []
     assert not player.logged_out
 
@@ -388,14 +372,13 @@ def test_notify_score_submitter_sends_pp_notification() -> None:
     score = _score()
     notifications: list[tuple[object, str]] = []
 
-    performance = score_submission.notify_score_submitter_of_personal_best(
+    score_submission.notify_score_submitter_of_personal_best(
         score,
         send_notification=lambda player, message: notifications.append(
             (player, message),
         ),
     )
 
-    assert performance == "10.45pp"
     assert notifications == [
         (score.player, "You achieved #1! (10.45pp)"),
     ]
@@ -408,14 +391,13 @@ def test_notify_score_submitter_uses_score_for_vanilla_loved() -> None:
     score.score = 1_234_567
     notifications: list[tuple[object, str]] = []
 
-    performance = score_submission.notify_score_submitter_of_personal_best(
+    score_submission.notify_score_submitter_of_personal_best(
         score,
         send_notification=lambda player, message: notifications.append(
             (player, message),
         ),
     )
 
-    assert performance == "1,234,567 score"
     assert notifications == [
         (score.player, "You achieved #1! (1,234,567 score)"),
     ]
@@ -426,14 +408,13 @@ def test_notify_score_submitter_uses_pp_for_relax_loved() -> None:
     score.bmap.status = RankedStatus.Loved
     notifications: list[tuple[object, str]] = []
 
-    performance = score_submission.notify_score_submitter_of_personal_best(
+    score_submission.notify_score_submitter_of_personal_best(
         score,
         send_notification=lambda player, message: notifications.append(
             (player, message),
         ),
     )
 
-    assert performance == "10.45pp"
     assert notifications == [
         (score.player, "You achieved #1! (10.45pp)"),
     ]
@@ -444,14 +425,13 @@ def test_notify_score_submitter_skips_non_best_score() -> None:
     score.status = SubmissionStatus.SUBMITTED
     notifications: list[tuple[object, str]] = []
 
-    performance = score_submission.notify_score_submitter_of_personal_best(
+    score_submission.notify_score_submitter_of_personal_best(
         score,
         send_notification=lambda player, message: notifications.append(
             (player, message),
         ),
     )
 
-    assert performance is None
     assert notifications == []
 
 
@@ -460,14 +440,13 @@ def test_notify_score_submitter_skips_no_leaderboard() -> None:
     score.bmap.has_leaderboard = False
     notifications: list[tuple[object, str]] = []
 
-    performance = score_submission.notify_score_submitter_of_personal_best(
+    score_submission.notify_score_submitter_of_personal_best(
         score,
         send_notification=lambda player, message: notifications.append(
             (player, message),
         ),
     )
 
-    assert performance is None
     assert notifications == []
 
 
