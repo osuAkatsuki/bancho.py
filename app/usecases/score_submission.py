@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+from typing import NotRequired
 from typing import Protocol
 from typing import TypedDict
 
@@ -29,18 +30,35 @@ from app.repositories.scores import PreviousFirstPlace
 from app.repositories.user_achievements import UserAchievement
 
 
-class StatsUpdates(TypedDict, total=False):
+class ScoreStatsUpdates(TypedDict):
     plays: int
     playtime: int
     tscore: int
     total_hits: int
-    max_combo: int
-    xh_count: int
-    x_count: int
-    sh_count: int
-    s_count: int
-    a_count: int
+    max_combo: NotRequired[int]
+    xh_count: NotRequired[int]
+    x_count: NotRequired[int]
+    sh_count: NotRequired[int]
+    s_count: NotRequired[int]
+    a_count: NotRequired[int]
+    rscore: NotRequired[int]
+    acc: NotRequired[float]
+    pp: NotRequired[int]
+
+
+class GradeCountStatsUpdates(TypedDict):
+    xh_count: NotRequired[int]
+    x_count: NotRequired[int]
+    sh_count: NotRequired[int]
+    s_count: NotRequired[int]
+    a_count: NotRequired[int]
+
+
+class RankedScoreStatsUpdates(GradeCountStatsUpdates):
     rscore: int
+
+
+class WeightedPerformanceStatsUpdates(TypedDict):
     acc: float
     pp: int
 
@@ -427,7 +445,7 @@ async def announce_first_place(
     announce_channel.send(" ".join(ann), sender=score.player, to_self=True)
 
 
-def apply_score_base_stats(score: Score, stats: ModeData) -> StatsUpdates:
+def apply_score_base_stats(score: Score, stats: ModeData) -> ScoreStatsUpdates:
     # Stats updated for all submitted scores.
     stats.playtime += score.time_elapsed // 1000
     stats.plays += 1
@@ -473,7 +491,7 @@ def grade_count_deltas(score: Score) -> dict[Grade, int]:
 
 
 def set_grade_count_update(
-    updates: StatsUpdates,
+    updates: GradeCountStatsUpdates,
     grade: Grade,
     value: int,
 ) -> None:
@@ -491,20 +509,22 @@ def set_grade_count_update(
         raise ValueError(f"Unexpected grade count update for {grade!r}")
 
 
-def apply_ranked_score_stats(score: Score, stats: ModeData) -> StatsUpdates:
-    updates: StatsUpdates = {}
+def apply_ranked_score_stats(score: Score, stats: ModeData) -> RankedScoreStatsUpdates:
+    grade_updates: GradeCountStatsUpdates = {}
 
     for grade, delta in grade_count_deltas(score).items():
         stats.grades[grade] += delta
-        set_grade_count_update(updates, grade, stats.grades[grade])
+        set_grade_count_update(grade_updates, grade, stats.grades[grade])
 
     stats.rscore += ranked_score_delta(score)
-    updates["rscore"] = stats.rscore
 
-    return updates
+    return {
+        **grade_updates,
+        "rscore": stats.rscore,
+    }
 
 
-def apply_score_stats(score: Score, stats: ModeData) -> StatsUpdates:
+def apply_score_stats(score: Score, stats: ModeData) -> ScoreStatsUpdates:
     updates = apply_score_base_stats(score, stats)
 
     if not score.passed:
@@ -525,7 +545,18 @@ def apply_score_stats(score: Score, stats: ModeData) -> StatsUpdates:
         # Map is ranked or approved, and this is our (new)
         # best score on the map. Update the player's
         # ranked score and grade counts.
-        updates.update(apply_ranked_score_stats(score, stats))
+        ranked_updates = apply_ranked_score_stats(score, stats)
+        if "xh_count" in ranked_updates:
+            updates["xh_count"] = ranked_updates["xh_count"]
+        if "x_count" in ranked_updates:
+            updates["x_count"] = ranked_updates["x_count"]
+        if "sh_count" in ranked_updates:
+            updates["sh_count"] = ranked_updates["sh_count"]
+        if "s_count" in ranked_updates:
+            updates["s_count"] = ranked_updates["s_count"]
+        if "a_count" in ranked_updates:
+            updates["a_count"] = ranked_updates["a_count"]
+        updates["rscore"] = ranked_updates["rscore"]
 
     return updates
 
@@ -547,7 +578,7 @@ def calculate_weighted_pp(best_scores: Sequence[BestScorePerformance]) -> int:
 def apply_weighted_performance_stats(
     stats: ModeData,
     best_scores: Sequence[BestScorePerformance],
-) -> StatsUpdates:
+) -> WeightedPerformanceStatsUpdates:
     stats.acc = calculate_weighted_accuracy(best_scores)
     stats.pp = calculate_weighted_pp(best_scores)
 
@@ -607,12 +638,12 @@ async def persist_score_submission_stats(
                 mode=score.mode.value,
             )
 
-            stats_updates.update(
-                apply_weighted_performance_stats(
-                    current_stats,
-                    best_scores,
-                ),
+            weighted_updates = apply_weighted_performance_stats(
+                current_stats,
+                best_scores,
             )
+            stats_updates["acc"] = weighted_updates["acc"]
+            stats_updates["pp"] = weighted_updates["pp"]
 
             # update global & country ranking
             current_stats.rank = await score.player.update_rank(score.mode)

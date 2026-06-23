@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections.abc import Mapping
 from datetime import datetime
 from typing import Any
-from typing import NotRequired
 from typing import TypedDict
 from typing import cast
 
@@ -130,22 +129,32 @@ class BestScorePerformance(TypedDict):
     acc: float
 
 
-class LeaderboardScore(TypedDict):
+class BaseLeaderboardScore(TypedDict):
     id: int
     _score: int | float
-    max_combo: NotRequired[int]
-    n50: NotRequired[int]
-    n100: NotRequired[int]
-    n300: NotRequired[int]
-    nmiss: NotRequired[int]
-    nkatu: NotRequired[int]
-    ngeki: NotRequired[int]
-    perfect: NotRequired[int]
-    mods: NotRequired[int]
-    time: NotRequired[int]
-    userid: NotRequired[int]
-    name: NotRequired[str]
-    rank: NotRequired[int]
+    max_combo: int
+    n50: int
+    n100: int
+    n300: int
+    nmiss: int
+    nkatu: int
+    ngeki: int
+    perfect: int
+    mods: int
+    time: int
+
+
+class BeatmapLeaderboardScore(BaseLeaderboardScore):
+    userid: int
+    name: str
+
+
+class PersonalBestLeaderboardScore(BaseLeaderboardScore):
+    pass
+
+
+class RankedPersonalBestLeaderboardScore(PersonalBestLeaderboardScore):
+    rank: int
 
 
 async def create(
@@ -279,7 +288,7 @@ async def fetch_beatmap_leaderboard_scores(
     friend_ids: set[int] | None = None,
     country: str | None = None,
     limit: int = 50,
-) -> list[LeaderboardScore]:
+) -> list[BeatmapLeaderboardScore]:
     query = [
         f"SELECT s.id, s.{scoring_metric} AS _score, "
         "s.max_combo, s.n50, s.n100, s.n300, "
@@ -316,7 +325,7 @@ async def fetch_beatmap_leaderboard_scores(
     query.append("ORDER BY _score DESC LIMIT :limit")
 
     score_rows = await app.state.services.database.fetch_all(" ".join(query), params)
-    return [cast(LeaderboardScore, dict(row)) for row in score_rows]
+    return [cast(BeatmapLeaderboardScore, dict(row)) for row in score_rows]
 
 
 async def fetch_personal_best_leaderboard_score(
@@ -325,7 +334,7 @@ async def fetch_personal_best_leaderboard_score(
     mode: int,
     user_id: int,
     scoring_metric: ScoringMetric,
-) -> LeaderboardScore | None:
+) -> PersonalBestLeaderboardScore | None:
     personal_best_score_row = await app.state.services.database.fetch_one(
         f"SELECT id, {scoring_metric} AS _score, "
         "max_combo, n50, n100, n300, "
@@ -343,7 +352,7 @@ async def fetch_personal_best_leaderboard_score(
         },
     )
     return (
-        cast(LeaderboardScore, dict(personal_best_score_row))
+        cast(PersonalBestLeaderboardScore, dict(personal_best_score_row))
         if personal_best_score_row is not None
         else None
     )

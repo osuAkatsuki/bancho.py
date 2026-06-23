@@ -6,7 +6,8 @@ from typing import TypedDict
 from app.constants.leaderboard_types import LeaderboardType
 from app.constants.mods import Mods
 from app.constants.scoring_metrics import ScoringMetric
-from app.repositories.scores import LeaderboardScore
+from app.repositories.scores import BeatmapLeaderboardScore
+from app.repositories.scores import PersonalBestLeaderboardScore
 from app.usecases import score_leaderboards
 
 
@@ -39,8 +40,8 @@ class _FakeScoresRepository:
     def __init__(
         self,
         *,
-        score_rows: list[LeaderboardScore],
-        personal_best_score_row: LeaderboardScore | None = None,
+        score_rows: list[BeatmapLeaderboardScore],
+        personal_best_score_row: PersonalBestLeaderboardScore | None = None,
         personal_best_rank: int = 1,
     ) -> None:
         self.score_rows = score_rows
@@ -61,7 +62,7 @@ class _FakeScoresRepository:
         friend_ids: set[int] | None = None,
         country: str | None = None,
         limit: int = 50,
-    ) -> list[LeaderboardScore]:
+    ) -> list[BeatmapLeaderboardScore]:
         self.leaderboard_fetches.append(
             {
                 "map_md5": map_md5,
@@ -83,7 +84,7 @@ class _FakeScoresRepository:
         mode: int,
         user_id: int,
         scoring_metric: ScoringMetric,
-    ) -> LeaderboardScore | None:
+    ) -> PersonalBestLeaderboardScore | None:
         self.personal_best_fetches.append(
             {
                 "map_md5": map_md5,
@@ -113,15 +114,64 @@ class _FakeScoresRepository:
         return self.personal_best_rank
 
 
+def _beatmap_leaderboard_score(
+    *,
+    id: int,
+    score: int | float,
+) -> BeatmapLeaderboardScore:
+    return {
+        "id": id,
+        "_score": score,
+        "max_combo": 321,
+        "n50": 1,
+        "n100": 2,
+        "n300": 300,
+        "nmiss": 0,
+        "nkatu": 4,
+        "ngeki": 5,
+        "perfect": 1,
+        "mods": Mods.HIDDEN.value,
+        "time": 1_704_110_400,
+        "userid": 6,
+        "name": "test-user",
+    }
+
+
+def _personal_best_leaderboard_score(
+    *,
+    id: int,
+    score: int | float,
+) -> PersonalBestLeaderboardScore:
+    return {
+        "id": id,
+        "_score": score,
+        "max_combo": 321,
+        "n50": 1,
+        "n100": 2,
+        "n300": 300,
+        "nmiss": 0,
+        "nkatu": 4,
+        "ngeki": 5,
+        "perfect": 1,
+        "mods": Mods.HIDDEN.value,
+        "time": 1_704_110_400,
+    }
+
+
 async def test_fetch_leaderboard_scores_fetches_personal_best_rank() -> None:
     player = SimpleNamespace(
         id=6,
         friends={7, 8},
         geoloc={"country": {"acronym": "ca"}},
     )
+    score_row = _beatmap_leaderboard_score(id=10, score=500_000)
+    personal_best_score_row = _personal_best_leaderboard_score(
+        id=11,
+        score=450_000,
+    )
     scores = _FakeScoresRepository(
-        score_rows=[{"id": 10, "_score": 500_000}],
-        personal_best_score_row={"id": 11, "_score": 450_000},
+        score_rows=[score_row],
+        personal_best_score_row=personal_best_score_row,
         personal_best_rank=3,
     )
 
@@ -135,10 +185,9 @@ async def test_fetch_leaderboard_scores_fetches_personal_best_rank() -> None:
         scores=scores,
     )
 
-    assert result.score_rows == [{"id": 10, "_score": 500_000}]
+    assert result.score_rows == [score_row]
     assert result.personal_best_score_row == {
-        "id": 11,
-        "_score": 450_000,
+        **personal_best_score_row,
         "rank": 3,
     }
     assert scores.leaderboard_fetches == [
@@ -201,7 +250,9 @@ async def test_fetch_leaderboard_scores_applies_mods_filter() -> None:
         friends={7, 8},
         geoloc={"country": {"acronym": "ca"}},
     )
-    scores = _FakeScoresRepository(score_rows=[{"id": 10, "_score": 123.45}])
+    scores = _FakeScoresRepository(
+        score_rows=[_beatmap_leaderboard_score(id=10, score=123.45)],
+    )
 
     await score_leaderboards.fetch_leaderboard_scores(
         leaderboard_type=LeaderboardType.Mods,
@@ -224,7 +275,9 @@ async def test_fetch_leaderboard_scores_applies_friends_filter() -> None:
         friends={7, 8},
         geoloc={"country": {"acronym": "ca"}},
     )
-    scores = _FakeScoresRepository(score_rows=[{"id": 10, "_score": 123.45}])
+    scores = _FakeScoresRepository(
+        score_rows=[_beatmap_leaderboard_score(id=10, score=123.45)],
+    )
 
     await score_leaderboards.fetch_leaderboard_scores(
         leaderboard_type=LeaderboardType.Friends,
@@ -247,7 +300,9 @@ async def test_fetch_leaderboard_scores_applies_country_filter() -> None:
         friends={7, 8},
         geoloc={"country": {"acronym": "ca"}},
     )
-    scores = _FakeScoresRepository(score_rows=[{"id": 10, "_score": 123.45}])
+    scores = _FakeScoresRepository(
+        score_rows=[_beatmap_leaderboard_score(id=10, score=123.45)],
+    )
 
     await score_leaderboards.fetch_leaderboard_scores(
         leaderboard_type=LeaderboardType.Country,

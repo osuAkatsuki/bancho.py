@@ -8,7 +8,9 @@ from app.constants.leaderboard_types import LeaderboardType
 from app.constants.mods import Mods
 from app.constants.scoring_metrics import ScoringMetric
 from app.objects.player import Player
-from app.repositories.scores import LeaderboardScore
+from app.repositories.scores import BeatmapLeaderboardScore
+from app.repositories.scores import PersonalBestLeaderboardScore
+from app.repositories.scores import RankedPersonalBestLeaderboardScore
 
 
 class ScoresRepository(Protocol):
@@ -23,7 +25,7 @@ class ScoresRepository(Protocol):
         friend_ids: set[int] | None = None,
         country: str | None = None,
         limit: int = 50,
-    ) -> Sequence[LeaderboardScore]: ...
+    ) -> Sequence[BeatmapLeaderboardScore]: ...
 
     async def fetch_personal_best_leaderboard_score(
         self,
@@ -32,7 +34,7 @@ class ScoresRepository(Protocol):
         mode: int,
         user_id: int,
         scoring_metric: ScoringMetric,
-    ) -> LeaderboardScore | None: ...
+    ) -> PersonalBestLeaderboardScore | None: ...
 
     async def fetch_personal_best_leaderboard_rank(
         self,
@@ -46,8 +48,8 @@ class ScoresRepository(Protocol):
 
 @dataclass(frozen=True)
 class LeaderboardScores:
-    score_rows: list[LeaderboardScore]
-    personal_best_score_row: LeaderboardScore | None
+    score_rows: list[BeatmapLeaderboardScore]
+    personal_best_score_row: RankedPersonalBestLeaderboardScore | None
 
 
 async def fetch_leaderboard_scores(
@@ -97,17 +99,20 @@ async def fetch_leaderboard_scores(
         scoring_metric=scoring_metric,
     )
 
+    ranked_personal_best_score_row = None
     if personal_best_score_row is not None:
-        personal_best_score_row["rank"] = (
-            await scores.fetch_personal_best_leaderboard_rank(
-                map_md5=map_md5,
-                mode=mode,
-                scoring_metric=scoring_metric,
-                score=personal_best_score_row["_score"],
-            )
+        rank = await scores.fetch_personal_best_leaderboard_rank(
+            map_md5=map_md5,
+            mode=mode,
+            scoring_metric=scoring_metric,
+            score=personal_best_score_row["_score"],
+        )
+        ranked_personal_best_score_row = RankedPersonalBestLeaderboardScore(
+            **personal_best_score_row,
+            rank=rank,
         )
 
     return LeaderboardScores(
         score_rows=score_rows,
-        personal_best_score_row=personal_best_score_row,
+        personal_best_score_row=ranked_personal_best_score_row,
     )
