@@ -5,6 +5,7 @@ import hashlib
 from collections.abc import Callable
 from collections.abc import Mapping
 from collections.abc import Sequence
+from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -71,6 +72,10 @@ class WeightedPerformanceStatsUpdates(TypedDict):
 class BeatmapPlayStatsUpdates(TypedDict):
     plays: int
     passes: int
+
+
+class DatabaseTransactions(Protocol):
+    def transaction(self) -> AbstractAsyncContextManager[Any]: ...
 
 
 MIN_REPLAY_SIZE = 24
@@ -196,6 +201,28 @@ class UniqueIdHashes:
 class ScoreStatsPersistenceResult:
     previous_stats: ModeData
     current_stats: ModeData
+    should_update_rank: bool
+    should_publish_user_stats: bool
+
+
+@dataclass(frozen=True)
+class ScoreSubmissionPersistenceResult:
+    score_id: int
+    previous_stats: ModeData
+    current_stats: ModeData
+    unlocked_achievements: Sequence[Achievement]
+    should_update_rank: bool
+    should_publish_user_stats: bool
+
+
+@dataclass(frozen=True)
+class ScoreSubmissionStateSnapshot:
+    score_id: int | None
+    stats: ModeData
+    beatmap_plays: int
+    beatmap_passes: int
+    had_recent_score: bool
+    recent_score: Score | None
 
 
 def parse_unique_id_hashes(unique_ids: str) -> UniqueIdHashes:
@@ -342,18 +369,31 @@ async def save_replay_file(
     restriction_admin: Player,
     log_missing_replay: Callable[[str], None],
 ) -> None:
+    replay_data = await read_validated_replay_file(
+        score,
+        replay_file=replay_file,
+        restriction_admin=restriction_admin,
+        log_missing_replay=log_missing_replay,
+    )
+    write_replay_file(score, replay_data=replay_data, replays_path=replays_path)
+
+
+async def read_validated_replay_file(
+    score: Score,
+    *,
+    replay_file: ReplayFile,
+    restriction_admin: Player,
+    log_missing_replay: Callable[[str], None],
+) -> bytes | None:
     assert score.player is not None
 
     if not score.passed:
-        return
+        return None
 
     replay_data = await replay_file.read()
 
     if len(replay_data) >= MIN_REPLAY_SIZE:
-        assert score.id is not None
-        replay_disk_file = replays_path / f"{score.id}.osr"
-        replay_disk_file.write_bytes(replay_data)
-        return
+        return replay_data
 
     log_missing_replay(f"{score.player} submitted a score without a replay!")
 
@@ -364,6 +404,22 @@ async def save_replay_file(
         )
         if score.player.is_online:
             score.player.logout()
+
+    return None
+
+
+def write_replay_file(
+    score: Score,
+    *,
+    replay_data: bytes | None,
+    replays_path: Path,
+) -> None:
+    if replay_data is None:
+        return
+
+    assert score.id is not None
+    replay_disk_file = replays_path / f"{score.id}.osr"
+    replay_disk_file.write_bytes(replay_data)
 
 
 def format_score_submission_performance(score: Score) -> str:
@@ -408,20 +464,72 @@ async def announce_first_place(
     announce_channel: AnnouncementChannel | None,
     domain: str,
 ) -> None:
+    announcement = await build_first_place_announcement(
+        score,
+        scores=scores,
+        domain=domain,
+    )
+    send_first_place_announcement(
+        score,
+        announcement=announcement,
+        announce_channel=announce_channel,
+    )
+
+
+def capture_score_submission_state(score: Score) -> ScoreSubmissionStateSnapshot:
+    assert score.bmap is not None
+    assert score.player is not None
+
+    current_stats = score.player.stats[score.mode]
+    return ScoreSubmissionStateSnapshot(
+        score_id=score.id,
+        stats=copy.deepcopy(current_stats),
+        beatmap_plays=score.bmap.plays,
+        beatmap_passes=score.bmap.passes,
+        had_recent_score=score.mode in score.player.recent_scores,
+        recent_score=score.player.recent_scores.get(score.mode),
+    )
+
+
+def restore_score_submission_state(
+    score: Score,
+    snapshot: ScoreSubmissionStateSnapshot,
+) -> None:
+    assert score.bmap is not None
+    assert score.player is not None
+
+    score.id = snapshot.score_id
+    score.player.stats[score.mode] = snapshot.stats
+    score.bmap.plays = snapshot.beatmap_plays
+    score.bmap.passes = snapshot.beatmap_passes
+
+    if snapshot.had_recent_score:
+        assert snapshot.recent_score is not None
+        score.player.recent_scores[score.mode] = snapshot.recent_score
+    else:
+        score.player.recent_scores.pop(score.mode, None)
+
+
+async def build_first_place_announcement(
+    score: Score,
+    *,
+    scores: ScoresRepository,
+    domain: str,
+) -> str | None:
     assert score.bmap is not None
     assert score.player is not None
 
     if score.status != SubmissionStatus.BEST:
-        return
+        return None
 
     if not score.bmap.has_leaderboard:
-        return
+        return None
 
     if score.rank != 1:
-        return
+        return None
 
     if score.player.restricted:
-        return
+        return None
 
     performance = format_score_submission_performance(score)
     ann = [
@@ -446,8 +554,21 @@ async def announce_first_place(
                 f"{prev_n1['name']}])",
             )
 
+    return " ".join(ann)
+
+
+def send_first_place_announcement(
+    score: Score,
+    *,
+    announcement: str | None,
+    announce_channel: AnnouncementChannel | None,
+) -> None:
+    if announcement is None:
+        return
+
+    assert score.player is not None
     assert announce_channel is not None
-    announce_channel.send(" ".join(ann), sender=score.player, to_self=True)
+    announce_channel.send(announcement, sender=score.player, to_self=True)
 
 
 def apply_score_base_stats(score: Score, stats: ModeData) -> ScoreStatsUpdates:
@@ -613,7 +734,6 @@ async def persist_score_submission_stats(
     stats: StatsRepository,
     scores: ScoresRepository,
     maps: MapsRepository,
-    publish_user_stats: Callable[[Player], None],
 ) -> ScoreStatsPersistenceResult:
     assert score.bmap is not None
     assert score.player is not None
@@ -624,6 +744,7 @@ async def persist_score_submission_stats(
     previous_stats = copy.copy(current_stats)
 
     stats_updates = apply_score_stats(score, current_stats)
+    should_update_rank = False
 
     if score.passed and score.bmap.has_leaderboard:
         # player passed & map is ranked, approved, or loved.
@@ -650,8 +771,7 @@ async def persist_score_submission_stats(
             stats_updates["acc"] = weighted_updates["acc"]
             stats_updates["pp"] = weighted_updates["pp"]
 
-            # update global & country ranking
-            current_stats.rank = await score.player.update_rank(score.mode)
+            should_update_rank = True
 
     await stats.partial_update(
         score.player.id,
@@ -671,10 +791,8 @@ async def persist_score_submission_stats(
         pp=stats_updates.get("pp", UNSET),
     )
 
-    if not score.player.restricted:
-        # enqueue new stats info to all other users
-        publish_user_stats(score.player)
-
+    should_publish_user_stats = not score.player.restricted
+    if should_publish_user_stats:
         beatmap_updates = apply_beatmap_play_stats(score)
         await maps.partial_update(
             score.bmap.id,
@@ -682,13 +800,83 @@ async def persist_score_submission_stats(
             passes=beatmap_updates["passes"],
         )
 
-    # update their recent score
-    score.player.recent_scores[score.mode] = score
-
     return ScoreStatsPersistenceResult(
         previous_stats=previous_stats,
         current_stats=current_stats,
+        should_update_rank=should_update_rank,
+        should_publish_user_stats=should_publish_user_stats,
     )
+
+
+def score_can_unlock_achievements(score: Score) -> bool:
+    assert score.bmap is not None
+    assert score.player is not None
+
+    return score.passed and score.bmap.awards_ranked_pp and not score.player.restricted
+
+
+async def persist_score_submission(
+    score: Score,
+    *,
+    database: DatabaseTransactions,
+    scores: ScoresRepository,
+    stats: StatsRepository,
+    maps: MapsRepository,
+    achievements: AchievementsService,
+    user_achievements: UserAchievementsService,
+) -> ScoreSubmissionPersistenceResult:
+    snapshot = capture_score_submission_state(score)
+
+    try:
+        async with database.transaction():
+            score_id = await persist_submitted_score(score, scores)
+            stats_result = await persist_score_submission_stats(
+                score,
+                stats=stats,
+                scores=scores,
+                maps=maps,
+            )
+            unlocked_achievements = (
+                await unlock_new_achievements(
+                    score=score,
+                    achievements=achievements,
+                    user_achievements=user_achievements,
+                )
+                if score_can_unlock_achievements(score)
+                else []
+            )
+    except BaseException:
+        restore_score_submission_state(score, snapshot)
+        raise
+
+    return ScoreSubmissionPersistenceResult(
+        score_id=score_id,
+        previous_stats=stats_result.previous_stats,
+        current_stats=stats_result.current_stats,
+        unlocked_achievements=unlocked_achievements,
+        should_update_rank=stats_result.should_update_rank,
+        should_publish_user_stats=stats_result.should_publish_user_stats,
+    )
+
+
+async def apply_score_submission_side_effects(
+    score: Score,
+    persistence_result: ScoreSubmissionPersistenceResult,
+    *,
+    publish_user_stats: Callable[[Player], None],
+) -> None:
+    assert score.player is not None
+
+    if persistence_result.should_update_rank:
+        persistence_result.current_stats.rank = await score.player.update_rank(
+            score.mode,
+        )
+
+    if persistence_result.should_publish_user_stats:
+        publish_user_stats(score.player)
+
+    # update their recent score
+    score.player.recent_scores[score.mode] = score
 
 
 def chart_entry(
@@ -828,6 +1016,7 @@ async def build_score_submission_response(
     domain: str,
     achievements: AchievementsService,
     user_achievements: UserAchievementsService,
+    unlocked_achievements: Sequence[Achievement] | None = None,
 ) -> bytes:
     if not score.passed:  # TODO: check if this is correct
         return b"error: no"
@@ -835,19 +1024,22 @@ async def build_score_submission_response(
     assert score.bmap is not None
     assert score.player is not None
 
-    if score.bmap.awards_ranked_pp and not score.player.restricted:
+    if unlocked_achievements is not None:
+        achievements_to_display = unlocked_achievements
+    elif score_can_unlock_achievements(score):
         unlocked_achievements = await unlock_new_achievements(
             score=score,
             achievements=achievements,
             user_achievements=user_achievements,
         )
+        achievements_to_display = unlocked_achievements
     else:
-        unlocked_achievements = []
+        achievements_to_display = []
 
     return build_submission_charts(
         score=score,
         previous_stats=previous_stats,
         current_stats=current_stats,
-        achievements=unlocked_achievements,
+        achievements=achievements_to_display,
         domain=domain,
     )

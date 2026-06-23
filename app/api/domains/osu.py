@@ -629,6 +629,13 @@ async def osuSubmitModularSelector(
         if not score.player.restricted:
             app.state.sessions.players.enqueue(app.packets.user_stats(score.player))
 
+    def log_missing_replay(message: str) -> None:
+        log(message, Ansi.LRED)
+
+    replay_data: bytes | None = None
+    first_place_announcement: str | None = None
+    stats_result: score_submission_usecases.ScoreSubmissionPersistenceResult
+
     # hold a lock around (check if submitted, submission) to ensure no duplicates
     # are submitted to the database, and potentially award duplicate score/pp/etc.
     async with app.state.score_submission_locks[score.client_checksum]:
@@ -663,54 +670,70 @@ async def osuSubmitModularSelector(
 
         # TODO: re-implement pp caps for non-whitelisted players?
 
+        replay_data = await score_submission_usecases.read_validated_replay_file(
+            score,
+            replay_file=replay_file,
+            restriction_admin=app.state.sessions.bot,
+            log_missing_replay=log_missing_replay,
+        )
+
         """ Score submission checks completed; submit the score. """
 
         if app.state.services.datadog:
             app.state.services.datadog.increment("bancho.submitted_scores")  # type: ignore[no-untyped-call]
 
-        def send_personal_best_notification(player: Player, message: str) -> None:
-            player.enqueue(app.packets.notification(message))
-
         if score.status == SubmissionStatus.BEST:
             if app.state.services.datadog:
                 app.state.services.datadog.increment("bancho.submitted_scores_best")  # type: ignore[no-untyped-call]
 
-            score_submission_usecases.notify_score_submitter_of_personal_best(
-                score,
-                send_notification=send_personal_best_notification,
+            first_place_announcement = (
+                await score_submission_usecases.build_first_place_announcement(
+                    score,
+                    scores=scores_repo,
+                    domain=app.settings.DOMAIN,
+                )
             )
 
-            announce_chan = app.state.sessions.channels.get_by_name("#announce")
-            await score_submission_usecases.announce_first_place(
-                score,
-                scores=scores_repo,
-                announce_channel=announce_chan,
-                domain=app.settings.DOMAIN,
-            )
+        stats_result = await score_submission_usecases.persist_score_submission(
+            score,
+            database=app.state.services.database,
+            scores=scores_repo,
+            stats=stats_repo,
+            maps=maps_repo,
+            achievements=achievements_usecases,
+            user_achievements=user_achievements_usecases,
+        )
 
-        await score_submission_usecases.persist_submitted_score(score, scores_repo)
-
-    def log_missing_replay(message: str) -> None:
-        log(message, Ansi.LRED)
-
-    await score_submission_usecases.save_replay_file(
+    score_submission_usecases.write_replay_file(
         score,
-        replay_file=replay_file,
+        replay_data=replay_data,
         replays_path=REPLAYS_PATH,
-        restriction_admin=app.state.sessions.bot,
-        log_missing_replay=log_missing_replay,
     )
 
     def publish_user_stats(player: Player) -> None:
         app.state.sessions.players.enqueue(app.packets.user_stats(player))
 
-    stats_result = await score_submission_usecases.persist_score_submission_stats(
+    await score_submission_usecases.apply_score_submission_side_effects(
         score,
-        stats=stats_repo,
-        scores=scores_repo,
-        maps=maps_repo,
+        stats_result,
         publish_user_stats=publish_user_stats,
     )
+
+    def send_personal_best_notification(player: Player, message: str) -> None:
+        player.enqueue(app.packets.notification(message))
+
+    if score.status == SubmissionStatus.BEST:
+        score_submission_usecases.notify_score_submitter_of_personal_best(
+            score,
+            send_notification=send_personal_best_notification,
+        )
+
+        announce_chan = app.state.sessions.channels.get_by_name("#announce")
+        score_submission_usecases.send_first_place_announcement(
+            score,
+            announcement=first_place_announcement,
+            announce_channel=announce_chan,
+        )
 
     response = await score_submission_usecases.build_score_submission_response(
         score=score,
@@ -719,6 +742,7 @@ async def osuSubmitModularSelector(
         domain=app.settings.DOMAIN,
         achievements=achievements_usecases,
         user_achievements=user_achievements_usecases,
+        unlocked_achievements=stats_result.unlocked_achievements,
     )
 
     log(

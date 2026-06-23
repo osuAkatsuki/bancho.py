@@ -5,6 +5,7 @@ from datetime import date
 from datetime import datetime
 from ipaddress import IPv4Address
 from types import SimpleNamespace
+from types import TracebackType
 from typing import TypedDict
 from typing import cast
 
@@ -684,11 +685,46 @@ class _FakeUserAchievements:
         return {"userid": user_id, "achid": achievement_id}
 
 
-class _FakeScoresRepository:
+class _FakeTransaction:
+    def __init__(self, calls: list[str]) -> None:
+        self.calls = calls
+        self.exception_type: type[BaseException] | None = None
+
+    async def __aenter__(self) -> None:
+        self.calls.append("transaction_enter")
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        self.exception_type = exc_type
+        self.calls.append("transaction_exit")
+
+
+class _FakeDatabaseTransactions:
     def __init__(self) -> None:
+        self.calls: list[str] = []
+        self.transactions: list[_FakeTransaction] = []
+
+    def transaction(self) -> _FakeTransaction:
+        self.calls.append("transaction")
+        transaction = _FakeTransaction(self.calls)
+        self.transactions.append(transaction)
+        return transaction
+
+
+class _FakeScoresRepository:
+    def __init__(
+        self,
+        best_scores: list[ScorePerformanceRow] | None = None,
+    ) -> None:
         self.calls: list[str] = []
         self.previous_best_updates: list[_PreviousBestUpdate] = []
         self.created_scores: list[_CreatedScoreFields] = []
+        self.best_scores = best_scores if best_scores is not None else []
+        self.fetches: list[_ScorePerformanceFetch] = []
 
     async def create(
         self,
@@ -713,6 +749,24 @@ class _FakeScoresRepository:
                 "mode": mode,
             },
         )
+
+    async def fetch_weighted_best_performances(
+        self,
+        *,
+        user_id: int,
+        mode: int,
+    ) -> list[ScorePerformanceRow]:
+        self.fetches.append({"user_id": user_id, "mode": mode})
+        return self.best_scores
+
+    async def fetch_previous_first_place(
+        self,
+        *,
+        map_md5: str,
+        mode: int,
+        scoring_metric: ScoringMetric,
+    ) -> PreviousFirstPlace | None:
+        raise AssertionError("previous first place should not be fetched")
 
 
 class _FakeScorePerformanceRepository:
@@ -781,6 +835,15 @@ class _FakeMapsRepository:
                 },
             },
         )
+
+
+class _FailingMapsRepository:
+    async def partial_update(
+        self,
+        id: int,
+        **updates: object,
+    ) -> None:
+        raise RuntimeError("map update failed")
 
 
 class _FakeUserStatsPublisher:
@@ -929,7 +992,6 @@ async def test_persist_score_submission_stats_updates_ranked_best_score_side_eff
         stats=stats_repo,
         scores=scores_repo,
         maps=maps_repo,
-        publish_user_stats=publish_user_stats,
     )
 
     assert result.previous_stats.plays == 0
@@ -941,8 +1003,10 @@ async def test_persist_score_submission_stats_updates_ranked_best_score_side_eff
     assert result.current_stats.rscore == 27_810
     assert result.current_stats.acc == pytest.approx(96.5384615385)
     assert result.current_stats.pp == 148
-    assert result.current_stats.rank == 7
-    assert player.updated_rank_modes == [GameMode.RELAX_OSU]
+    assert result.current_stats.rank == 0
+    assert result.should_update_rank
+    assert result.should_publish_user_stats
+    assert player.updated_rank_modes == []
     assert scores_repo.fetches == [
         {
             "user_id": 6,
@@ -965,7 +1029,7 @@ async def test_persist_score_submission_stats_updates_ranked_best_score_side_eff
             },
         },
     ]
-    assert publish_user_stats.published_players == [player]
+    assert publish_user_stats.published_players == []
     assert score.bmap.plays == 2
     assert score.bmap.passes == 2
     assert maps_repo.partial_updates == [
@@ -977,6 +1041,25 @@ async def test_persist_score_submission_stats_updates_ranked_best_score_side_eff
             },
         },
     ]
+    assert player.recent_scores == {}
+
+    persistence_result = score_submission.ScoreSubmissionPersistenceResult(
+        score_id=123,
+        previous_stats=result.previous_stats,
+        current_stats=result.current_stats,
+        unlocked_achievements=[],
+        should_update_rank=result.should_update_rank,
+        should_publish_user_stats=result.should_publish_user_stats,
+    )
+    await score_submission.apply_score_submission_side_effects(
+        score,
+        persistence_result,
+        publish_user_stats=publish_user_stats,
+    )
+
+    assert result.current_stats.rank == 7
+    assert player.updated_rank_modes == [GameMode.RELAX_OSU]
+    assert publish_user_stats.published_players == [player]
     assert player.recent_scores[GameMode.RELAX_OSU] is score
 
 
@@ -1005,7 +1088,6 @@ async def test_persist_score_submission_stats_updates_failed_score_without_weigh
         stats=stats_repo,
         scores=_FailingScorePerformanceRepository(),
         maps=maps_repo,
-        publish_user_stats=publish_user_stats,
     )
 
     assert result.previous_stats.plays == 2
@@ -1013,6 +1095,8 @@ async def test_persist_score_submission_stats_updates_failed_score_without_weigh
     assert result.current_stats.playtime == 18
     assert result.current_stats.tscore == 26_820
     assert result.current_stats.total_hits == 109
+    assert not result.should_update_rank
+    assert result.should_publish_user_stats
     assert player.updated_rank_modes == []
     assert stats_repo.partial_updates == [
         {
@@ -1026,7 +1110,8 @@ async def test_persist_score_submission_stats_updates_failed_score_without_weigh
             },
         },
     ]
-    assert player.recent_scores[GameMode.RELAX_OSU] is score
+    assert publish_user_stats.published_players == []
+    assert player.recent_scores == {}
 
 
 async def test_persist_score_submission_stats_skips_public_side_effects_for_restricted_player() -> (
@@ -1047,20 +1132,123 @@ async def test_persist_score_submission_stats_skips_public_side_effects_for_rest
     maps_repo = _FakeMapsRepository()
     publish_user_stats = _FakeUserStatsPublisher()
 
-    await score_submission.persist_score_submission_stats(
+    result = await score_submission.persist_score_submission_stats(
         score,
         stats=stats_repo,
         scores=_FakeScorePerformanceRepository(),
         maps=maps_repo,
-        publish_user_stats=publish_user_stats,
     )
 
     assert stats_repo.partial_updates != []
+    assert not result.should_publish_user_stats
     assert publish_user_stats.published_players == []
     assert score.bmap.plays == 1
     assert score.bmap.passes == 1
     assert maps_repo.partial_updates == []
-    assert player.recent_scores[GameMode.RELAX_OSU] is score
+    assert player.recent_scores == {}
+
+
+async def test_persist_score_submission_wraps_db_writes_in_transaction() -> None:
+    score = _score()
+    score.client_checksum = "client-checksum"
+    stats = _mode_data(
+        rscore=1_000,
+        max_combo=40,
+        grades=_grade_counts(),
+    )
+    player = _FakePlayer(stats=stats)
+    score.player = player
+    database = _FakeDatabaseTransactions()
+    scores = _FakeScoresRepository(
+        best_scores=[
+            {"pp": 100.0, "acc": 98.0},
+            {"pp": 50.0, "acc": 95.0},
+        ],
+    )
+    maps = _FakeMapsRepository()
+    user_achievements = _FakeUserAchievements()
+
+    result = await score_submission.persist_score_submission(
+        score,
+        database=database,
+        scores=scores,
+        stats=_FakeStatsRepository(),
+        maps=maps,
+        achievements=_FakeAchievements(),
+        user_achievements=user_achievements,
+    )
+
+    assert database.calls == ["transaction", "transaction_enter", "transaction_exit"]
+    assert database.transactions[0].exception_type is None
+    assert scores.calls == ["mark_previous_best_scores_submitted", "create"]
+    assert maps.partial_updates == [
+        {
+            "id": 315,
+            "updates": {
+                "plays": 2,
+                "passes": 2,
+            },
+        },
+    ]
+    assert user_achievements.created_achievement_ids == [1]
+    assert result.score_id == 123
+    assert [achievement["id"] for achievement in result.unlocked_achievements] == [1]
+    assert result.should_update_rank
+    assert result.should_publish_user_stats
+    assert player.updated_rank_modes == []
+    assert player.recent_scores == {}
+
+
+async def test_persist_score_submission_restores_memory_state_on_failure() -> None:
+    score = _score()
+    score.id = None
+    score.client_checksum = "client-checksum"
+    score.bmap.plays = 10
+    score.bmap.passes = 9
+    previous_recent_score = _score()
+    stats = _mode_data(
+        plays=2,
+        playtime=5,
+        tscore=10,
+        total_hits=7,
+        rscore=1_000,
+        max_combo=40,
+        grades=_grade_counts(a=2),
+    )
+    player = _FakePlayer(stats=stats)
+    player.recent_scores[GameMode.RELAX_OSU] = previous_recent_score
+    score.player = player
+    database = _FakeDatabaseTransactions()
+
+    with pytest.raises(RuntimeError, match="map update failed"):
+        await score_submission.persist_score_submission(
+            score,
+            database=database,
+            scores=_FakeScoresRepository(
+                best_scores=[
+                    {"pp": 100.0, "acc": 98.0},
+                    {"pp": 50.0, "acc": 95.0},
+                ],
+            ),
+            stats=_FakeStatsRepository(),
+            maps=_FailingMapsRepository(),
+            achievements=_FakeAchievements(),
+            user_achievements=_FakeUserAchievements(),
+        )
+
+    assert database.calls == ["transaction", "transaction_enter", "transaction_exit"]
+    assert database.transactions[0].exception_type is RuntimeError
+    assert score.id is None
+    assert score.bmap.plays == 10
+    assert score.bmap.passes == 9
+    assert player.stats[GameMode.RELAX_OSU].plays == 2
+    assert player.stats[GameMode.RELAX_OSU].playtime == 5
+    assert player.stats[GameMode.RELAX_OSU].tscore == 10
+    assert player.stats[GameMode.RELAX_OSU].total_hits == 7
+    assert player.stats[GameMode.RELAX_OSU].rscore == 1_000
+    assert player.stats[GameMode.RELAX_OSU].max_combo == 40
+    assert player.stats[GameMode.RELAX_OSU].grades[Grade.A] == 2
+    assert player.recent_scores[GameMode.RELAX_OSU] is previous_recent_score
 
 
 def test_parse_unique_id_hashes_md5s_submission_unique_ids() -> None:
