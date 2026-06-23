@@ -121,11 +121,11 @@ class Webhook:
     def json(self) -> Any:
         if not any([self.content, self.file, self.embeds]):
             raise Exception(
-                "Webhook must contain at least one " + "of (content, file, embeds).",
+                "Webhook must contain at least one of (content, file, embeds).",
             )
 
         if self.content and len(self.content) > 2000:
-            raise Exception("Webhook content must be under " + "2000 characters.")
+            raise Exception("Webhook content must be under 2000 characters.")
 
         payload: dict[str, Any] = {"embeds": []}
 
