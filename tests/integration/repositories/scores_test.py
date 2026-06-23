@@ -51,7 +51,7 @@ async def test_fetch_beatmap_leaderboard_scores_orders_scores_and_filters_restri
         requester_score["id"],
         unrestricted_score["id"],
     ]
-    assert [row["_score"] for row in score_rows] == [900_000, 500_000]
+    assert [row["leaderboard_value"] for row in score_rows] == [900_000, 500_000]
 
 
 async def test_fetch_personal_best_leaderboard_rank_ignores_restricted_scores() -> None:

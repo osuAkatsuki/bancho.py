@@ -15,7 +15,7 @@ from app.repositories.scores import PersonalBestLeaderboardScoreRow
 
 class PersonalBestLeaderboardScoreListing(TypedDict):
     id: int
-    _score: int | float
+    leaderboard_value: int | float
     max_combo: int
     n50: int
     n100: int
@@ -121,7 +121,7 @@ async def fetch_leaderboard_scores(
             map_md5=map_md5,
             mode=mode,
             scoring_metric=scoring_metric,
-            score=personal_best_score_row["_score"],
+            score=personal_best_score_row["leaderboard_value"],
         )
         ranked_personal_best_score_row = PersonalBestLeaderboardScoreListing(
             **personal_best_score_row,

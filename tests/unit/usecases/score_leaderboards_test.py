@@ -121,7 +121,7 @@ def _beatmap_leaderboard_score(
 ) -> BeatmapLeaderboardScoreRow:
     return {
         "id": id,
-        "_score": score,
+        "leaderboard_value": score,
         "max_combo": 321,
         "n50": 1,
         "n100": 2,
@@ -144,7 +144,7 @@ def _personal_best_leaderboard_score(
 ) -> PersonalBestLeaderboardScoreRow:
     return {
         "id": id,
-        "_score": score,
+        "leaderboard_value": score,
         "max_combo": 321,
         "n50": 1,
         "n100": 2,

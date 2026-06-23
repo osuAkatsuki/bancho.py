@@ -131,7 +131,8 @@ class ScorePerformanceRow(TypedDict):
 
 class BeatmapLeaderboardScoreRow(TypedDict):
     id: int
-    _score: int | float
+    # score or pp, depending on the requested ScoringMetric.
+    leaderboard_value: int | float
     max_combo: int
     n50: int
     n100: int
@@ -148,7 +149,8 @@ class BeatmapLeaderboardScoreRow(TypedDict):
 
 class PersonalBestLeaderboardScoreRow(TypedDict):
     id: int
-    _score: int | float
+    # score or pp, depending on the requested ScoringMetric.
+    leaderboard_value: int | float
     max_combo: int
     n50: int
     n100: int
@@ -294,7 +296,7 @@ async def fetch_beatmap_leaderboard_scores(
     limit: int = 50,
 ) -> list[BeatmapLeaderboardScoreRow]:
     query = [
-        f"SELECT s.id, s.{scoring_metric} AS _score, "
+        f"SELECT s.id, s.{scoring_metric} AS leaderboard_value, "
         "s.max_combo, s.n50, s.n100, s.n300, "
         "s.nmiss, s.nkatu, s.ngeki, s.perfect, s.mods, "
         "UNIX_TIMESTAMP(s.play_time) time, u.id userid, "
@@ -326,7 +328,7 @@ async def fetch_beatmap_leaderboard_scores(
         query.append("AND u.country = :country")
         params["country"] = country
 
-    query.append("ORDER BY _score DESC LIMIT :limit")
+    query.append("ORDER BY leaderboard_value DESC LIMIT :limit")
 
     score_rows = await app.state.services.database.fetch_all(" ".join(query), params)
     return [cast(BeatmapLeaderboardScoreRow, dict(row)) for row in score_rows]
@@ -340,14 +342,14 @@ async def fetch_personal_best_leaderboard_score(
     scoring_metric: ScoringMetric,
 ) -> PersonalBestLeaderboardScoreRow | None:
     personal_best_score_row = await app.state.services.database.fetch_one(
-        f"SELECT id, {scoring_metric} AS _score, "
+        f"SELECT id, {scoring_metric} AS leaderboard_value, "
         "max_combo, n50, n100, n300, "
         "nmiss, nkatu, ngeki, perfect, mods, "
         "UNIX_TIMESTAMP(play_time) time "
         "FROM scores "
         "WHERE map_md5 = :map_md5 AND mode = :mode "
         "AND userid = :user_id AND status = :status "
-        "ORDER BY _score DESC LIMIT 1",
+        "ORDER BY leaderboard_value DESC LIMIT 1",
         {
             "map_md5": map_md5,
             "mode": mode,

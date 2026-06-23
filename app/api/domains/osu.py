@@ -960,7 +960,7 @@ async def getScores(
                 **personal_best_score_row,
                 name=display_name,
                 userid=player.id,
-                score=int(round(personal_best_score_row["_score"])),
+                score=int(round(personal_best_score_row["leaderboard_value"])),
                 has_replay="1",
             ),
         )
@@ -971,7 +971,7 @@ async def getScores(
         [
             SCORE_LISTING_FMTSTR.format(
                 **s,
-                score=int(round(s["_score"])),
+                score=int(round(s["leaderboard_value"])),
                 has_replay="1",
                 rank=idx + 1,
             )
