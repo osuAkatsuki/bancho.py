@@ -633,7 +633,6 @@ async def osuSubmitModularSelector(
         log(message, Ansi.LRED)
 
     replay_data: bytes | None = None
-    first_place_announcement: str | None = None
     stats_result: score_submission_usecases.ScoreSubmissionPersistenceResult
 
     # hold a lock around (check if submitted, submission) to ensure no duplicates
@@ -686,14 +685,6 @@ async def osuSubmitModularSelector(
             if app.state.services.datadog:
                 app.state.services.datadog.increment("bancho.submitted_scores_best")  # type: ignore[no-untyped-call]
 
-            first_place_announcement = (
-                await score_submission_usecases.build_first_place_announcement(
-                    score,
-                    scores=scores_repo,
-                    domain=app.settings.DOMAIN,
-                )
-            )
-
         stats_result = await score_submission_usecases.persist_score_submission(
             score,
             database=app.state.services.database,
@@ -728,6 +719,13 @@ async def osuSubmitModularSelector(
             send_notification=send_personal_best_notification,
         )
 
+        first_place_announcement = (
+            score_submission_usecases.build_first_place_announcement(
+                score,
+                previous_first_place_score=stats_result.previous_first_place_score,
+                domain=app.settings.DOMAIN,
+            )
+        )
         announce_chan = app.state.sessions.channels.get_by_name("#announce")
         score_submission_usecases.send_first_place_announcement(
             score,

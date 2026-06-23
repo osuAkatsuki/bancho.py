@@ -26,7 +26,7 @@ from app.objects.player import Player
 from app.objects.score import Grade
 from app.objects.score import Score
 from app.repositories.achievements import Achievement
-from app.repositories.scores import PreviousFirstPlace
+from app.repositories.scores import CurrentFirstPlaceScore
 from app.repositories.scores import ScorePerformanceRow
 from app.repositories.user_achievements import UserAchievement
 
@@ -150,13 +150,13 @@ class ScoresRepository(Protocol):
         mode: int,
     ) -> Sequence[ScorePerformanceRow]: ...
 
-    async def fetch_previous_first_place(
+    async def fetch_current_first_place_score(
         self,
         *,
         map_md5: str,
         mode: int,
         scoring_metric: ScoringMetric,
-    ) -> PreviousFirstPlace | None: ...
+    ) -> CurrentFirstPlaceScore | None: ...
 
 
 class StatsRepository(Protocol):
@@ -210,6 +210,7 @@ class ScoreSubmissionPersistenceResult:
     score_id: int
     previous_stats: ModeData
     current_stats: ModeData
+    previous_first_place_score: CurrentFirstPlaceScore | None
     unlocked_achievements: Sequence[Achievement]
     should_update_rank: bool
     should_publish_user_stats: bool
@@ -457,6 +458,37 @@ def first_place_scoring_metric(score: Score) -> ScoringMetric:
     return "pp" if score.mode >= GameMode.RELAX_OSU else "score"
 
 
+def score_should_announce_first_place(score: Score) -> bool:
+    assert score.bmap is not None
+    assert score.player is not None
+
+    return (
+        score.status == SubmissionStatus.BEST
+        and score.bmap.has_leaderboard
+        and score.rank == 1
+        and not score.player.restricted
+    )
+
+
+async def fetch_previous_first_place_score(
+    score: Score,
+    *,
+    scores: ScoresRepository,
+) -> CurrentFirstPlaceScore | None:
+    assert score.bmap is not None
+
+    if not score_should_announce_first_place(score):
+        return None
+
+    # Before persistence, the current first-place row is the previous #1 for
+    # this submission.
+    return await scores.fetch_current_first_place_score(
+        map_md5=score.bmap.md5,
+        mode=score.mode.value,
+        scoring_metric=first_place_scoring_metric(score),
+    )
+
+
 async def announce_first_place(
     score: Score,
     *,
@@ -464,9 +496,13 @@ async def announce_first_place(
     announce_channel: AnnouncementChannel | None,
     domain: str,
 ) -> None:
-    announcement = await build_first_place_announcement(
+    previous_first_place_score = await fetch_previous_first_place_score(
         score,
         scores=scores,
+    )
+    announcement = build_first_place_announcement(
+        score,
+        previous_first_place_score=previous_first_place_score,
         domain=domain,
     )
     send_first_place_announcement(
@@ -510,25 +546,16 @@ def restore_score_submission_state(
         score.player.recent_scores.pop(score.mode, None)
 
 
-async def build_first_place_announcement(
+def build_first_place_announcement(
     score: Score,
     *,
-    scores: ScoresRepository,
+    previous_first_place_score: CurrentFirstPlaceScore | None,
     domain: str,
 ) -> str | None:
     assert score.bmap is not None
     assert score.player is not None
 
-    if score.status != SubmissionStatus.BEST:
-        return None
-
-    if not score.bmap.has_leaderboard:
-        return None
-
-    if score.rank != 1:
-        return None
-
-    if score.player.restricted:
+    if not score_should_announce_first_place(score):
         return None
 
     performance = format_score_submission_performance(score)
@@ -540,18 +567,12 @@ async def build_first_place_announcement(
     if score.mods:
         ann.insert(1, f"+{score.mods!r}")
 
-    # If there was previously a score on the map, add old #1.
-    prev_n1 = await scores.fetch_previous_first_place(
-        map_md5=score.bmap.md5,
-        mode=score.mode.value,
-        scoring_metric=first_place_scoring_metric(score),
-    )
-
-    if prev_n1:
-        if score.player.id != prev_n1["id"]:
+    if previous_first_place_score:
+        if score.player.id != previous_first_place_score["id"]:
             ann.append(
-                f"(Previous #1: [https://{domain}/u/{prev_n1['id']} "
-                f"{prev_n1['name']}])",
+                f"(Previous #1: [https://{domain}/u/"
+                f"{previous_first_place_score['id']} "
+                f"{previous_first_place_score['name']}])",
             )
 
     return " ".join(ann)
@@ -829,6 +850,10 @@ async def persist_score_submission(
 
     try:
         async with database.transaction():
+            previous_first_place_score = await fetch_previous_first_place_score(
+                score,
+                scores=scores,
+            )
             score_id = await persist_submitted_score(score, scores)
             stats_result = await persist_score_submission_stats(
                 score,
@@ -853,6 +878,7 @@ async def persist_score_submission(
         score_id=score_id,
         previous_stats=stats_result.previous_stats,
         current_stats=stats_result.current_stats,
+        previous_first_place_score=previous_first_place_score,
         unlocked_achievements=unlocked_achievements,
         should_update_rank=stats_result.should_update_rank,
         should_publish_user_stats=stats_result.should_publish_user_stats,

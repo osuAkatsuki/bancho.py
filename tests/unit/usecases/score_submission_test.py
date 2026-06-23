@@ -25,13 +25,13 @@ from app.objects.player import OsuVersion
 from app.objects.score import Grade
 from app.objects.score import Score
 from app.repositories.achievements import Achievement
-from app.repositories.scores import PreviousFirstPlace
+from app.repositories.scores import CurrentFirstPlaceScore
 from app.repositories.scores import ScorePerformanceRow
 from app.repositories.user_achievements import UserAchievement
 from app.usecases import score_submission
 
 
-class _PreviousFirstPlaceFetch(TypedDict):
+class _FirstPlaceScoreFetch(TypedDict):
     map_md5: str
     mode: int
     scoring_metric: ScoringMetric
@@ -263,17 +263,20 @@ class _FakeAnnounceChannel:
 
 
 class _FakeFirstPlaceScoresRepository:
-    def __init__(self, previous_first_place: PreviousFirstPlace | None = None) -> None:
-        self.previous_first_place = previous_first_place
-        self.calls: list[_PreviousFirstPlaceFetch] = []
+    def __init__(
+        self,
+        current_first_place_score: CurrentFirstPlaceScore | None = None,
+    ) -> None:
+        self.current_first_place_score = current_first_place_score
+        self.calls: list[_FirstPlaceScoreFetch] = []
 
-    async def fetch_previous_first_place(
+    async def fetch_current_first_place_score(
         self,
         *,
         map_md5: str,
         mode: int,
         scoring_metric: ScoringMetric,
-    ) -> PreviousFirstPlace | None:
+    ) -> CurrentFirstPlaceScore | None:
         self.calls.append(
             {
                 "map_md5": map_md5,
@@ -281,7 +284,7 @@ class _FakeFirstPlaceScoresRepository:
                 "scoring_metric": scoring_metric,
             },
         )
-        return self.previous_first_place
+        return self.current_first_place_score
 
 
 async def test_save_replay_file_writes_passed_replay(tmp_path) -> None:
@@ -719,12 +722,15 @@ class _FakeScoresRepository:
     def __init__(
         self,
         best_scores: list[ScorePerformanceRow] | None = None,
+        current_first_place_score: CurrentFirstPlaceScore | None = None,
     ) -> None:
         self.calls: list[str] = []
         self.previous_best_updates: list[_PreviousBestUpdate] = []
         self.created_scores: list[_CreatedScoreFields] = []
         self.best_scores = best_scores if best_scores is not None else []
+        self.current_first_place_score = current_first_place_score
         self.fetches: list[_ScorePerformanceFetch] = []
+        self.first_place_score_fetches: list[_FirstPlaceScoreFetch] = []
 
     async def create(
         self,
@@ -759,14 +765,22 @@ class _FakeScoresRepository:
         self.fetches.append({"user_id": user_id, "mode": mode})
         return self.best_scores
 
-    async def fetch_previous_first_place(
+    async def fetch_current_first_place_score(
         self,
         *,
         map_md5: str,
         mode: int,
         scoring_metric: ScoringMetric,
-    ) -> PreviousFirstPlace | None:
-        raise AssertionError("previous first place should not be fetched")
+    ) -> CurrentFirstPlaceScore | None:
+        self.calls.append("fetch_current_first_place_score")
+        self.first_place_score_fetches.append(
+            {
+                "map_md5": map_md5,
+                "mode": mode,
+                "scoring_metric": scoring_metric,
+            },
+        )
+        return self.current_first_place_score
 
 
 class _FakeScorePerformanceRepository:
@@ -1047,6 +1061,7 @@ async def test_persist_score_submission_stats_updates_ranked_best_score_side_eff
         score_id=123,
         previous_stats=result.previous_stats,
         current_stats=result.current_stats,
+        previous_first_place_score=None,
         unlocked_achievements=[],
         should_update_rank=result.should_update_rank,
         should_publish_user_stats=result.should_publish_user_stats,
@@ -1164,6 +1179,7 @@ async def test_persist_score_submission_wraps_db_writes_in_transaction() -> None
             {"pp": 100.0, "acc": 98.0},
             {"pp": 50.0, "acc": 95.0},
         ],
+        current_first_place_score={"id": 9, "name": "old-user"},
     )
     maps = _FakeMapsRepository()
     user_achievements = _FakeUserAchievements()
@@ -1180,7 +1196,18 @@ async def test_persist_score_submission_wraps_db_writes_in_transaction() -> None
 
     assert database.calls == ["transaction", "transaction_enter", "transaction_exit"]
     assert database.transactions[0].exception_type is None
-    assert scores.calls == ["mark_previous_best_scores_submitted", "create"]
+    assert scores.calls == [
+        "fetch_current_first_place_score",
+        "mark_previous_best_scores_submitted",
+        "create",
+    ]
+    assert scores.first_place_score_fetches == [
+        {
+            "map_md5": "1cf5b2c2edfafd055536d2cefcb89c0e",
+            "mode": GameMode.RELAX_OSU.value,
+            "scoring_metric": "pp",
+        },
+    ]
     assert maps.partial_updates == [
         {
             "id": 315,
@@ -1192,6 +1219,7 @@ async def test_persist_score_submission_wraps_db_writes_in_transaction() -> None
     ]
     assert user_achievements.created_achievement_ids == [1]
     assert result.score_id == 123
+    assert result.previous_first_place_score == {"id": 9, "name": "old-user"}
     assert [achievement["id"] for achievement in result.unlocked_achievements] == [1]
     assert result.should_update_rank
     assert result.should_publish_user_stats
