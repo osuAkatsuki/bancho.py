@@ -14,7 +14,6 @@ from collections.abc import Callable
 from collections.abc import Mapping
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime
 from datetime import timedelta
 from functools import wraps
 from pathlib import Path
@@ -37,7 +36,6 @@ import app.packets
 import app.settings
 import app.state
 import app.usecases.performance
-import app.utils
 from app.constants import regexes
 from app.constants.beatmap_statuses import RankedStatus
 from app.constants.gamemodes import GAMEMODE_REPR_LIST
@@ -166,7 +164,7 @@ def command(
 
 
 @command(Privileges.UNRESTRICTED, aliases=["", "h"], hidden=True)
-async def _help(ctx: Context) -> str | None:
+async def help_(ctx: Context) -> str | None:
     """Show all documented commands the player can access."""
     prefix = app.settings.COMMAND_PREFIX
     l = ["Individual commands", "-----------"]
@@ -392,13 +390,13 @@ async def top(ctx: Context) -> str | None:
 
     scores = await app.state.services.database.fetch_all(
         "SELECT s.pp, b.artist, b.title, b.version, b.set_id map_set_id, b.id map_id "
-        "FROM scores s "
-        "LEFT JOIN maps b ON b.md5 = s.map_md5 "
-        "WHERE s.userid = :user_id "
-        "AND s.mode = :mode "
-        "AND s.status = 2 "
-        "AND b.status in (2, 3) "
-        "ORDER BY s.pp DESC LIMIT 10",
+        + "FROM scores s "
+        + "LEFT JOIN maps b ON b.md5 = s.map_md5 "
+        + "WHERE s.userid = :user_id "
+        + "AND s.mode = :mode "
+        + "AND s.status = 2 "
+        + "AND b.status in (2, 3) "
+        + "ORDER BY s.pp DESC LIMIT 10",
         {"user_id": user["id"], "mode": mode},
     )
     if not scores:
@@ -468,7 +466,7 @@ def parse__with__command_args(
 
 
 @command(Privileges.UNRESTRICTED, aliases=["w"], hidden=True)
-async def _with(ctx: Context) -> str | None:
+async def with_(ctx: Context) -> str | None:
     """Specify custom accuracy & mod combinations with `/np`."""
     if ctx.recipient is not app.state.sessions.bot:
         return "This command can only be used in DM with bot."
@@ -491,7 +489,7 @@ async def _with(ctx: Context) -> str | None:
     if isinstance(command_args, ParsingError):
         return str(command_args)
 
-    msg_fields = []
+    msg_fields: list[str] = []
 
     score_args = ScoreParams(mode=mode_vn)
 
@@ -626,7 +624,7 @@ def status_to_id(s: str) -> int:
 
 
 @command(Privileges.NOMINATOR)
-async def _map(ctx: Context) -> str | None:
+async def map_(ctx: Context) -> str | None:
     """Changes the ranked status of the most recently /np'ed map."""
     if (
         len(ctx.args) != 2
@@ -722,16 +720,16 @@ async def notes(ctx: Context) -> str | None:
 
     res = await app.state.services.database.fetch_all(
         "SELECT `action`, `msg`, `time`, `from` "
-        "FROM `logs` WHERE `to` = :to "
-        "AND UNIX_TIMESTAMP(`time`) >= UNIX_TIMESTAMP(NOW()) - :seconds "
-        "ORDER BY `time` ASC",
+        + "FROM `logs` WHERE `to` = :to "
+        + "AND UNIX_TIMESTAMP(`time`) >= UNIX_TIMESTAMP(NOW()) - :seconds "
+        + "ORDER BY `time` ASC",
         {"to": target.id, "seconds": days * 86400},
     )
 
     if not res:
         return f"No notes found on {target} in the past {days} days."
 
-    notes = []
+    notes: list[str] = []
     for row in res:
         logger = await app.state.sessions.players.from_cache_or_sql(id=row["from"])
         if not logger:
@@ -866,7 +864,7 @@ async def user(ctx: Context) -> str | None:
 
     donator_info = (
         f"True (ends {timeago.format(player.donor_end)})"
-        if player.priv & Privileges.DONATOR != 0
+        if player.priv & Privileges.DONATOR
         else "False"
     )
 
@@ -1096,7 +1094,7 @@ async def addpriv(ctx: Context) -> str | None:
     if not target:
         return "Could not find user."
 
-    if bits & Privileges.DONATOR != 0:
+    if bits & Privileges.DONATOR:
         return "Please use the !givedonator command to assign donator privileges to players."
 
     await target.add_privs(bits)
@@ -1123,7 +1121,7 @@ async def rmpriv(ctx: Context) -> str | None:
 
     await target.remove_privs(bits)
 
-    if bits & Privileges.DONATOR != 0:
+    if bits & Privileges.DONATOR:
         target.donor_end = 0
         await app.state.services.database.execute(
             "UPDATE users SET donor_end = 0 WHERE id = :user_id",
@@ -1251,7 +1249,7 @@ async def server(ctx: Context) -> str | None:
     # cmyui v1.7.3 | datadog v0.40.1 | geoip2 v4.1.0
     # maniera v1.0.0 | mysql-connector-python v8.0.23 | orjson v3.5.1
     # psutil v5.8.0 | py3rijndael v0.3.3 | uvloop v0.15.2
-    requirements = []
+    requirements: list[str] = []
 
     for dist in importlib.metadata.distributions():
         requirements.append(f"{dist.name} v{dist.version}")
@@ -1372,7 +1370,7 @@ def ensure_match(
 async def mp_help(ctx: Context, match: Match) -> str | None:
     """Show all documented multiplayer commands the player can access."""
     prefix = app.settings.COMMAND_PREFIX
-    cmds = []
+    cmds: list[str] = []
 
     for cmd in mp_commands.commands:
         if not cmd.doc or ctx.player.priv & cmd.priv != cmd.priv:
@@ -2077,7 +2075,7 @@ async def mp_pick(ctx: Context, match: Match) -> str | None:
 async def pool_help(ctx: Context) -> str | None:
     """Show all documented mappool commands the player can access."""
     prefix = app.settings.COMMAND_PREFIX
-    cmds = []
+    cmds: list[str] = []
 
     for cmd in pool_commands.commands:
         if not cmd.doc or ctx.player.priv & cmd.priv != cmd.priv:
@@ -2101,7 +2099,7 @@ async def pool_create(ctx: Context) -> str | None:
     if existing_pool is not None:
         return "Pool already exists by that name!"
 
-    tourney_pool = await tourney_pools_repo.create(
+    await tourney_pools_repo.create(
         name=name,
         created_by=ctx.player.id,
     )
@@ -2233,7 +2231,7 @@ async def pool_list(ctx: Context) -> str | None:
 
         l.append(
             f"[{pool['created_at']:%Y-%m-%d}] "
-            f"{pool['name']}, by {created_by['name']}.",
+            + f"{pool['name']}, by {created_by['name']}.",
         )
 
     return "\n".join(l)
@@ -2281,7 +2279,7 @@ async def pool_info(ctx: Context) -> str | None:
 async def clan_help(ctx: Context) -> str | None:
     """Show all documented clan commands the player can access."""
     prefix = app.settings.COMMAND_PREFIX
-    cmds = []
+    cmds: list[str] = []
 
     for cmd in clan_commands.commands:
         if not cmd.doc or ctx.player.priv & cmd.priv != cmd.priv:

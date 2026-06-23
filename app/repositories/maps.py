@@ -21,7 +21,7 @@ from sqlalchemy.dialects.mysql import TINYINT
 
 import app.state.services
 from app._typing import UNSET
-from app._typing import _UnsetSentinel
+from app._typing import Unset
 from app.repositories import Base
 
 
@@ -281,74 +281,74 @@ async def fetch_many(
 
 async def partial_update(
     id: int,
-    server: str | _UnsetSentinel = UNSET,
-    set_id: int | _UnsetSentinel = UNSET,
-    status: int | _UnsetSentinel = UNSET,
-    md5: str | _UnsetSentinel = UNSET,
-    artist: str | _UnsetSentinel = UNSET,
-    title: str | _UnsetSentinel = UNSET,
-    version: str | _UnsetSentinel = UNSET,
-    creator: str | _UnsetSentinel = UNSET,
-    filename: str | _UnsetSentinel = UNSET,
-    last_update: datetime | _UnsetSentinel = UNSET,
-    total_length: int | _UnsetSentinel = UNSET,
-    max_combo: int | _UnsetSentinel = UNSET,
-    frozen: bool | _UnsetSentinel = UNSET,
-    plays: int | _UnsetSentinel = UNSET,
-    passes: int | _UnsetSentinel = UNSET,
-    mode: int | _UnsetSentinel = UNSET,
-    bpm: float | _UnsetSentinel = UNSET,
-    cs: float | _UnsetSentinel = UNSET,
-    ar: float | _UnsetSentinel = UNSET,
-    od: float | _UnsetSentinel = UNSET,
-    hp: float | _UnsetSentinel = UNSET,
-    diff: float | _UnsetSentinel = UNSET,
+    server: str | Unset = UNSET,
+    set_id: int | Unset = UNSET,
+    status: int | Unset = UNSET,
+    md5: str | Unset = UNSET,
+    artist: str | Unset = UNSET,
+    title: str | Unset = UNSET,
+    version: str | Unset = UNSET,
+    creator: str | Unset = UNSET,
+    filename: str | Unset = UNSET,
+    last_update: datetime | Unset = UNSET,
+    total_length: int | Unset = UNSET,
+    max_combo: int | Unset = UNSET,
+    frozen: bool | Unset = UNSET,
+    plays: int | Unset = UNSET,
+    passes: int | Unset = UNSET,
+    mode: int | Unset = UNSET,
+    bpm: float | Unset = UNSET,
+    cs: float | Unset = UNSET,
+    ar: float | Unset = UNSET,
+    od: float | Unset = UNSET,
+    hp: float | Unset = UNSET,
+    diff: float | Unset = UNSET,
 ) -> Map | None:
     """Update a beatmap entry in the database."""
     update_stmt = update(MapsTable).where(MapsTable.id == id)
-    if not isinstance(server, _UnsetSentinel):
+    if not isinstance(server, Unset):
         update_stmt = update_stmt.values(server=server)
-    if not isinstance(set_id, _UnsetSentinel):
+    if not isinstance(set_id, Unset):
         update_stmt = update_stmt.values(set_id=set_id)
-    if not isinstance(status, _UnsetSentinel):
+    if not isinstance(status, Unset):
         update_stmt = update_stmt.values(status=status)
-    if not isinstance(md5, _UnsetSentinel):
+    if not isinstance(md5, Unset):
         update_stmt = update_stmt.values(md5=md5)
-    if not isinstance(artist, _UnsetSentinel):
+    if not isinstance(artist, Unset):
         update_stmt = update_stmt.values(artist=artist)
-    if not isinstance(title, _UnsetSentinel):
+    if not isinstance(title, Unset):
         update_stmt = update_stmt.values(title=title)
-    if not isinstance(version, _UnsetSentinel):
+    if not isinstance(version, Unset):
         update_stmt = update_stmt.values(version=version)
-    if not isinstance(creator, _UnsetSentinel):
+    if not isinstance(creator, Unset):
         update_stmt = update_stmt.values(creator=creator)
-    if not isinstance(filename, _UnsetSentinel):
+    if not isinstance(filename, Unset):
         update_stmt = update_stmt.values(filename=filename)
-    if not isinstance(last_update, _UnsetSentinel):
+    if not isinstance(last_update, Unset):
         update_stmt = update_stmt.values(last_update=last_update)
-    if not isinstance(total_length, _UnsetSentinel):
+    if not isinstance(total_length, Unset):
         update_stmt = update_stmt.values(total_length=total_length)
-    if not isinstance(max_combo, _UnsetSentinel):
+    if not isinstance(max_combo, Unset):
         update_stmt = update_stmt.values(max_combo=max_combo)
-    if not isinstance(frozen, _UnsetSentinel):
+    if not isinstance(frozen, Unset):
         update_stmt = update_stmt.values(frozen=frozen)
-    if not isinstance(plays, _UnsetSentinel):
+    if not isinstance(plays, Unset):
         update_stmt = update_stmt.values(plays=plays)
-    if not isinstance(passes, _UnsetSentinel):
+    if not isinstance(passes, Unset):
         update_stmt = update_stmt.values(passes=passes)
-    if not isinstance(mode, _UnsetSentinel):
+    if not isinstance(mode, Unset):
         update_stmt = update_stmt.values(mode=mode)
-    if not isinstance(bpm, _UnsetSentinel):
+    if not isinstance(bpm, Unset):
         update_stmt = update_stmt.values(bpm=bpm)
-    if not isinstance(cs, _UnsetSentinel):
+    if not isinstance(cs, Unset):
         update_stmt = update_stmt.values(cs=cs)
-    if not isinstance(ar, _UnsetSentinel):
+    if not isinstance(ar, Unset):
         update_stmt = update_stmt.values(ar=ar)
-    if not isinstance(od, _UnsetSentinel):
+    if not isinstance(od, Unset):
         update_stmt = update_stmt.values(od=od)
-    if not isinstance(hp, _UnsetSentinel):
+    if not isinstance(hp, Unset):
         update_stmt = update_stmt.values(hp=hp)
-    if not isinstance(diff, _UnsetSentinel):
+    if not isinstance(diff, Unset):
         update_stmt = update_stmt.values(diff=diff)
 
     await app.state.services.database.execute(update_stmt)

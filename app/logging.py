@@ -8,6 +8,7 @@ from enum import IntEnum
 from zoneinfo import ZoneInfo
 
 import yaml
+from typing_extensions import override
 
 from app import settings
 
@@ -41,6 +42,7 @@ class Ansi(IntEnum):
 
     RESET = 0
 
+    @override
     def __repr__(self) -> str:
         return f"\x1b[{self.value}m"
 

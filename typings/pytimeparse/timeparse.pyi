@@ -1,0 +1,3 @@
+from __future__ import annotations
+
+def timeparse(sval: str) -> int | float | None: ...

@@ -15,7 +15,7 @@ from sqlalchemy.dialects.mysql import TINYINT
 
 import app.state.services
 from app._typing import UNSET
-from app._typing import _UnsetSentinel
+from app._typing import Unset
 from app.repositories import Base
 from app.utils import make_safe_name
 
@@ -208,56 +208,56 @@ async def fetch_many(
 
 async def partial_update(
     id: int,
-    name: str | _UnsetSentinel = UNSET,
-    email: str | _UnsetSentinel = UNSET,
-    priv: int | _UnsetSentinel = UNSET,
-    country: str | _UnsetSentinel = UNSET,
-    silence_end: int | _UnsetSentinel = UNSET,
-    donor_end: int | _UnsetSentinel = UNSET,
-    creation_time: _UnsetSentinel | _UnsetSentinel = UNSET,
-    latest_activity: int | _UnsetSentinel = UNSET,
-    clan_id: int | _UnsetSentinel = UNSET,
-    clan_priv: int | _UnsetSentinel = UNSET,
-    preferred_mode: int | _UnsetSentinel = UNSET,
-    play_style: int | _UnsetSentinel = UNSET,
-    custom_badge_name: str | None | _UnsetSentinel = UNSET,
-    custom_badge_icon: str | None | _UnsetSentinel = UNSET,
-    userpage_content: str | None | _UnsetSentinel = UNSET,
-    api_key: str | None | _UnsetSentinel = UNSET,
+    name: str | Unset = UNSET,
+    email: str | Unset = UNSET,
+    priv: int | Unset = UNSET,
+    country: str | Unset = UNSET,
+    silence_end: int | Unset = UNSET,
+    donor_end: int | Unset = UNSET,
+    creation_time: int | Unset = UNSET,
+    latest_activity: int | Unset = UNSET,
+    clan_id: int | Unset = UNSET,
+    clan_priv: int | Unset = UNSET,
+    preferred_mode: int | Unset = UNSET,
+    play_style: int | Unset = UNSET,
+    custom_badge_name: str | None | Unset = UNSET,
+    custom_badge_icon: str | None | Unset = UNSET,
+    userpage_content: str | None | Unset = UNSET,
+    api_key: str | None | Unset = UNSET,
 ) -> User | None:
     """Update a user in the database."""
     update_stmt = update(UsersTable).where(UsersTable.id == id)
-    if not isinstance(name, _UnsetSentinel):
+    if not isinstance(name, Unset):
         update_stmt = update_stmt.values(name=name, safe_name=make_safe_name(name))
-    if not isinstance(email, _UnsetSentinel):
+    if not isinstance(email, Unset):
         update_stmt = update_stmt.values(email=email)
-    if not isinstance(priv, _UnsetSentinel):
+    if not isinstance(priv, Unset):
         update_stmt = update_stmt.values(priv=priv)
-    if not isinstance(country, _UnsetSentinel):
+    if not isinstance(country, Unset):
         update_stmt = update_stmt.values(country=country)
-    if not isinstance(silence_end, _UnsetSentinel):
+    if not isinstance(silence_end, Unset):
         update_stmt = update_stmt.values(silence_end=silence_end)
-    if not isinstance(donor_end, _UnsetSentinel):
+    if not isinstance(donor_end, Unset):
         update_stmt = update_stmt.values(donor_end=donor_end)
-    if not isinstance(creation_time, _UnsetSentinel):
+    if not isinstance(creation_time, Unset):
         update_stmt = update_stmt.values(creation_time=creation_time)
-    if not isinstance(latest_activity, _UnsetSentinel):
+    if not isinstance(latest_activity, Unset):
         update_stmt = update_stmt.values(latest_activity=latest_activity)
-    if not isinstance(clan_id, _UnsetSentinel):
+    if not isinstance(clan_id, Unset):
         update_stmt = update_stmt.values(clan_id=clan_id)
-    if not isinstance(clan_priv, _UnsetSentinel):
+    if not isinstance(clan_priv, Unset):
         update_stmt = update_stmt.values(clan_priv=clan_priv)
-    if not isinstance(preferred_mode, _UnsetSentinel):
+    if not isinstance(preferred_mode, Unset):
         update_stmt = update_stmt.values(preferred_mode=preferred_mode)
-    if not isinstance(play_style, _UnsetSentinel):
+    if not isinstance(play_style, Unset):
         update_stmt = update_stmt.values(play_style=play_style)
-    if not isinstance(custom_badge_name, _UnsetSentinel):
+    if not isinstance(custom_badge_name, Unset):
         update_stmt = update_stmt.values(custom_badge_name=custom_badge_name)
-    if not isinstance(custom_badge_icon, _UnsetSentinel):
+    if not isinstance(custom_badge_icon, Unset):
         update_stmt = update_stmt.values(custom_badge_icon=custom_badge_icon)
-    if not isinstance(userpage_content, _UnsetSentinel):
+    if not isinstance(userpage_content, Unset):
         update_stmt = update_stmt.values(userpage_content=userpage_content)
-    if not isinstance(api_key, _UnsetSentinel):
+    if not isinstance(api_key, Unset):
         update_stmt = update_stmt.values(api_key=api_key)
 
     await app.state.services.database.execute(update_stmt)

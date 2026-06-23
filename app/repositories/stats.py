@@ -15,7 +15,7 @@ from sqlalchemy.dialects.mysql import TINYINT
 
 import app.state.services
 from app._typing import UNSET
-from app._typing import _UnsetSentinel
+from app._typing import Unset
 from app.repositories import Base
 
 
@@ -173,20 +173,20 @@ async def fetch_many(
 async def partial_update(
     player_id: int,
     mode: int,
-    tscore: int | _UnsetSentinel = UNSET,
-    rscore: int | _UnsetSentinel = UNSET,
-    pp: int | _UnsetSentinel = UNSET,
-    plays: int | _UnsetSentinel = UNSET,
-    playtime: int | _UnsetSentinel = UNSET,
-    acc: float | _UnsetSentinel = UNSET,
-    max_combo: int | _UnsetSentinel = UNSET,
-    total_hits: int | _UnsetSentinel = UNSET,
-    replay_views: int | _UnsetSentinel = UNSET,
-    xh_count: int | _UnsetSentinel = UNSET,
-    x_count: int | _UnsetSentinel = UNSET,
-    sh_count: int | _UnsetSentinel = UNSET,
-    s_count: int | _UnsetSentinel = UNSET,
-    a_count: int | _UnsetSentinel = UNSET,
+    tscore: int | Unset = UNSET,
+    rscore: int | Unset = UNSET,
+    pp: int | Unset = UNSET,
+    plays: int | Unset = UNSET,
+    playtime: int | Unset = UNSET,
+    acc: float | Unset = UNSET,
+    max_combo: int | Unset = UNSET,
+    total_hits: int | Unset = UNSET,
+    replay_views: int | Unset = UNSET,
+    xh_count: int | Unset = UNSET,
+    x_count: int | Unset = UNSET,
+    sh_count: int | Unset = UNSET,
+    s_count: int | Unset = UNSET,
+    a_count: int | Unset = UNSET,
 ) -> Stat | None:
     """Update a player stats entry in the database."""
     update_stmt = (
@@ -194,33 +194,33 @@ async def partial_update(
         .where(StatsTable.id == player_id)
         .where(StatsTable.mode == mode)
     )
-    if not isinstance(tscore, _UnsetSentinel):
+    if not isinstance(tscore, Unset):
         update_stmt = update_stmt.values(tscore=tscore)
-    if not isinstance(rscore, _UnsetSentinel):
+    if not isinstance(rscore, Unset):
         update_stmt = update_stmt.values(rscore=rscore)
-    if not isinstance(pp, _UnsetSentinel):
+    if not isinstance(pp, Unset):
         update_stmt = update_stmt.values(pp=pp)
-    if not isinstance(plays, _UnsetSentinel):
+    if not isinstance(plays, Unset):
         update_stmt = update_stmt.values(plays=plays)
-    if not isinstance(playtime, _UnsetSentinel):
+    if not isinstance(playtime, Unset):
         update_stmt = update_stmt.values(playtime=playtime)
-    if not isinstance(acc, _UnsetSentinel):
+    if not isinstance(acc, Unset):
         update_stmt = update_stmt.values(acc=acc)
-    if not isinstance(max_combo, _UnsetSentinel):
+    if not isinstance(max_combo, Unset):
         update_stmt = update_stmt.values(max_combo=max_combo)
-    if not isinstance(total_hits, _UnsetSentinel):
+    if not isinstance(total_hits, Unset):
         update_stmt = update_stmt.values(total_hits=total_hits)
-    if not isinstance(replay_views, _UnsetSentinel):
+    if not isinstance(replay_views, Unset):
         update_stmt = update_stmt.values(replay_views=replay_views)
-    if not isinstance(xh_count, _UnsetSentinel):
+    if not isinstance(xh_count, Unset):
         update_stmt = update_stmt.values(xh_count=xh_count)
-    if not isinstance(x_count, _UnsetSentinel):
+    if not isinstance(x_count, Unset):
         update_stmt = update_stmt.values(x_count=x_count)
-    if not isinstance(sh_count, _UnsetSentinel):
+    if not isinstance(sh_count, Unset):
         update_stmt = update_stmt.values(sh_count=sh_count)
-    if not isinstance(s_count, _UnsetSentinel):
+    if not isinstance(s_count, Unset):
         update_stmt = update_stmt.values(s_count=s_count)
-    if not isinstance(a_count, _UnsetSentinel):
+    if not isinstance(a_count, Unset):
         update_stmt = update_stmt.values(a_count=a_count)
 
     await app.state.services.database.execute(update_stmt)

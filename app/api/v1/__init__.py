@@ -1,4 +1,3 @@
-# type: ignore
 # isort: dont-add-imports
 
 from fastapi import APIRouter

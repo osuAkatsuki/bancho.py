@@ -9,7 +9,6 @@ from sqlalchemy import Column
 from sqlalchemy import DateTime
 from sqlalchemy import Integer
 from sqlalchemy import func
-from sqlalchemy import or_
 from sqlalchemy import select
 from sqlalchemy.dialects.mysql import Insert as MysqlInsert
 from sqlalchemy.dialects.mysql import insert as mysql_insert
@@ -127,7 +126,11 @@ async def fetch_any_hardware_matches_for_user(
         oneof_filters.append(ClientHashesTable.uninstall_id == uninstall_id)
         if disk_serial is not None:
             oneof_filters.append(ClientHashesTable.disk_serial == disk_serial)
-        select_stmt = select_stmt.where(or_(*oneof_filters))
+
+        oneof_filter = oneof_filters[0]
+        for filter_ in oneof_filters[1:]:
+            oneof_filter |= filter_
+        select_stmt = select_stmt.where(oneof_filter)
 
     client_hashes = await app.state.services.database.fetch_all(select_stmt)
     return cast(list[ClientHashWithPlayer], client_hashes)

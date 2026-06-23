@@ -4,6 +4,8 @@ import functools
 from enum import IntFlag
 from enum import unique
 
+from typing_extensions import override
+
 from app.utils import escape_enum
 from app.utils import pymysql_encode
 
@@ -44,12 +46,12 @@ class Mods(IntFlag):
     SCOREV2 = 1 << 29
     MIRROR = 1 << 30
 
-    @functools.cache
+    @override
     def __repr__(self) -> str:
         if self.value == Mods.NOMOD:
             return "NM"
 
-        mod_str = []
+        mod_str: list[str] = []
         _dict = mod2modstr_dict  # global
 
         for mod in Mods:

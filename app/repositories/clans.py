@@ -17,7 +17,7 @@ from sqlalchemy import update
 
 import app.state.services
 from app._typing import UNSET
-from app._typing import _UnsetSentinel
+from app._typing import Unset
 from app.repositories import Base
 
 
@@ -124,17 +124,17 @@ async def fetch_many(
 
 async def partial_update(
     id: int,
-    name: str | _UnsetSentinel = UNSET,
-    tag: str | _UnsetSentinel = UNSET,
-    owner: int | _UnsetSentinel = UNSET,
+    name: str | Unset = UNSET,
+    tag: str | Unset = UNSET,
+    owner: int | Unset = UNSET,
 ) -> Clan | None:
     """Update a clan in the database."""
     update_stmt = update(ClansTable).where(ClansTable.id == id)
-    if not isinstance(name, _UnsetSentinel):
+    if not isinstance(name, Unset):
         update_stmt = update_stmt.values(name=name)
-    if not isinstance(tag, _UnsetSentinel):
+    if not isinstance(tag, Unset):
         update_stmt = update_stmt.values(tag=tag)
-    if not isinstance(owner, _UnsetSentinel):
+    if not isinstance(owner, Unset):
         update_stmt = update_stmt.values(owner=owner)
 
     await app.state.services.database.execute(update_stmt)

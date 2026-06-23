@@ -6,6 +6,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.base import RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import Response
+from typing_extensions import override
 
 from app.logging import Ansi
 from app.logging import log
@@ -13,6 +14,7 @@ from app.logging import magnitude_fmt_time
 
 
 class MetricsMiddleware(BaseHTTPMiddleware):
+    @override
     async def dispatch(
         self,
         request: Request,

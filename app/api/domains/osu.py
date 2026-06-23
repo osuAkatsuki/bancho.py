@@ -45,7 +45,6 @@ from app.constants import regexes
 from app.constants.beatmap_statuses import RankedStatus
 from app.constants.clientflags import LastFMFlags
 from app.constants.gamemodes import GameMode
-from app.constants.leaderboard_types import LeaderboardType
 from app.constants.mods import Mods
 from app.constants.privileges import Privileges
 from app.constants.score_statuses import SubmissionStatus
@@ -471,8 +470,8 @@ async def osuSearchSetHandler(
     # Get all set data.
     bmapset = await app.state.services.database.fetch_one(
         "SELECT DISTINCT set_id, artist, "
-        "title, status, creator, last_update "
-        f"FROM maps WHERE {k} = :v",
+        + "title, status, creator, last_update "
+        + f"FROM maps WHERE {k} = :v",
         {"v": v},
     )
     if bmapset is None:
@@ -792,7 +791,10 @@ async def getReplay(
 
     # increment replay views for this score
     if score.player is not None and player.id != score.player.id:
-        app.state.loop.create_task(score.increment_replay_views())  # type: ignore[unused-awaitable]
+        app.utils.create_background_task(
+            score.increment_replay_views(),
+            loop=app.state.loop,
+        )
 
     return FileResponse(file)
 
@@ -1094,7 +1096,7 @@ async def osuComment(
 
             log(
                 f"User {player} attempted to use a coloured comment without "
-                "supporter status. Submitting comment without a colour.",
+                + "supporter status. Submitting comment without a colour.",
             )
 
         # insert into sql

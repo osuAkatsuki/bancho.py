@@ -6,7 +6,6 @@ import hashlib
 import struct
 from pathlib import Path as SystemPath
 from typing import Literal
-from typing import cast
 
 from fastapi import APIRouter
 from fastapi import Depends
@@ -68,15 +67,15 @@ DATETIME_OFFSET = 0x89F7FF5F7B58000
 @router.get("/calculate_pp")
 async def api_calculate_pp(
     token: HTTPCredentials | None = Depends(http_bearer_scheme),
-    beatmap_id: int = Query(None, alias="id", min=0, max=2_147_483_647),
-    nkatu: int = Query(None, max=2_147_483_647),
-    ngeki: int = Query(None, max=2_147_483_647),
-    n100: int = Query(None, max=2_147_483_647),
-    n50: int = Query(None, max=2_147_483_647),
+    beatmap_id: int | None = Query(None, alias="id", min=0, max=2_147_483_647),
+    nkatu: int | None = Query(None, max=2_147_483_647),
+    ngeki: int | None = Query(None, max=2_147_483_647),
+    n100: int | None = Query(None, max=2_147_483_647),
+    n50: int | None = Query(None, max=2_147_483_647),
     misses: int = Query(0, max=2_147_483_647),
     mods: int = Query(0, min=0, max=2_147_483_647),
     mode: int = Query(0, min=0, max=11),
-    combo: int = Query(None, max=2_147_483_647),
+    combo: int | None = Query(None, max=2_147_483_647),
     acclist: list[float] = Query([100, 99, 98, 95], alias="acc"),
 ) -> Response:
     """Calculates the PP of a specified map with specified score parameters."""
@@ -85,6 +84,12 @@ async def api_calculate_pp(
         return ORJSONResponse(
             {"status": "Invalid API key."},
             status_code=status.HTTP_401_UNAUTHORIZED,
+        )
+
+    if beatmap_id is None:
+        return ORJSONResponse(
+            {"status": "Missing beatmap id."},
+            status_code=status.HTTP_400_BAD_REQUEST,
         )
 
     beatmap = await Beatmap.from_bid(beatmap_id)
@@ -104,7 +109,7 @@ async def api_calculate_pp(
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
-    scores = []
+    scores: list[ScoreParams] = []
 
     if all(x is None for x in [ngeki, nkatu, n100, n50]):
         scores = [
@@ -154,10 +159,10 @@ async def api_search_players(
     """Search for users on the server by name."""
     rows = await app.state.services.database.fetch_all(
         "SELECT id, name "
-        "FROM users "
-        "WHERE name LIKE COALESCE(:name, name) "
-        "AND priv & 3 = 3 "
-        "ORDER BY id ASC",
+        + "FROM users "
+        + "WHERE name LIKE COALESCE(:name, name) "
+        + "AND priv & 3 = 3 "
+        + "ORDER BY id ASC",
         {"name": f"%{search}%" if search is not None else None},
     )
 
@@ -227,19 +232,13 @@ async def api_get_player_info(
         all_stats = await stats_repo.fetch_many(player_id=resolved_user_id)
 
         for mode_stats in all_stats:
-            rank = cast(
-                int | None,
-                await app.state.services.redis.zrevrank(
-                    f"bancho:leaderboard:{mode_stats['mode']}",
-                    str(resolved_user_id),
-                ),
+            rank = await app.state.services.zrevrank(
+                f"bancho:leaderboard:{mode_stats['mode']}",
+                str(resolved_user_id),
             )
-            country_rank = cast(
-                int | None,
-                await app.state.services.redis.zrevrank(
-                    f"bancho:leaderboard:{mode_stats['mode']}:{resolved_country}",
-                    str(resolved_user_id),
-                ),
+            country_rank = await app.state.services.zrevrank(
+                f"bancho:leaderboard:{mode_stats['mode']}:{resolved_country}",
+                str(resolved_user_id),
             )
 
             # NOTE: this dict-like return is intentional.
@@ -407,11 +406,11 @@ async def api_get_player_scores(
 
     query = [
         "SELECT t.id, t.map_md5, t.score, t.pp, t.acc, t.max_combo, "
-        "t.mods, t.n300, t.n100, t.n50, t.nmiss, t.ngeki, t.nkatu, t.grade, "
-        "t.status, t.mode, t.play_time, t.time_elapsed, t.perfect "
-        "FROM scores t "
-        "INNER JOIN maps b ON t.map_md5 = b.md5 "
-        "WHERE t.userid = :user_id AND t.mode = :mode",
+        + "t.mods, t.n300, t.n100, t.n50, t.nmiss, t.ngeki, t.nkatu, t.grade, "
+        + "t.status, t.mode, t.play_time, t.time_elapsed, t.perfect "
+        + "FROM scores t "
+        + "INNER JOIN maps b ON t.map_md5 = b.md5 "
+        + "WHERE t.userid = :user_id AND t.mode = :mode",
     ]
 
     params: dict[str, object] = {
@@ -525,14 +524,14 @@ async def api_get_player_most_played(
     # fetch & return info from sql
     rows = await app.state.services.database.fetch_all(
         "SELECT m.md5, m.id, m.set_id, m.status, "
-        "m.artist, m.title, m.version, m.creator, COUNT(*) plays "
-        "FROM scores s "
-        "INNER JOIN maps m ON m.md5 = s.map_md5 "
-        "WHERE s.userid = :user_id "
-        "AND s.mode = :mode "
-        "GROUP BY s.map_md5 "
-        "ORDER BY plays DESC "
-        "LIMIT :limit",
+        + "m.artist, m.title, m.version, m.creator, COUNT(*) plays "
+        + "FROM scores s "
+        + "INNER JOIN maps m ON m.md5 = s.map_md5 "
+        + "WHERE s.userid = :user_id "
+        + "AND s.mode = :mode "
+        + "GROUP BY s.map_md5 "
+        + "ORDER BY plays DESC "
+        + "LIMIT :limit",
         {"user_id": player.id, "mode": mode, "limit": limit},
     )
 
@@ -632,17 +631,17 @@ async def api_get_map_scores(
 
     query = [
         "SELECT s.map_md5, s.score, s.pp, s.acc, s.max_combo, s.mods, "
-        "s.n300, s.n100, s.n50, s.nmiss, s.ngeki, s.nkatu, s.grade, s.status, "
-        "s.mode, s.play_time, s.time_elapsed, s.userid, s.perfect, "
-        "u.name player_name, u.country player_country, "
-        "c.id clan_id, c.name clan_name, c.tag clan_tag "
-        "FROM scores s "
-        "INNER JOIN users u ON u.id = s.userid "
-        "LEFT JOIN clans c ON c.id = u.clan_id "
-        "WHERE s.map_md5 = :map_md5 "
-        "AND s.mode = :mode "
-        "AND s.status = 2 "
-        "AND u.priv & 1",
+        + "s.n300, s.n100, s.n50, s.nmiss, s.ngeki, s.nkatu, s.grade, s.status, "
+        + "s.mode, s.play_time, s.time_elapsed, s.userid, s.perfect, "
+        + "u.name player_name, u.country player_country, "
+        + "c.id clan_id, c.name clan_name, c.tag clan_tag "
+        + "FROM scores s "
+        + "INNER JOIN users u ON u.id = s.userid "
+        + "LEFT JOIN clans c ON c.id = u.clan_id "
+        + "WHERE s.map_md5 = :map_md5 "
+        + "AND s.mode = :mode "
+        + "AND s.status = 2 "
+        + "AND u.priv & 1",
     ]
     params: dict[str, object] = {
         "map_md5": bmap.md5,
@@ -726,14 +725,14 @@ async def api_get_replay(
     # TODO: osu_version & life graph in scores tables?
     row = await app.state.services.database.fetch_one(
         "SELECT u.name username, m.md5 map_md5, "
-        "m.artist, m.title, m.version, "
-        "s.mode, s.n300, s.n100, s.n50, s.ngeki, "
-        "s.nkatu, s.nmiss, s.score, s.max_combo, "
-        "s.perfect, s.mods, s.play_time "
-        "FROM scores s "
-        "INNER JOIN users u ON u.id = s.userid "
-        "INNER JOIN maps m ON m.md5 = s.map_md5 "
-        "WHERE s.id = :score_id",
+        + "m.artist, m.title, m.version, "
+        + "s.mode, s.n300, s.n100, s.n50, s.ngeki, "
+        + "s.nkatu, s.nmiss, s.score, s.max_combo, "
+        + "s.perfect, s.mods, s.play_time "
+        + "FROM scores s "
+        + "INNER JOIN users u ON u.id = s.userid "
+        + "INNER JOIN maps m ON m.md5 = s.map_md5 "
+        + "WHERE s.id = :score_id",
         {"score_id": score_id},
     )
     if not row:
@@ -887,14 +886,14 @@ async def api_get_global_leaderboard(
 
     rows = await app.state.services.database.fetch_all(
         "SELECT u.id as player_id, u.name, u.country, s.tscore, s.rscore, "
-        "s.pp, s.plays, s.playtime, s.acc, s.max_combo, "
-        "s.xh_count, s.x_count, s.sh_count, s.s_count, s.a_count, "
-        "c.id as clan_id, c.name as clan_name, c.tag as clan_tag "
-        "FROM stats s "
-        "LEFT JOIN users u USING (id) "
-        "LEFT JOIN clans c ON u.clan_id = c.id "
-        f"WHERE {' AND '.join(query_conditions)} "
-        f"ORDER BY s.{sort} DESC LIMIT :offset, :limit",
+        + "s.pp, s.plays, s.playtime, s.acc, s.max_combo, "
+        + "s.xh_count, s.x_count, s.sh_count, s.s_count, s.a_count, "
+        + "c.id as clan_id, c.name as clan_name, c.tag as clan_tag "
+        + "FROM stats s "
+        + "LEFT JOIN users u USING (id) "
+        + "LEFT JOIN clans c ON u.clan_id = c.id "
+        + f"WHERE {' AND '.join(query_conditions)} "
+        + f"ORDER BY s.{sort} DESC LIMIT :offset, :limit",
         query_parameters | {"offset": offset, "limit": limit},
     )
 
