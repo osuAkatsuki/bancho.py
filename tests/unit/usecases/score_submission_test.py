@@ -872,9 +872,7 @@ async def test_update_public_score_submission_state_does_not_count_failed_pass()
     ]
 
 
-async def test_update_public_score_submission_state_skips_restricted_player() -> (
-    None
-):
+async def test_update_public_score_submission_state_skips_restricted_player() -> None:
     score = _score()
     stats = _mode_data()
     player = _FakePlayer(stats=stats, restricted=True)
