@@ -630,7 +630,7 @@ async def osuSubmitModularSelector(
             app.state.sessions.players.enqueue(app.packets.user_stats(score.player))
 
     replay_data: bytes | None = None
-    stats_result: score_submission_usecases.ScoreSubmissionPersistenceResult
+    persistence_result: score_submission_usecases.ScoreSubmissionPersistenceResult
 
     # hold a lock around (check if submitted, submission) to ensure no duplicates
     # are submitted to the database, and potentially award duplicate score/pp/etc.
@@ -691,7 +691,7 @@ async def osuSubmitModularSelector(
             if app.state.services.datadog:
                 app.state.services.datadog.increment("bancho.submitted_scores_best")  # type: ignore[no-untyped-call]
 
-        stats_result = await score_submission_usecases.persist_score_submission(
+        persistence_result = await score_submission_usecases.persist_score_submission(
             score,
             database=app.state.services.database,
             scores=scores_repo,
@@ -712,7 +712,7 @@ async def osuSubmitModularSelector(
 
     await score_submission_usecases.apply_score_submission_side_effects(
         score,
-        stats_result,
+        persistence_result,
         publish_user_stats=publish_user_stats,
     )
 
@@ -728,24 +728,24 @@ async def osuSubmitModularSelector(
         announce_chan = app.state.sessions.channels.get_by_name("#announce")
         score_submission_usecases.announce_first_place(
             score,
-            previous_first_place_score=stats_result.previous_first_place_score,
+            previous_first_place_score=persistence_result.previous_first_place_score,
             announce_channel=announce_chan,
             domain=app.settings.DOMAIN,
         )
 
     response = await score_submission_usecases.build_score_submission_response(
         score=score,
-        previous_stats=stats_result.previous_stats,
-        current_stats=stats_result.current_stats,
+        previous_stats=persistence_result.previous_stats,
+        current_stats=persistence_result.current_stats,
         domain=app.settings.DOMAIN,
         achievements=achievements_usecases,
         user_achievements=user_achievements_usecases,
-        unlocked_achievements=stats_result.unlocked_achievements,
+        unlocked_achievements=persistence_result.unlocked_achievements,
     )
 
     log(
         f"[{score.mode!r}] {score.player} submitted a score! "
-        f"({score.status!r}, {score.pp:,.2f}pp / {stats_result.current_stats.pp:,}pp)",
+        f"({score.status!r}, {score.pp:,.2f}pp / {persistence_result.current_stats.pp:,}pp)",
         Ansi.LGREEN,
     )
 
