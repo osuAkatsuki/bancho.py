@@ -145,6 +145,24 @@ async def test_fetch_first_place_score_uses_metric_and_ignores_restricted_users(
     }
 
 
+async def test_fetch_one_by_online_checksum_returns_matching_score() -> None:
+    beatmap = await factories.create_map()
+    player = await factories.create_user()
+    score = await factories.create_score(
+        player_id=player["id"],
+        map_md5=beatmap["md5"],
+    )
+
+    fetched_score = await scores_repo.fetch_one_by_online_checksum(
+        score["online_checksum"],
+    )
+    missing_score = await scores_repo.fetch_one_by_online_checksum("missing-checksum")
+
+    assert fetched_score is not None
+    assert fetched_score["id"] == score["id"]
+    assert missing_score is None
+
+
 async def test_fetch_personal_best_leaderboard_rank_ignores_restricted_scores() -> None:
     beatmap = await factories.create_map()
     player = await factories.create_user()

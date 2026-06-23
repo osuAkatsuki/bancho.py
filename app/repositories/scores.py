@@ -289,6 +289,14 @@ async def fetch_first_place_score(
     return cast(FirstPlaceScore | None, first_place_score)
 
 
+async def fetch_one_by_online_checksum(online_checksum: str) -> Score | None:
+    select_stmt = select(*READ_PARAMS).where(
+        ScoresTable.online_checksum == online_checksum,
+    )
+    _score = await app.state.services.database.fetch_one(select_stmt)
+    return cast(Score | None, _score)
+
+
 async def fetch_beatmap_leaderboard_scores(
     *,
     map_md5: str,
