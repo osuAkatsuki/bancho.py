@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import TypedDict
 from typing import cast
 
+import pymysql
 from sqlalchemy import Column
 from sqlalchemy import DateTime
 from sqlalchemy import Index
@@ -29,6 +30,10 @@ from app.repositories import Base
 from app.repositories.clans import ClansTable
 from app.repositories.maps import MapsTable
 from app.repositories.users import UsersTable
+
+
+class DuplicateScoreError(Exception):
+    """Raised when a submitted score already exists."""
 
 
 class ScoresTable(Base):
@@ -211,7 +216,10 @@ async def create(
         perfect=perfect,
         online_checksum=online_checksum,
     )
-    rec_id = await app.state.services.database.execute(insert_stmt)
+    try:
+        rec_id = await app.state.services.database.execute(insert_stmt)
+    except pymysql.err.IntegrityError as exc:
+        raise DuplicateScoreError from exc
 
     select_stmt = select(*READ_PARAMS).where(ScoresTable.id == rec_id)
     _score = await app.state.services.database.fetch_one(select_stmt)
@@ -287,6 +295,14 @@ async def fetch_first_place_score(
 
     first_place_score = await app.state.services.database.fetch_one(select_stmt)
     return cast(FirstPlaceScore | None, first_place_score)
+
+
+async def fetch_one_by_online_checksum(online_checksum: str) -> Score | None:
+    select_stmt = select(*READ_PARAMS).where(
+        ScoresTable.online_checksum == online_checksum,
+    )
+    _score = await app.state.services.database.fetch_one(select_stmt)
+    return cast(Score | None, _score)
 
 
 async def fetch_beatmap_leaderboard_scores(

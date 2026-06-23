@@ -9,6 +9,7 @@ from collections import defaultdict
 from collections.abc import Awaitable
 from collections.abc import Callable
 from collections.abc import Mapping
+from collections.abc import Sequence
 from functools import cache
 from pathlib import Path as SystemPath
 from typing import Any
@@ -53,6 +54,7 @@ from app.logging import log
 from app.objects import models
 from app.objects.beatmap import Beatmap
 from app.objects.beatmap import ensure_osu_file_is_available
+from app.objects.player import ModeData
 from app.objects.player import Player
 from app.objects.score import Score
 from app.repositories import clans as clans_repo
@@ -64,6 +66,7 @@ from app.repositories import ratings as ratings_repo
 from app.repositories import scores as scores_repo
 from app.repositories import stats as stats_repo
 from app.repositories import users as users_repo
+from app.repositories.achievements import Achievement
 from app.usecases import achievements as achievements_usecases
 from app.usecases import score_leaderboards as score_leaderboards_usecases
 from app.usecases import score_submission as score_submission_usecases
@@ -513,6 +516,174 @@ def parse_form_data_score_params(
         )
 
 
+def chart_entry(
+    name: str,
+    before: float | int | None,
+    after: float | int | None,
+) -> str:
+    return f"{name}Before:{before or ''}|{name}After:{after or ''}"
+
+
+def format_achievement_string(file: str, name: str, description: str) -> str:
+    return f"{file}+{name}+{description}"
+
+
+def format_achievements(achievements: Sequence[Achievement]) -> str:
+    return "/".join(
+        format_achievement_string(
+            achievement["file"],
+            achievement["name"],
+            achievement["desc"],
+        )
+        for achievement in achievements
+    )
+
+
+def build_submission_charts(
+    *,
+    score: Score,
+    previous_stats: ModeData,
+    current_stats: ModeData,
+    achievements: Sequence[Achievement],
+    domain: str,
+) -> bytes:
+    assert score.bmap is not None
+    assert score.player is not None
+
+    if score.prev_best:
+        beatmap_ranking_chart_entries = (
+            chart_entry("rank", score.prev_best.rank, score.rank),
+            chart_entry("rankedScore", score.prev_best.score, score.score),
+            chart_entry("totalScore", score.prev_best.score, score.score),
+            chart_entry("maxCombo", score.prev_best.max_combo, score.max_combo),
+            chart_entry("accuracy", round(score.prev_best.acc, 2), round(score.acc, 2)),
+            chart_entry("pp", score.prev_best.pp, score.pp),
+        )
+    else:
+        beatmap_ranking_chart_entries = (
+            chart_entry("rank", None, score.rank),
+            chart_entry("rankedScore", None, score.score),
+            chart_entry("totalScore", None, score.score),
+            chart_entry("maxCombo", None, score.max_combo),
+            chart_entry("accuracy", None, round(score.acc, 2)),
+            chart_entry("pp", None, score.pp),
+        )
+
+    overall_ranking_chart_entries = (
+        chart_entry("rank", previous_stats.rank, current_stats.rank),
+        chart_entry("rankedScore", previous_stats.rscore, current_stats.rscore),
+        chart_entry("totalScore", previous_stats.tscore, current_stats.tscore),
+        chart_entry("maxCombo", previous_stats.max_combo, current_stats.max_combo),
+        chart_entry(
+            "accuracy",
+            round(previous_stats.acc, 2),
+            round(current_stats.acc, 2),
+        ),
+        chart_entry("pp", previous_stats.pp, current_stats.pp),
+    )
+
+    submission_charts = [
+        # beatmap info chart
+        f"beatmapId:{score.bmap.id}",
+        f"beatmapSetId:{score.bmap.set_id}",
+        f"beatmapPlaycount:{score.bmap.plays}",
+        f"beatmapPasscount:{score.bmap.passes}",
+        f"approvedDate:{score.bmap.last_update}",
+        "\n",
+        # beatmap ranking chart
+        "chartId:beatmap",
+        f"chartUrl:{score.bmap.set.url}",
+        "chartName:Beatmap Ranking",
+        *beatmap_ranking_chart_entries,
+        f"onlineScoreId:{score.id}",
+        "\n",
+        # overall ranking chart
+        "chartId:overall",
+        f"chartUrl:https://{domain}/u/{score.player.id}",
+        "chartName:Overall Ranking",
+        *overall_ranking_chart_entries,
+        f"achievements-new:{format_achievements(achievements)}",
+    ]
+
+    return "|".join(submission_charts).encode()
+
+
+def build_score_submission_response(
+    *,
+    score: Score,
+    previous_stats: ModeData,
+    current_stats: ModeData,
+    domain: str,
+    unlocked_achievements: Sequence[Achievement],
+) -> bytes:
+    if not score.passed:  # TODO: check if this is correct
+        return b"error: no"
+
+    assert score.bmap is not None
+    assert score.player is not None
+
+    return build_submission_charts(
+        score=score,
+        previous_stats=previous_stats,
+        current_stats=current_stats,
+        achievements=unlocked_achievements,
+        domain=domain,
+    )
+
+
+def build_score_submission_error_response(
+    error: score_submission_usecases.ScoreSubmissionError,
+) -> bytes:
+    if (
+        error.code
+        is score_submission_usecases.ScoreSubmissionErrorCode.BEATMAP_NOT_FOUND
+    ):
+        return b"error: beatmap"
+    if (
+        error.code
+        is score_submission_usecases.ScoreSubmissionErrorCode.PLAYER_NOT_FOUND
+    ):
+        # Player is not online, return nothing so that their
+        # client will retry submission when they log in.
+        return b""
+    if (
+        error.code
+        is score_submission_usecases.ScoreSubmissionErrorCode.DUPLICATE_SUBMISSION
+    ):
+        return b"error: no"
+
+    raise ValueError(f"Unexpected score submission error: {error.code!r}")
+
+
+async def fetch_score_submission_beatmap(md5: str) -> Beatmap | None:
+    return await Beatmap.from_md5(md5)
+
+
+async def authenticate_score_submitter(
+    username: str,
+    password_md5: str,
+) -> Player | None:
+    return await app.state.sessions.players.from_login(username, password_md5)
+
+
+async def record_score_submission_integrity_failure() -> None:
+    stacktrace = app.utils.get_appropriate_stacktrace()
+    await app.state.services.log_strange_occurrence(stacktrace)
+
+
+def increment_score_submission_metric(metric: str) -> None:
+    if app.state.services.datadog:
+        app.state.services.datadog.increment(metric)  # type: ignore[no-untyped-call]
+
+
+def send_personal_best_notification(player: Player, message: str) -> None:
+    player.enqueue(app.packets.notification(message))
+
+
+def publish_score_submitter_stats(player: Player) -> None:
+    app.state.sessions.players.enqueue(app.packets.user_stats(player))
+
+
 @router.post("/web/osu-submit-modular-selector.php")
 async def osuSubmitModularSelector(
     request: Request,
@@ -559,195 +730,47 @@ async def osuSubmitModularSelector(
         osu_version,
     )
 
-    # fetch map & player
-
-    bmap_md5 = score_data[0]
-    bmap = await Beatmap.from_md5(bmap_md5)
-    if not bmap:
-        # Map does not exist, most likely unsubmitted.
-        return Response(b"error: beatmap")
-
-    # if the client has supporter, a space is appended
-    # but usernames may also end with a space, which must be preserved
-    username = score_data[1]
-    if username[-1] == " ":
-        username = username[:-1]
-
-    player = await app.state.sessions.players.from_login(username, pw_md5)
-    if not player:
-        # Player is not online, return nothing so that their
-        # client will retry submission when they log in.
-        return Response(b"")
-
-    # parse the score from the remaining data
-    score = Score.from_submission(score_data[2:])
-
-    # attach bmap & player
-    score.bmap = bmap
-    score.player = player
-
-    ## perform checksum validation
-
-    try:
-        score_submission_usecases.validate_submission_integrity(
-            client_details=player.client_details,
+    submitted_score = await score_submission_usecases.submit_score(
+        score_submission_usecases.ScoreSubmissionRequest(
+            score_data=score_data,
+            password_md5=pw_md5,
             osu_version=osu_version,
             client_hash=client_hash_decoded,
             unique_ids=unique_ids,
-            score=score,
             storyboard_md5=storyboard_md5,
-            submission_beatmap_md5=bmap_md5,
             updated_beatmap_hash=updated_beatmap_hash,
-        )
-
-    except (ValueError, AssertionError):
-        # NOTE: this is undergoing a temporary trial period,
-        # after which, it will be enabled & perform restrictions.
-        stacktrace = app.utils.get_appropriate_stacktrace()
-        await app.state.services.log_strange_occurrence(stacktrace)
-
-        # await player.restrict(
-        #     admin=app.state.sessions.bot,
-        #     reason="mismatching hashes on score submission",
-        # )
-
-        # refresh their client state
-        # if player.online:
-        #     player.logout()
-
-        # return b"error: ban"
-
-    # we should update their activity no matter
-    # what the result of the score submission is.
-    score.player.update_latest_activity_soon()
-
-    # make sure the player's client displays the correct mode's stats
-    if score.mode != score.player.status.mode:
-        score.player.status.mods = score.mods
-        score.player.status.mode = score.mode
-
-        if not score.player.restricted:
-            app.state.sessions.players.enqueue(app.packets.user_stats(score.player))
-
-    replay_data: bytes | None = None
-    persistence_result: score_submission_usecases.ScoreSubmissionPersistenceResult
-
-    # hold a lock around (check if submitted, submission) to ensure no duplicates
-    # are submitted to the database, and potentially award duplicate score/pp/etc.
-    async with app.state.score_submission_locks[score.client_checksum]:
-        # stop here if this is a duplicate score
-        if await app.state.services.database.fetch_one(
-            "SELECT 1 FROM scores WHERE online_checksum = :checksum",
-            {"checksum": score.client_checksum},
-        ):
-            log(f"{score.player} submitted a duplicate score.", Ansi.LYELLOW)
-            return Response(b"error: no")
-
-        # all data read from submission.
-        # now we can calculate things based on our data.
-        score.acc = score.calculate_accuracy()
-
-        osu_file_available = await ensure_osu_file_is_available(
-            bmap.id,
-            expected_md5=bmap.md5,
-        )
-        if osu_file_available:
-            score.pp, score.sr = score.calculate_performance(bmap.id)
-
-            if score.passed:
-                await score.calculate_status()
-
-                if score.bmap.status != RankedStatus.Pending:
-                    score.rank = await score.calculate_placement()
-            else:
-                score.status = SubmissionStatus.FAILED
-
-        score.time_elapsed = score_time if score.passed else fail_time
-
-        # TODO: re-implement pp caps for non-whitelisted players?
-
-        replay_data = await score_submission_usecases.read_submitted_replay_file(
-            score,
+            score_time=score_time,
+            fail_time=fail_time,
             replay_file=replay_file,
-        )
-        if (
-            replay_data is not None
-            and not score_submission_usecases.replay_data_is_valid(
-                replay_data,
-            )
-        ):
-            await score_submission_usecases.restrict_player_for_missing_replay(
-                score,
-                restriction_admin=app.state.sessions.bot,
-            )
-            replay_data = None
-
-        """ Score submission checks completed; submit the score. """
-
-        if app.state.services.datadog:
-            app.state.services.datadog.increment("bancho.submitted_scores")  # type: ignore[no-untyped-call]
-
-        if score.status == SubmissionStatus.BEST:
-            if app.state.services.datadog:
-                app.state.services.datadog.increment("bancho.submitted_scores_best")  # type: ignore[no-untyped-call]
-
-        persistence_result = await score_submission_usecases.persist_score_submission(
-            score,
-            database=app.state.services.database,
-            scores=scores_repo,
-            stats=stats_repo,
-            maps=maps_repo,
-            achievements=achievements_usecases,
-            user_achievements=user_achievements_usecases,
-        )
-
-    score_submission_usecases.write_replay_file(
-        score,
-        replay_data=replay_data,
+        ),
         replays_path=REPLAYS_PATH,
-    )
-
-    assert score.player is not None
-
-    if persistence_result.should_update_rank:
-        persistence_result.current_stats.rank = await score.player.update_rank(
-            score.mode,
-        )
-
-    if persistence_result.is_public_submission:
-        app.state.sessions.players.enqueue(app.packets.user_stats(score.player))
-
-    score.player.recent_scores[score.mode] = score
-
-    def send_personal_best_notification(player: Player, message: str) -> None:
-        player.enqueue(app.packets.notification(message))
-
-    if score.status == SubmissionStatus.BEST:
-        score_submission_usecases.notify_score_submitter_of_personal_best(
-            score,
-            send_notification=send_personal_best_notification,
-        )
-
-        announce_chan = app.state.sessions.channels.get_by_name("#announce")
-        score_submission_usecases.announce_first_place(
-            score,
-            previous_first_place_score=persistence_result.previous_first_place_score,
-            announce_channel=announce_chan,
-            domain=app.settings.DOMAIN,
-        )
-
-    response = score_submission_usecases.build_score_submission_response(
-        score=score,
-        previous_stats=persistence_result.previous_stats,
-        current_stats=persistence_result.current_stats,
+        restriction_admin=app.state.sessions.bot,
+        fetch_beatmap=fetch_score_submission_beatmap,
+        authenticate_player=authenticate_score_submitter,
+        score_submission_locks=app.state.score_submission_locks,
+        database=app.state.services.database,
+        scores=scores_repo,
+        stats=stats_repo,
+        maps=maps_repo,
+        achievements=achievements_usecases,
+        user_achievements=user_achievements_usecases,
+        ensure_osu_file_is_available=ensure_osu_file_is_available,
+        publish_user_stats=publish_score_submitter_stats,
+        send_personal_best_notification=send_personal_best_notification,
+        announce_channel=app.state.sessions.channels.get_by_name("#announce"),
         domain=app.settings.DOMAIN,
-        unlocked_achievements=persistence_result.unlocked_achievements,
+        increment_metric=increment_score_submission_metric,
+        record_submission_integrity_failure=record_score_submission_integrity_failure,
     )
+    if isinstance(submitted_score, score_submission_usecases.ScoreSubmissionError):
+        return Response(build_score_submission_error_response(submitted_score))
 
-    log(
-        f"[{score.mode!r}] {score.player} submitted a score! "
-        f"({score.status!r}, {score.pp:,.2f}pp / {persistence_result.current_stats.pp:,}pp)",
-        Ansi.LGREEN,
+    response = build_score_submission_response(
+        score=submitted_score.score,
+        previous_stats=submitted_score.previous_stats,
+        current_stats=submitted_score.current_stats,
+        domain=app.settings.DOMAIN,
+        unlocked_achievements=submitted_score.unlocked_achievements,
     )
 
     return Response(response)

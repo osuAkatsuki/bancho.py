@@ -25,6 +25,7 @@ from app.objects.player import OsuVersion
 from app.objects.score import Grade
 from app.objects.score import Score
 from app.repositories.achievements import Achievement
+from app.repositories.scores import DuplicateScoreError
 from app.repositories.scores import FirstPlaceScore
 from app.repositories.scores import ScorePerformanceRow
 from app.repositories.user_achievements import UserAchievement
@@ -150,6 +151,55 @@ def _score() -> Score:
     return score
 
 
+def _score_submission_request(
+    score: Score,
+    *,
+    player: object,
+    client_checksum: str | None = None,
+) -> score_submission.ScoreSubmissionRequest:
+    assert score.bmap is not None
+
+    if client_checksum is None:
+        score.player = player
+        client_checksum = score.compute_online_checksum(
+            osu_version="20240102",
+            osu_client_hash=player.client_details.client_hash,
+            storyboard_checksum="storyboard",
+        )
+
+    return score_submission.ScoreSubmissionRequest(
+        score_data=[
+            score.bmap.md5,
+            f"{player.name} ",
+            client_checksum,
+            str(score.n300),
+            str(score.n100),
+            str(score.n50),
+            str(score.ngeki),
+            str(score.nkatu),
+            str(score.nmiss),
+            str(score.score),
+            str(score.max_combo),
+            str(score.perfect),
+            score.grade.name,
+            str(int(score.mods)),
+            str(score.passed),
+            str(score.mode.as_vanilla),
+            score.client_time.strftime("%y%m%d%H%M%S"),
+            "20240102",
+        ],
+        password_md5="password-md5",
+        osu_version="20240102",
+        client_hash=player.client_details.client_hash,
+        unique_ids="unique1|unique2",
+        storyboard_md5="storyboard",
+        updated_beatmap_hash=score.bmap.md5,
+        score_time=13_358,
+        fail_time=0,
+        replay_file=_FakeReplayFile(b"x" * score_submission.MIN_REPLAY_SIZE),
+    )
+
+
 def _grade_counts(
     *,
     xh: int = 0,
@@ -192,34 +242,6 @@ def _mode_data(
         rank=rank,
         grades=grades if grades is not None else _grade_counts(),
     )
-
-
-def _stats() -> tuple[ModeData, ModeData]:
-    previous = ModeData(
-        tscore=0,
-        rscore=0,
-        pp=0,
-        acc=0.0,
-        plays=0,
-        playtime=0,
-        max_combo=0,
-        total_hits=0,
-        rank=0,
-        grades={},
-    )
-    current = ModeData(
-        tscore=26_810,
-        rscore=26_810,
-        pp=11,
-        acc=81.94,
-        plays=1,
-        playtime=13,
-        max_combo=52,
-        total_hits=102,
-        rank=1,
-        grades={},
-    )
-    return previous, current
 
 
 class _FakeReplayFile:
@@ -668,19 +690,88 @@ class _FakeDatabaseTransactions:
         return transaction
 
 
+class _FakeScoreSubmissionLock:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    async def __aenter__(self) -> None:
+        self.calls.append("lock_enter")
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        self.calls.append("lock_exit")
+
+
+class _FakeScoreSubmissionLocks:
+    def __init__(self, lock: _FakeScoreSubmissionLock) -> None:
+        self.lock = lock
+        self.online_checksums: list[str] = []
+
+    def __getitem__(self, online_checksum: str) -> _FakeScoreSubmissionLock:
+        self.online_checksums.append(online_checksum)
+        return self.lock
+
+
+class _FakeBeatmapFetcher:
+    def __init__(self, beatmap: object | None) -> None:
+        self.beatmap = beatmap
+        self.calls: list[str] = []
+
+    async def __call__(self, md5: str) -> object | None:
+        self.calls.append(md5)
+        if self.beatmap is None:
+            return None
+        if md5 != self.beatmap.md5:
+            return None
+        return self.beatmap
+
+
+class _FakePlayerAuthenticator:
+    def __init__(self, player: _FakePlayer | None) -> None:
+        self.player = player
+        self.calls: list[tuple[str, str]] = []
+
+    async def __call__(self, username: str, password_md5: str) -> _FakePlayer | None:
+        self.calls.append((username, password_md5))
+        if self.player is None:
+            return None
+        if username != self.player.name or password_md5 != "password-md5":
+            return None
+        return self.player
+
+
+class _FakeOsuFileAvailability:
+    def __init__(self, *, available: bool = True) -> None:
+        self.available = available
+        self.calls: list[tuple[int, str]] = []
+
+    async def __call__(self, beatmap_id: int, *, expected_md5: str) -> bool:
+        self.calls.append((beatmap_id, expected_md5))
+        return self.available
+
+
 class _FakeScoresRepository:
     def __init__(
         self,
         best_scores: list[ScorePerformanceRow] | None = None,
         first_place_score: FirstPlaceScore | None = None,
+        duplicate_score: _CreatedScore | None = None,
+        raise_duplicate_on_create: bool = False,
     ) -> None:
         self.calls: list[str] = []
         self.previous_best_updates: list[_PreviousBestUpdate] = []
         self.created_scores: list[_CreatedScoreFields] = []
         self.best_scores = best_scores if best_scores is not None else []
         self.first_place_score = first_place_score
+        self.duplicate_score = duplicate_score
+        self.raise_duplicate_on_create = raise_duplicate_on_create
         self.fetches: list[_ScorePerformanceFetch] = []
         self.first_place_score_fetches: list[_FirstPlaceScoreFetch] = []
+        self.online_checksum_fetches: list[str] = []
 
     async def create(
         self,
@@ -688,6 +779,8 @@ class _FakeScoresRepository:
     ) -> _CreatedScore:
         self.calls.append("create")
         self.created_scores.append(cast(_CreatedScoreFields, score_fields))
+        if self.raise_duplicate_on_create:
+            raise DuplicateScoreError
         return {"id": 123}
 
     async def mark_previous_best_scores_submitted(
@@ -731,6 +824,14 @@ class _FakeScoresRepository:
             },
         )
         return self.first_place_score
+
+    async def fetch_one_by_online_checksum(
+        self,
+        online_checksum: str,
+    ) -> _CreatedScore | None:
+        self.calls.append("fetch_one_by_online_checksum")
+        self.online_checksum_fetches.append(online_checksum)
+        return self.duplicate_score
 
 
 class _FakeScorePerformanceRepository:
@@ -820,13 +921,34 @@ class _FakePlayer:
         self.id = 6
         self.name = "test-user"
         self.restricted = restricted
+        self.is_online = True
+        self.logged_out = False
+        self.client_details = _client_details()
+        self.status = SimpleNamespace(mode=GameMode.VANILLA_OSU, mods=Mods.NOMOD)
         self.stats = {GameMode.RELAX_OSU: stats}
         self.recent_scores: dict[GameMode, Score] = {}
         self.updated_rank_modes: list[GameMode] = []
+        self.latest_activity_updates = 0
+        self.restriction_reasons: list[str] = []
+        self.restriction_admins: list[object] = []
+
+    def __repr__(self) -> str:
+        return f"<{self.name} ({self.id})>"
+
+    def update_latest_activity_soon(self) -> None:
+        self.latest_activity_updates += 1
 
     async def update_rank(self, mode: GameMode) -> int:
         self.updated_rank_modes.append(mode)
         return 7
+
+    async def restrict(self, admin: object, reason: str) -> None:
+        self.restriction_admins.append(admin)
+        self.restriction_reasons.append(reason)
+
+    def logout(self) -> None:
+        self.logged_out = True
+        self.is_online = False
 
 
 async def test_persist_submitted_score_demotes_previous_best_before_creating_score() -> (
@@ -1195,29 +1317,400 @@ async def test_persist_score_submission_restores_memory_state_on_failure() -> No
     assert player.recent_scores[GameMode.RELAX_OSU] is previous_recent_score
 
 
+async def test_submit_score_orchestrates_submission_side_effects(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    score = _score()
+    score.id = None
+    stats = _mode_data(
+        rscore=1_000,
+        max_combo=40,
+        grades=_grade_counts(),
+    )
+    player = _FakePlayer(stats=stats)
+    score.bmap.plays = 1
+    score.bmap.passes = 1
+    request = _score_submission_request(score, player=player)
+
+    performance_calls: list[int] = []
+
+    def calculate_performance(self: Score, beatmap_id: int) -> tuple[float, float]:
+        performance_calls.append(beatmap_id)
+        return 10.448, 4.2
+
+    async def calculate_status(self: Score) -> None:
+        self.status = SubmissionStatus.BEST
+
+    async def calculate_placement(self: Score) -> int:
+        return 1
+
+    monkeypatch.setattr(Score, "calculate_performance", calculate_performance)
+    monkeypatch.setattr(Score, "calculate_status", calculate_status)
+    monkeypatch.setattr(Score, "calculate_placement", calculate_placement)
+
+    lock = _FakeScoreSubmissionLock()
+    locks = _FakeScoreSubmissionLocks(lock)
+    beatmap_fetcher = _FakeBeatmapFetcher(score.bmap)
+    player_authenticator = _FakePlayerAuthenticator(player)
+    osu_file_availability = _FakeOsuFileAvailability()
+    database = _FakeDatabaseTransactions()
+    scores = _FakeScoresRepository(
+        best_scores=[
+            {"pp": 100.0, "acc": 98.0},
+            {"pp": 50.0, "acc": 95.0},
+        ],
+        first_place_score={"id": 9, "name": "old-user"},
+    )
+    stats_repo = _FakeStatsRepository()
+    maps = _FakeMapsRepository()
+    user_achievements = _FakeUserAchievements()
+    published_stats: list[object] = []
+    notifications: list[tuple[object, str]] = []
+    metrics: list[str] = []
+    integrity_failures = 0
+    announce_channel = _FakeAnnounceChannel()
+
+    async def record_submission_integrity_failure() -> None:
+        nonlocal integrity_failures
+        integrity_failures += 1
+
+    result = await score_submission.submit_score(
+        request,
+        replays_path=tmp_path,
+        restriction_admin=player,
+        fetch_beatmap=beatmap_fetcher,
+        authenticate_player=player_authenticator,
+        score_submission_locks=locks,
+        database=database,
+        scores=scores,
+        stats=stats_repo,
+        maps=maps,
+        achievements=_FakeAchievements(),
+        user_achievements=user_achievements,
+        ensure_osu_file_is_available=osu_file_availability,
+        publish_user_stats=published_stats.append,
+        send_personal_best_notification=lambda player, message: notifications.append(
+            (player, message),
+        ),
+        announce_channel=announce_channel,
+        domain="osu.cmyui.xyz",
+        increment_metric=metrics.append,
+        record_submission_integrity_failure=record_submission_integrity_failure,
+    )
+
+    assert isinstance(result, score_submission.SubmittedScore)
+    submitted_score = result.score
+    assert integrity_failures == 0
+    assert beatmap_fetcher.calls == ["1cf5b2c2edfafd055536d2cefcb89c0e"]
+    assert player_authenticator.calls == [("test-user", "password-md5")]
+    assert player.latest_activity_updates == 1
+    assert player.status.mode == GameMode.RELAX_OSU
+    assert player.status.mods == Mods.HIDDEN | Mods.RELAX
+    assert lock.calls == ["lock_enter", "lock_exit"]
+    assert locks.online_checksums == [request.score_data[2]]
+    assert scores.online_checksum_fetches == [request.score_data[2]]
+    assert osu_file_availability.calls == [
+        (315, "1cf5b2c2edfafd055536d2cefcb89c0e"),
+    ]
+    assert performance_calls == [315]
+    assert metrics == ["bancho.submitted_scores", "bancho.submitted_scores_best"]
+    assert database.calls == ["transaction", "transaction_enter", "transaction_exit"]
+    assert submitted_score.id == 123
+    assert (
+        tmp_path / "123.osr"
+    ).read_bytes() == b"x" * score_submission.MIN_REPLAY_SIZE
+    assert result.score_id == 123
+    assert result.previous_stats.plays == 0
+    assert result.current_stats.rank == 7
+    assert [achievement["id"] for achievement in result.unlocked_achievements] == [1]
+    assert player.updated_rank_modes == [GameMode.RELAX_OSU]
+    assert published_stats == [player, player]
+    assert player.recent_scores[GameMode.RELAX_OSU] is submitted_score
+    assert notifications == [(player, "You achieved #1! (10.45pp)")]
+    assert announce_channel.messages == [
+        (
+            "\x01ACTION achieved #1 on [https://osu.cmyui.xyz/b/315 test map] "
+            "+HDRX with 81.94% for 10.45pp. "
+            "(Previous #1: [https://osu.cmyui.xyz/u/9 old-user])",
+            submitted_score.player,
+            True,
+        ),
+    ]
+
+
+async def test_submit_score_rejects_duplicate_inside_submission_lock(tmp_path) -> None:
+    score = _score()
+    score.id = None
+    stats = _mode_data()
+    player = _FakePlayer(stats=stats)
+    request = _score_submission_request(score, player=player)
+    lock = _FakeScoreSubmissionLock()
+    locks = _FakeScoreSubmissionLocks(lock)
+    scores = _FakeScoresRepository(duplicate_score={"id": 123})
+    metrics: list[str] = []
+
+    async def record_submission_integrity_failure() -> None:
+        raise AssertionError("valid integrity should not be logged")
+
+    result = await score_submission.submit_score(
+        request,
+        replays_path=tmp_path,
+        restriction_admin=player,
+        fetch_beatmap=_FakeBeatmapFetcher(score.bmap),
+        authenticate_player=_FakePlayerAuthenticator(player),
+        score_submission_locks=locks,
+        database=_FakeDatabaseTransactions(),
+        scores=scores,
+        stats=_FakeStatsRepository(),
+        maps=_FakeMapsRepository(),
+        achievements=_FakeAchievements(),
+        user_achievements=_FakeUserAchievements(),
+        ensure_osu_file_is_available=_FakeOsuFileAvailability(),
+        publish_user_stats=lambda player: None,
+        send_personal_best_notification=lambda player, message: None,
+        announce_channel=_FakeAnnounceChannel(),
+        domain="osu.cmyui.xyz",
+        increment_metric=metrics.append,
+        record_submission_integrity_failure=record_submission_integrity_failure,
+    )
+
+    assert result == score_submission.ScoreSubmissionError(
+        code=score_submission.ScoreSubmissionErrorCode.DUPLICATE_SUBMISSION,
+        user_message="Score has already been submitted.",
+    )
+    assert lock.calls == ["lock_enter", "lock_exit"]
+    assert locks.online_checksums == [request.score_data[2]]
+    assert scores.online_checksum_fetches == [request.score_data[2]]
+    assert request.replay_file.read_count == 0
+    assert metrics == []
+
+
+async def test_submit_score_maps_duplicate_insert_to_duplicate_submission(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    score = _score()
+    score.id = None
+    player = _FakePlayer(stats=_mode_data())
+    request = _score_submission_request(score, player=player)
+
+    def calculate_performance(self: Score, beatmap_id: int) -> tuple[float, float]:
+        return 10.448, 4.2
+
+    async def calculate_status(self: Score) -> None:
+        self.status = SubmissionStatus.SUBMITTED
+
+    async def calculate_placement(self: Score) -> int:
+        return 2
+
+    monkeypatch.setattr(Score, "calculate_performance", calculate_performance)
+    monkeypatch.setattr(Score, "calculate_status", calculate_status)
+    monkeypatch.setattr(Score, "calculate_placement", calculate_placement)
+
+    lock = _FakeScoreSubmissionLock()
+    locks = _FakeScoreSubmissionLocks(lock)
+    database = _FakeDatabaseTransactions()
+    scores = _FakeScoresRepository(raise_duplicate_on_create=True)
+    metrics: list[str] = []
+
+    async def record_submission_integrity_failure() -> None:
+        raise AssertionError("valid integrity should not be logged")
+
+    result = await score_submission.submit_score(
+        request,
+        replays_path=tmp_path,
+        restriction_admin=player,
+        fetch_beatmap=_FakeBeatmapFetcher(score.bmap),
+        authenticate_player=_FakePlayerAuthenticator(player),
+        score_submission_locks=locks,
+        database=database,
+        scores=scores,
+        stats=_FakeStatsRepository(),
+        maps=_FakeMapsRepository(),
+        achievements=_FakeAchievements(),
+        user_achievements=_FakeUserAchievements(),
+        ensure_osu_file_is_available=_FakeOsuFileAvailability(),
+        publish_user_stats=lambda player: None,
+        send_personal_best_notification=lambda player, message: None,
+        announce_channel=_FakeAnnounceChannel(),
+        domain="osu.cmyui.xyz",
+        increment_metric=metrics.append,
+        record_submission_integrity_failure=record_submission_integrity_failure,
+    )
+
+    assert result == score_submission.ScoreSubmissionError(
+        code=score_submission.ScoreSubmissionErrorCode.DUPLICATE_SUBMISSION,
+        user_message="Score has already been submitted.",
+    )
+    assert lock.calls == ["lock_enter", "lock_exit"]
+    assert locks.online_checksums == [request.score_data[2]]
+    assert scores.online_checksum_fetches == [request.score_data[2]]
+    assert scores.calls == ["fetch_one_by_online_checksum", "create"]
+    assert database.calls == ["transaction", "transaction_enter", "transaction_exit"]
+    assert database.transactions[0].exception_type is DuplicateScoreError
+    assert player.recent_scores == {}
+    assert not (tmp_path / "123.osr").exists()
+    assert metrics == ["bancho.submitted_scores"]
+
+
+async def test_submit_score_returns_error_when_beatmap_is_missing(tmp_path) -> None:
+    score = _score()
+    player = _FakePlayer(stats=_mode_data())
+    request = _score_submission_request(score, player=player)
+    beatmap_fetcher = _FakeBeatmapFetcher(None)
+    player_authenticator = _FakePlayerAuthenticator(player)
+    metrics: list[str] = []
+
+    async def record_submission_integrity_failure() -> None:
+        raise AssertionError("integrity should not be checked without a beatmap")
+
+    result = await score_submission.submit_score(
+        request,
+        replays_path=tmp_path,
+        restriction_admin=player,
+        fetch_beatmap=beatmap_fetcher,
+        authenticate_player=player_authenticator,
+        score_submission_locks=_FakeScoreSubmissionLocks(_FakeScoreSubmissionLock()),
+        database=_FakeDatabaseTransactions(),
+        scores=_FakeScoresRepository(),
+        stats=_FakeStatsRepository(),
+        maps=_FakeMapsRepository(),
+        achievements=_FakeAchievements(),
+        user_achievements=_FakeUserAchievements(),
+        ensure_osu_file_is_available=_FakeOsuFileAvailability(),
+        publish_user_stats=lambda player: None,
+        send_personal_best_notification=lambda player, message: None,
+        announce_channel=_FakeAnnounceChannel(),
+        domain="osu.cmyui.xyz",
+        increment_metric=metrics.append,
+        record_submission_integrity_failure=record_submission_integrity_failure,
+    )
+
+    assert result == score_submission.ScoreSubmissionError(
+        code=score_submission.ScoreSubmissionErrorCode.BEATMAP_NOT_FOUND,
+        user_message="Beatmap not found.",
+    )
+    assert beatmap_fetcher.calls == ["1cf5b2c2edfafd055536d2cefcb89c0e"]
+    assert player_authenticator.calls == []
+    assert request.replay_file.read_count == 0
+    assert metrics == []
+
+
+async def test_submit_score_returns_error_when_player_authentication_fails(
+    tmp_path,
+) -> None:
+    score = _score()
+    player = _FakePlayer(stats=_mode_data())
+    request = _score_submission_request(score, player=player)
+    player_authenticator = _FakePlayerAuthenticator(None)
+    metrics: list[str] = []
+
+    async def record_submission_integrity_failure() -> None:
+        raise AssertionError("integrity should not be checked without a player")
+
+    result = await score_submission.submit_score(
+        request,
+        replays_path=tmp_path,
+        restriction_admin=player,
+        fetch_beatmap=_FakeBeatmapFetcher(score.bmap),
+        authenticate_player=player_authenticator,
+        score_submission_locks=_FakeScoreSubmissionLocks(_FakeScoreSubmissionLock()),
+        database=_FakeDatabaseTransactions(),
+        scores=_FakeScoresRepository(),
+        stats=_FakeStatsRepository(),
+        maps=_FakeMapsRepository(),
+        achievements=_FakeAchievements(),
+        user_achievements=_FakeUserAchievements(),
+        ensure_osu_file_is_available=_FakeOsuFileAvailability(),
+        publish_user_stats=lambda player: None,
+        send_personal_best_notification=lambda player, message: None,
+        announce_channel=_FakeAnnounceChannel(),
+        domain="osu.cmyui.xyz",
+        increment_metric=metrics.append,
+        record_submission_integrity_failure=record_submission_integrity_failure,
+    )
+
+    assert result == score_submission.ScoreSubmissionError(
+        code=score_submission.ScoreSubmissionErrorCode.PLAYER_NOT_FOUND,
+        user_message="Player could not be authenticated.",
+    )
+    assert player_authenticator.calls == [("test-user", "password-md5")]
+    assert request.replay_file.read_count == 0
+    assert metrics == []
+
+
+async def test_submit_score_logs_integrity_failure_and_continues(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    score = _score()
+    score.id = None
+    stats = _mode_data(
+        rscore=1_000,
+        max_combo=40,
+        grades=_grade_counts(),
+    )
+    player = _FakePlayer(stats=stats)
+    player.status.mode = GameMode.RELAX_OSU
+    score.bmap.awards_ranked_pp = False
+    request = _score_submission_request(
+        score,
+        player=player,
+        client_checksum="wrong-checksum",
+    )
+
+    def calculate_performance(self: Score, beatmap_id: int) -> tuple[float, float]:
+        return 10.448, 4.2
+
+    async def calculate_status(self: Score) -> None:
+        self.status = SubmissionStatus.BEST
+
+    async def calculate_placement(self: Score) -> int:
+        return 1
+
+    monkeypatch.setattr(Score, "calculate_performance", calculate_performance)
+    monkeypatch.setattr(Score, "calculate_status", calculate_status)
+    monkeypatch.setattr(Score, "calculate_placement", calculate_placement)
+
+    integrity_failures = 0
+
+    async def record_submission_integrity_failure() -> None:
+        nonlocal integrity_failures
+        integrity_failures += 1
+
+    result = await score_submission.submit_score(
+        request,
+        replays_path=tmp_path,
+        restriction_admin=player,
+        fetch_beatmap=_FakeBeatmapFetcher(score.bmap),
+        authenticate_player=_FakePlayerAuthenticator(player),
+        score_submission_locks=_FakeScoreSubmissionLocks(_FakeScoreSubmissionLock()),
+        database=_FakeDatabaseTransactions(),
+        scores=_FakeScoresRepository(),
+        stats=_FakeStatsRepository(),
+        maps=_FakeMapsRepository(),
+        achievements=_FakeAchievements(),
+        user_achievements=_FakeUserAchievements(),
+        ensure_osu_file_is_available=_FakeOsuFileAvailability(),
+        publish_user_stats=lambda player: None,
+        send_personal_best_notification=lambda player, message: None,
+        announce_channel=_FakeAnnounceChannel(),
+        domain="osu.cmyui.xyz",
+        increment_metric=lambda metric: None,
+        record_submission_integrity_failure=record_submission_integrity_failure,
+    )
+
+    assert isinstance(result, score_submission.SubmittedScore)
+    assert integrity_failures == 1
+
+
 def test_parse_unique_id_hashes_md5s_submission_unique_ids() -> None:
     unique_id_hashes = score_submission.parse_unique_id_hashes("unique1|unique2")
 
     assert unique_id_hashes == score_submission.UniqueIdHashes(
         unique_id1_md5=_md5("unique1"),
         unique_id2_md5=_md5("unique2"),
-    )
-
-
-def test_chart_entry_formats_optional_before_and_after_values() -> None:
-    assert score_submission.chart_entry("rankedScore", None, 123.45) == (
-        "rankedScoreBefore:|rankedScoreAfter:123.45"
-    )
-
-
-def test_format_achievement_string_uses_client_delimiters() -> None:
-    assert (
-        score_submission.format_achievement_string(
-            "osu-combo-500",
-            "500 Combo",
-            "Achieve a 500 combo.",
-        )
-        == "osu-combo-500+500 Combo+Achieve a 500 combo."
     )
 
 
@@ -1677,126 +2170,3 @@ def test_apply_weighted_performance_stats_calculates_accuracy_and_pp() -> None:
     assert stats.pp == 148
     assert updates["acc"] == pytest.approx(96.5384615385)
     assert updates["pp"] == 148
-
-
-def test_build_submission_charts_formats_osu_client_response() -> None:
-    score = _score()
-    previous_stats, current_stats = _stats()
-    achievements = [
-        {
-            "id": 1,
-            "file": "osu-skill-pass-4",
-            "name": "Insanity Approaches",
-            "desc": "You're not twitching, you're just ready.",
-            "cond": lambda score, mode_vn: True,
-        },
-        {
-            "id": 2,
-            "file": "all-intro-hidden",
-            "name": "Blindsight",
-            "desc": "I can see just perfectly",
-            "cond": lambda score, mode_vn: True,
-        },
-    ]
-
-    response = score_submission.build_submission_charts(
-        score=score,
-        previous_stats=previous_stats,
-        current_stats=current_stats,
-        achievements=achievements,
-        domain="cmyui.xyz",
-    )
-
-    assert response == (
-        b"beatmapId:315|beatmapSetId:141|beatmapPlaycount:1|beatmapPasscount:1|approvedDate:2014-05-18 15:41:48|\n"
-        b"|chartId:beatmap|chartUrl:https://osu.cmyui.xyz/s/141|chartName:Beatmap Ranking|rankBefore:|rankAfter:1|rankedScoreBefore:|rankedScoreAfter:26810|totalScoreBefore:|totalScoreAfter:26810|maxComboBefore:|maxComboAfter:52|accuracyBefore:|accuracyAfter:81.94|ppBefore:|ppAfter:10.448|onlineScoreId:42|\n"
-        b"|chartId:overall|chartUrl:https://cmyui.xyz/u/6|chartName:Overall Ranking|rankBefore:|rankAfter:1|rankedScoreBefore:|rankedScoreAfter:26810|totalScoreBefore:|totalScoreAfter:26810|maxComboBefore:|maxComboAfter:52|accuracyBefore:|accuracyAfter:81.94|ppBefore:|ppAfter:11|achievements-new:osu-skill-pass-4+Insanity Approaches+You're not twitching, you're just ready./all-intro-hidden+Blindsight+I can see just perfectly"
-    )
-
-
-def test_build_submission_charts_includes_previous_best_values() -> None:
-    score = _score()
-    previous_best = Score()
-    previous_best.rank = 4
-    previous_best.score = 20_000
-    previous_best.max_combo = 40
-    previous_best.acc = 80.123
-    previous_best.pp = 9.5
-    score.prev_best = previous_best
-    previous_stats, current_stats = _stats()
-
-    response = score_submission.build_submission_charts(
-        score=score,
-        previous_stats=previous_stats,
-        current_stats=current_stats,
-        achievements=[],
-        domain="cmyui.xyz",
-    )
-
-    assert (
-        b"rankBefore:4|rankAfter:1|rankedScoreBefore:20000|rankedScoreAfter:26810"
-        in response
-    )
-    assert (
-        b"accuracyBefore:80.12|accuracyAfter:81.94|ppBefore:9.5|ppAfter:10.448"
-        in response
-    )
-
-
-def test_build_score_submission_response_returns_error_for_failed_score() -> None:
-    score = _score()
-    score.passed = False
-    previous_stats, current_stats = _stats()
-
-    response = score_submission.build_score_submission_response(
-        score=score,
-        previous_stats=previous_stats,
-        current_stats=current_stats,
-        domain="cmyui.xyz",
-        unlocked_achievements=[],
-    )
-
-    assert response == b"error: no"
-
-
-def test_build_score_submission_response_formats_empty_achievements() -> None:
-    score = _score()
-    previous_stats, current_stats = _stats()
-
-    response = score_submission.build_score_submission_response(
-        score=score,
-        previous_stats=previous_stats,
-        current_stats=current_stats,
-        domain="cmyui.xyz",
-        unlocked_achievements=[],
-    )
-
-    assert b"achievements-new:" in response
-    assert b"osu-skill-pass-4" not in response
-
-
-def test_build_score_submission_response_formats_unlocked_achievements() -> None:
-    score = _score()
-    previous_stats, current_stats = _stats()
-    achievements = [
-        {
-            "id": 1,
-            "file": "osu-skill-pass-4",
-            "name": "Insanity Approaches",
-            "desc": "You're not twitching, you're just ready.",
-            "cond": lambda score, mode_vn: True,
-        },
-    ]
-
-    response = score_submission.build_score_submission_response(
-        score=score,
-        previous_stats=previous_stats,
-        current_stats=current_stats,
-        domain="cmyui.xyz",
-        unlocked_achievements=achievements,
-    )
-
-    assert (
-        b"achievements-new:osu-skill-pass-4+Insanity Approaches+You're not twitching, you're just ready."
-        in response
-    )
