@@ -104,6 +104,7 @@ class ScoreSubmissionLocks(Protocol):
     def __getitem__(
         self,
         online_checksum: str,
+        /,
     ) -> AbstractAsyncContextManager[Any]: ...
 
 
