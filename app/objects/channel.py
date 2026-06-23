@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
+from typing_extensions import override
+
 import app.packets
 import app.state
 from app.constants.privileges import Privileges
@@ -54,6 +56,7 @@ class Channel:
 
         self.players: list[Player] = []
 
+    @override
     def __repr__(self) -> str:
         return f"<{self.real_name}>"
 
@@ -66,13 +69,13 @@ class Channel:
         if not self.read_priv:
             return True
 
-        return priv & self.read_priv != 0
+        return bool(priv & self.read_priv)
 
     def can_write(self, priv: Privileges) -> bool:
         if not self.write_priv:
             return True
 
-        return priv & self.write_priv != 0
+        return bool(priv & self.write_priv)
 
     def send(self, msg: str, sender: Player, to_self: bool = False) -> None:
         """Enqueue `msg` to all appropriate clients from `sender`."""

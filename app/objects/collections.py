@@ -5,11 +5,10 @@ from collections.abc import Iterator
 from collections.abc import Sequence
 from typing import Any
 
-import databases.core
+from typing_extensions import override
 
 import app.settings
 import app.state
-import app.utils
 from app.constants.privileges import ClanPrivileges
 from app.constants.privileges import Privileges
 from app.logging import Ansi
@@ -18,7 +17,6 @@ from app.objects.channel import Channel
 from app.objects.match import Match
 from app.objects.player import Player
 from app.repositories import channels as channels_repo
-from app.repositories import clans as clans_repo
 from app.repositories import users as users_repo
 from app.utils import make_safe_name
 
@@ -26,9 +24,11 @@ from app.utils import make_safe_name
 class Channels(list[Channel]):
     """The currently active chat channels on the server."""
 
+    @override
     def __iter__(self) -> Iterator[Channel]:
         return super().__iter__()
 
+    @override
     def __contains__(self, o: object) -> bool:
         """Check whether internal list contains `o`."""
         # Allow string to be passed to compare vs. name.
@@ -37,6 +37,7 @@ class Channels(list[Channel]):
         else:
             return super().__contains__(o)
 
+    @override
     def __repr__(self) -> str:
         # XXX: we use the "real" name, aka
         # #multi_1 instead of #multiplayer
@@ -51,6 +52,7 @@ class Channels(list[Channel]):
 
         return None
 
+    @override
     def append(self, channel: Channel) -> None:
         """Append `channel` to the list."""
         super().append(channel)
@@ -58,6 +60,7 @@ class Channels(list[Channel]):
         if app.settings.DEBUG:
             log(f"{channel} added to channels list.")
 
+    @override
     def extend(self, channels: Iterable[Channel]) -> None:
         """Extend the list with `channels`."""
         super().extend(channels)
@@ -65,6 +68,7 @@ class Channels(list[Channel]):
         if app.settings.DEBUG:
             log(f"{channels} added to channels list.")
 
+    @override
     def remove(self, channel: Channel) -> None:
         """Remove `channel` from the list."""
         super().remove(channel)
@@ -94,9 +98,11 @@ class Matches(list[Match | None]):
         MAX_MATCHES = 64  # TODO: refactor this out of existence
         super().__init__([None] * MAX_MATCHES)
 
+    @override
     def __iter__(self) -> Iterator[Match | None]:
         return super().__iter__()
 
+    @override
     def __repr__(self) -> str:
         return f'[{", ".join(match.name for match in self if match)}]'
 
@@ -108,6 +114,7 @@ class Matches(list[Match | None]):
 
         return None
 
+    @override
     def remove(self, match: Match | None) -> None:
         """Remove `match` from the list."""
         for i, _m in enumerate(self):
@@ -128,15 +135,18 @@ class Players(list[Player]):
         self._by_id: dict[int, Player] = {}
         self._by_name: dict[str, Player] = {}
 
+    @override
     def __iter__(self) -> Iterator[Player]:
         return super().__iter__()
 
+    @override
     def __contains__(self, player: object) -> bool:
         if isinstance(player, str):
             return make_safe_name(player) in self._by_name
         else:
             return super().__contains__(player)
 
+    @override
     def __repr__(self) -> str:
         return f'[{", ".join(map(repr, self))}]'
 
@@ -261,6 +271,7 @@ class Players(list[Player]):
 
         return None
 
+    @override
     def append(self, player: Player) -> None:
         """Append `player` to the list."""
         if player in self:
@@ -273,6 +284,7 @@ class Players(list[Player]):
         self._by_id[player.id] = player
         self._by_name[player.safe_name] = player
 
+    @override
     def remove(self, player: Player) -> None:
         """Remove `player` from the list."""
         if player not in self:

@@ -16,7 +16,7 @@ from sqlalchemy.dialects.mysql import TINYINT
 
 import app.state.services
 from app._typing import UNSET
-from app._typing import _UnsetSentinel
+from app._typing import Unset
 from app.repositories import Base
 
 
@@ -146,21 +146,21 @@ async def fetch_many(
 
 async def partial_update(
     name: str,
-    topic: str | _UnsetSentinel = UNSET,
-    read_priv: int | _UnsetSentinel = UNSET,
-    write_priv: int | _UnsetSentinel = UNSET,
-    auto_join: bool | _UnsetSentinel = UNSET,
+    topic: str | Unset = UNSET,
+    read_priv: int | Unset = UNSET,
+    write_priv: int | Unset = UNSET,
+    auto_join: bool | Unset = UNSET,
 ) -> Channel | None:
     """Update a channel in the database."""
     update_stmt = update(ChannelsTable).where(ChannelsTable.name == name)
 
-    if not isinstance(topic, _UnsetSentinel):
+    if not isinstance(topic, Unset):
         update_stmt = update_stmt.values(topic=topic)
-    if not isinstance(read_priv, _UnsetSentinel):
+    if not isinstance(read_priv, Unset):
         update_stmt = update_stmt.values(read_priv=read_priv)
-    if not isinstance(write_priv, _UnsetSentinel):
+    if not isinstance(write_priv, Unset):
         update_stmt = update_stmt.values(write_priv=write_priv)
-    if not isinstance(auto_join, _UnsetSentinel):
+    if not isinstance(auto_join, Unset):
         update_stmt = update_stmt.values(auto_join=auto_join)
 
     await app.state.services.database.execute(update_stmt)

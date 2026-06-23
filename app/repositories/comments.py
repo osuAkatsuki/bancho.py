@@ -9,9 +9,7 @@ from sqlalchemy import Column
 from sqlalchemy import Enum
 from sqlalchemy import Integer
 from sqlalchemy import String
-from sqlalchemy import and_
 from sqlalchemy import insert
-from sqlalchemy import or_
 from sqlalchemy import select
 from sqlalchemy.dialects.mysql import FLOAT
 
@@ -104,19 +102,17 @@ async def fetch_all_relevant_to_replay(
         select(READ_PARAMS, UsersTable.priv)
         .join(UsersTable, CommentsTable.userid == UsersTable.id)
         .where(
-            or_(
-                and_(
-                    CommentsTable.target_type == TargetType.REPLAY,
-                    CommentsTable.target_id == score_id,
-                ),
-                and_(
-                    CommentsTable.target_type == TargetType.SONG,
-                    CommentsTable.target_id == map_set_id,
-                ),
-                and_(
-                    CommentsTable.target_type == TargetType.BEATMAP,
-                    CommentsTable.target_id == map_id,
-                ),
+            (
+                (CommentsTable.target_type == TargetType.REPLAY)
+                & (CommentsTable.target_id == score_id)
+            )
+            | (
+                (CommentsTable.target_type == TargetType.SONG)
+                & (CommentsTable.target_id == map_set_id)
+            )
+            | (
+                (CommentsTable.target_type == TargetType.BEATMAP)
+                & (CommentsTable.target_id == map_id)
             ),
         )
     )

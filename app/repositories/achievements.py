@@ -7,7 +7,7 @@ from typing import cast
 
 import app.state.services
 from app._typing import UNSET
-from app._typing import _UnsetSentinel
+from app._typing import Unset
 from app.repositories import Base
 
 if TYPE_CHECKING:
@@ -130,20 +130,20 @@ async def fetch_many(
 
 async def partial_update(
     id: int,
-    file: str | _UnsetSentinel = UNSET,
-    name: str | _UnsetSentinel = UNSET,
-    desc: str | _UnsetSentinel = UNSET,
-    cond: str | _UnsetSentinel = UNSET,
+    file: str | Unset = UNSET,
+    name: str | Unset = UNSET,
+    desc: str | Unset = UNSET,
+    cond: str | Unset = UNSET,
 ) -> Achievement | None:
     """Update an existing achievement."""
     update_stmt = update(AchievementsTable).where(AchievementsTable.id == id)
-    if not isinstance(file, _UnsetSentinel):
+    if not isinstance(file, Unset):
         update_stmt = update_stmt.values(file=file)
-    if not isinstance(name, _UnsetSentinel):
+    if not isinstance(name, Unset):
         update_stmt = update_stmt.values(name=name)
-    if not isinstance(desc, _UnsetSentinel):
+    if not isinstance(desc, Unset):
         update_stmt = update_stmt.values(desc=desc)
-    if not isinstance(cond, _UnsetSentinel):
+    if not isinstance(cond, Unset):
         update_stmt = update_stmt.values(cond=cond)
 
     await app.state.services.database.execute(update_stmt)

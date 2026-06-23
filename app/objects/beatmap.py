@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import functools
 import hashlib
 from datetime import datetime
 from datetime import timedelta
@@ -11,10 +10,10 @@ from typing import TypedDict
 import httpx
 from tenacity import retry
 from tenacity.stop import stop_after_attempt
+from typing_extensions import override
 
 import app.settings
 import app.state
-import app.utils
 from app.constants.beatmap_statuses import RankedStatus
 from app.constants.gamemodes import GameMode
 from app.logging import Ansi
@@ -163,7 +162,8 @@ class Beatmap:
       Beatmap._from_md5_sql(md5: str) -> Beatmap | None
       Beatmap._from_bid_sql(bid: int) -> Beatmap | None
 
-      Beatmap._parse_from_osuapi_resp(osuapi_resp: dict[str, object]) -> None
+      Beatmap.from_osuapi_response(osuapi_resp: dict[str, object], ...) -> Beatmap
+      Beatmap.update_from_osuapi_response(osuapi_resp: dict[str, object]) -> None
 
     Note that the BeatmapSet class also provides a similar API.
 
@@ -226,6 +226,7 @@ class Beatmap:
         self.diff = diff
         self.filename = filename
 
+    @override
     def __repr__(self) -> str:
         return self.full_name
 
@@ -332,8 +333,7 @@ class Beatmap:
                 return bmap
 
         if bmap is not None:
-            if bmap.set._cache_expired():
-                await bmap.set._update_if_available()
+            await bmap.set.ensure_fresh()
 
         return bmap
 
@@ -375,8 +375,7 @@ class Beatmap:
                 return bmap
 
         if bmap is not None:
-            if bmap.set._cache_expired():
-                await bmap.set._update_if_available()
+            await bmap.set.ensure_fresh()
 
         return bmap
 
@@ -386,10 +385,30 @@ class Beatmap:
     # if you're really modifying bancho.py by adding new
     # features, or perhaps optimizing parts of the code.
 
-    def _parse_from_osuapi_resp(self, osuapi_resp: dict[str, Any]) -> None:
+    @classmethod
+    def from_osuapi_response(
+        cls,
+        osuapi_resp: dict[str, Any],
+        *,
+        map_set: BeatmapSet,
+        frozen: bool = False,
+        status: RankedStatus | None = None,
+        plays: int = 0,
+        passes: int = 0,
+    ) -> Beatmap:
+        bmap = cls(
+            map_set=map_set,
+            id=int(osuapi_resp["beatmap_id"]),
+            status=status if status is not None else RankedStatus.Pending,
+            frozen=frozen,
+            plays=plays,
+            passes=passes,
+        )
+        bmap.update_from_osuapi_response(osuapi_resp)
+        return bmap
+
+    def update_from_osuapi_response(self, osuapi_resp: dict[str, Any]) -> None:
         """Change internal data with the data in osu!api format."""
-        # NOTE: `self` is not guaranteed to have any attributes
-        #       initialized when this is called.
         self.md5 = osuapi_resp["file_md5"]
         # self.id = int(osuapi_resp['beatmap_id'])
         self.set_id = int(osuapi_resp["beatmapset_id"])
@@ -480,8 +499,7 @@ class BeatmapSet:
       await BeatmapSet._from_bsid_sql(bsid: int) -> BeatmapSet | None
       await BeatmapSet._from_bsid_osuapi(bsid: int) -> BeatmapSet | None
 
-      BeatmapSet._cache_expired() -> bool
-      await BeatmapSet._update_if_available() -> None
+      await BeatmapSet.ensure_fresh() -> None
       await BeatmapSet._save_to_sql() -> None
     """
 
@@ -496,8 +514,9 @@ class BeatmapSet:
         self.maps = maps or []
         self.last_osuapi_check = last_osuapi_check
 
+    @override
     def __repr__(self) -> str:
-        map_names = []
+        map_names: list[str] = []
         for bmap in self.maps:
             name = f"{bmap.artist} - {bmap.title}"
             if name not in map_names:
@@ -517,6 +536,11 @@ class BeatmapSet:
             RankedStatus.Approved,
         )
         return any(bmap.status in leaderboard_having_statuses for bmap in self.maps)
+
+    async def ensure_fresh(self) -> None:
+        """Update the set from the osu!api if the cache is stale."""
+        if self._cache_expired():
+            await self._update_if_available()
 
     def _cache_expired(self) -> bool:
         """Whether the cached version of the set is
@@ -597,7 +621,7 @@ class BeatmapSet:
                     ):
                         # update map from old_maps
                         bmap = old_maps[old_id]
-                        bmap._parse_from_osuapi_resp(new_map)
+                        bmap.update_from_osuapi_response(new_map)
                         updated_maps.append(bmap)
                     else:
                         # map is the same, make no changes
@@ -607,17 +631,7 @@ class BeatmapSet:
             for new_id, new_map in new_maps.items():
                 if new_id not in old_maps:
                     # new map we don't have locally, add it
-                    bmap = Beatmap.__new__(Beatmap)
-                    bmap.id = new_id
-
-                    bmap._parse_from_osuapi_resp(new_map)
-
-                    # (some implementation-specific stuff not given by api)
-                    bmap.frozen = False
-                    bmap.passes = 0
-                    bmap.plays = 0
-
-                    bmap.set = self
+                    bmap = Beatmap.from_osuapi_response(new_map, map_set=self)
                     updated_maps.append(bmap)
 
             # save changes to cache
@@ -641,8 +655,8 @@ class BeatmapSet:
             # update last_osuapi_check
             await app.state.services.database.execute(
                 "REPLACE INTO mapsets "
-                "(id, server, last_osuapi_check) "
-                "VALUES (:id, :server, :last_osuapi_check)",
+                + "(id, server, last_osuapi_check) "
+                + "VALUES (:id, :server, :last_osuapi_check)",
                 {
                     "id": self.id,
                     "server": "osu!",
@@ -684,20 +698,20 @@ class BeatmapSet:
         """Save the object's attributes into the database."""
         await app.state.services.database.execute_many(
             "REPLACE INTO maps ("
-            "md5, id, server, set_id, "
-            "artist, title, version, creator, "
-            "filename, last_update, total_length, "
-            "max_combo, status, frozen, "
-            "plays, passes, mode, bpm, "
-            "cs, od, ar, hp, diff"
-            ") VALUES ("
-            ":md5, :id, :server, :set_id, "
-            ":artist, :title, :version, :creator, "
-            ":filename, :last_update, :total_length, "
-            ":max_combo, :status, :frozen, "
-            ":plays, :passes, :mode, :bpm, "
-            ":cs, :od, :ar, :hp, :diff"
-            ")",
+            + "md5, id, server, set_id, "
+            + "artist, title, version, creator, "
+            + "filename, last_update, total_length, "
+            + "max_combo, status, frozen, "
+            + "plays, passes, mode, bpm, "
+            + "cs, od, ar, hp, diff"
+            + ") VALUES ("
+            + ":md5, :id, :server, :set_id, "
+            + ":artist, :title, :version, :creator, "
+            + ":filename, :last_update, :total_length, "
+            + ":max_combo, :status, :frozen, "
+            + ":plays, :passes, :mode, :bpm, "
+            + ":cs, :od, :ar, :hp, :diff"
+            + ")",
             [
                 {
                     "md5": bmap.md5,
@@ -813,30 +827,28 @@ class BeatmapSet:
             current_maps = {row["id"]: row["status"] for row in res}
 
             for api_bmap in api_response:
-                # newer version available for this map
-                bmap: Beatmap = Beatmap.__new__(Beatmap)
-                bmap.id = int(api_bmap["beatmap_id"])
+                bmap_id = int(api_bmap["beatmap_id"])
 
-                if bmap.id in current_maps:
+                if bmap_id in current_maps:
                     # map is currently frozen, keep it's status.
-                    bmap.status = RankedStatus(current_maps[bmap.id])
-                    bmap.frozen = True
+                    frozen = True
+                    status = RankedStatus(current_maps[bmap_id])
                 else:
-                    bmap.frozen = False
+                    frozen = False
+                    status = None
 
-                bmap._parse_from_osuapi_resp(api_bmap)
-
-                # (some implementation-specific stuff not given by api)
-                bmap.passes = 0
-                bmap.plays = 0
-
-                bmap.set = self
+                bmap = Beatmap.from_osuapi_response(
+                    api_bmap,
+                    map_set=self,
+                    frozen=frozen,
+                    status=status,
+                )
                 self.maps.append(bmap)
 
             await app.state.services.database.execute(
                 "REPLACE INTO mapsets "
-                "(id, server, last_osuapi_check) "
-                "VALUES (:id, :server, :last_osuapi_check)",
+                + "(id, server, last_osuapi_check) "
+                + "VALUES (:id, :server, :last_osuapi_check)",
                 {
                     "id": self.id,
                     "server": "osu!",
@@ -870,8 +882,8 @@ class BeatmapSet:
         # TODO: this can be done less often for certain types of maps,
         # such as ones that're ranked on bancho and won't be updated,
         # and perhaps ones that haven't been updated in a long time.
-        if not did_api_request and bmap_set._cache_expired():
-            await bmap_set._update_if_available()
+        if not did_api_request:
+            await bmap_set.ensure_fresh()
 
         # cache the beatmap set, and beatmaps
         # to be efficient in future requests

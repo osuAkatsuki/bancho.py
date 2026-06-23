@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import ipaddress
-import logging
 import pickle
 import re
 import secrets
@@ -9,16 +8,18 @@ from collections.abc import AsyncGenerator
 from collections.abc import Mapping
 from collections.abc import MutableMapping
 from pathlib import Path
+from typing import Any
 from typing import TypedDict
+from typing import cast
 
 import datadog as datadog_module
 import datadog.threadstats.base as datadog_client
 import httpx
 import pymysql
 from redis import asyncio as aioredis
+from typing_extensions import override
 
 import app.settings
-import app.state
 from app._typing import IPAddress
 from app.adapters.database import Database
 from app.logging import Ansi
@@ -42,11 +43,16 @@ if str(app.settings.DATADOG_API_KEY) and str(app.settings.DATADOG_APP_KEY):
         api_key=str(app.settings.DATADOG_API_KEY),
         app_key=str(app.settings.DATADOG_APP_KEY),
     )
-    datadog = datadog_client.ThreadStats()  # type: ignore[no-untyped-call]
+    datadog = cast(Any, datadog_client.ThreadStats)()
 
 ip_resolver: IPResolver
 
 """ session usecases """
+
+
+async def zrevrank(name: str, value: str) -> int | None:
+    redis_client = cast(Any, redis)
+    return cast(int | None, await redis_client.zrevrank(name, value))
 
 
 class Country(TypedDict):
@@ -245,7 +251,7 @@ async def log_strange_occurrence(obj: object) -> None:
             uploaded = True
             log(
                 "Logged strange occurrence to cmyui's server. "
-                "Thank you for your participation! <3",
+                + "Thank you for your participation! <3",
                 Ansi.LBLUE,
             )
         else:
@@ -270,7 +276,7 @@ async def log_strange_occurrence(obj: object) -> None:
         )
         log(
             "It would be greatly appreciated if you could forward this to the "
-            "bancho.py development team. To do so, please email josh@akatsuki.gg",
+            + "bancho.py development team. To do so, please email josh@akatsuki.gg",
             Ansi.LYELLOW,
         )
 
@@ -284,12 +290,15 @@ class Version:
         self.minor = minor
         self.micro = micro
 
+    @override
     def __repr__(self) -> str:
         return f"{self.major}.{self.minor}.{self.micro}"
 
+    @override
     def __hash__(self) -> int:
         return self.as_tuple.__hash__()
 
+    @override
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Version):
             return NotImplemented
@@ -370,14 +379,14 @@ async def check_for_dependency_updates() -> None:
             updates_available = True
             log(
                 f"{module} has an update available "
-                f"[{current_ver!r} -> {latest_ver!r}]",
+                + f"[{current_ver!r} -> {latest_ver!r}]",
                 Ansi.LMAGENTA,
             )
 
     if updates_available:
         log(
             "Python modules can be updated with "
-            "`python3.11 -m pip install -U <modules>`.",
+            + "`python3.11 -m pip install -U <modules>`.",
             Ansi.LMAGENTA,
         )
 
@@ -387,9 +396,9 @@ async def check_for_dependency_updates() -> None:
 
 async def _get_current_sql_structure_version() -> Version | None:
     """Get the last launched version of the server."""
-    res = await app.state.services.database.fetch_one(
+    res = await database.fetch_one(
         "SELECT ver_major, ver_minor, ver_micro "
-        "FROM startups ORDER BY datetime DESC LIMIT 1",
+        + "FROM startups ORDER BY datetime DESC LIMIT 1",
     )
 
     if res:
@@ -408,9 +417,9 @@ async def run_sql_migrations() -> None:
     if not last_run_migration_version:
         # Migrations have never run before - this is the first time starting the server.
         # We'll insert the current version into the database, so future versions know to migrate.
-        await app.state.services.database.execute(
+        await database.execute(
             "INSERT INTO startups (ver_major, ver_minor, ver_micro, datetime) "
-            "VALUES (:major, :minor, :micro, NOW())",
+            + "VALUES (:major, :minor, :micro, NOW())",
             {
                 "major": software_version.major,
                 "minor": software_version.minor,
@@ -467,22 +476,22 @@ async def run_sql_migrations() -> None:
     # tables implicitly commit: https://dev.mysql.com/doc/refman/5.7/en/implicit-commit.html
     for query in queries:
         try:
-            await app.state.services.database.execute(query)
+            await database.execute(query)
         except pymysql.err.MySQLError as exc:
             log(f"Failed: {query}", Ansi.GRAY)
             log(repr(exc))
             log(
                 "SQL failed to update - unless you've been "
-                "modifying sql and know what caused this, "
-                "please contact @cmyui on Discord.",
+                + "modifying sql and know what caused this, "
+                + "please contact @cmyui on Discord.",
                 Ansi.LRED,
             )
             raise KeyboardInterrupt from exc
     else:
         # all queries executed successfully
-        await app.state.services.database.execute(
+        await database.execute(
             "INSERT INTO startups (ver_major, ver_minor, ver_micro, datetime) "
-            "VALUES (:major, :minor, :micro, NOW())",
+            + "VALUES (:major, :minor, :micro, NOW())",
             {
                 "major": software_version.major,
                 "minor": software_version.minor,

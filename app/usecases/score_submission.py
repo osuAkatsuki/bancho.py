@@ -17,7 +17,7 @@ from typing import Protocol
 from typing import TypedDict
 
 from app._typing import UNSET
-from app._typing import _UnsetSentinel
+from app._typing import Unset
 from app.constants.beatmap_statuses import RankedStatus
 from app.constants.gamemodes import GameMode
 from app.constants.score_statuses import SubmissionStatus
@@ -199,20 +199,20 @@ class StatsRepository(Protocol):
         self,
         player_id: int,
         mode: int,
-        tscore: int | _UnsetSentinel = UNSET,
-        rscore: int | _UnsetSentinel = UNSET,
-        pp: int | _UnsetSentinel = UNSET,
-        plays: int | _UnsetSentinel = UNSET,
-        playtime: int | _UnsetSentinel = UNSET,
-        acc: float | _UnsetSentinel = UNSET,
-        max_combo: int | _UnsetSentinel = UNSET,
-        total_hits: int | _UnsetSentinel = UNSET,
-        replay_views: int | _UnsetSentinel = UNSET,
-        xh_count: int | _UnsetSentinel = UNSET,
-        x_count: int | _UnsetSentinel = UNSET,
-        sh_count: int | _UnsetSentinel = UNSET,
-        s_count: int | _UnsetSentinel = UNSET,
-        a_count: int | _UnsetSentinel = UNSET,
+        tscore: int | Unset = UNSET,
+        rscore: int | Unset = UNSET,
+        pp: int | Unset = UNSET,
+        plays: int | Unset = UNSET,
+        playtime: int | Unset = UNSET,
+        acc: float | Unset = UNSET,
+        max_combo: int | Unset = UNSET,
+        total_hits: int | Unset = UNSET,
+        replay_views: int | Unset = UNSET,
+        xh_count: int | Unset = UNSET,
+        x_count: int | Unset = UNSET,
+        sh_count: int | Unset = UNSET,
+        s_count: int | Unset = UNSET,
+        a_count: int | Unset = UNSET,
     ) -> Mapping[str, Any] | None: ...
 
 
@@ -221,8 +221,8 @@ class MapsRepository(Protocol):
         self,
         id: int,
         *,
-        plays: int | _UnsetSentinel = UNSET,
-        passes: int | _UnsetSentinel = UNSET,
+        plays: int | Unset = UNSET,
+        passes: int | Unset = UNSET,
     ) -> Mapping[str, Any] | None: ...
 
 
@@ -654,8 +654,8 @@ def announce_first_place(
         if score.player.id != previous_first_place_score["id"]:
             ann.append(
                 f"(Previous #1: [https://{domain}/u/"
-                f"{previous_first_place_score['id']} "
-                f"{previous_first_place_score['name']}])",
+                + f"{previous_first_place_score['id']} "
+                + f"{previous_first_place_score['name']}])",
             )
 
     assert announce_channel is not None
@@ -1153,7 +1153,7 @@ async def submit_score(
 
     log(
         f"[{score.mode!r}] {score.player} submitted a score! "
-        f"({score.status!r}, {score.pp:,.2f}pp / {persistence_result.current_stats.pp:,}pp)",
+        + f"({score.status!r}, {score.pp:,.2f}pp / {persistence_result.current_stats.pp:,}pp)",
         Ansi.LGREEN,
     )
 

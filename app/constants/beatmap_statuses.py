@@ -6,6 +6,8 @@ from collections.abc import Mapping
 from enum import IntEnum
 from enum import unique
 
+from typing_extensions import override
+
 from app.utils import escape_enum
 from app.utils import pymysql_encode
 
@@ -29,6 +31,7 @@ class RankedStatus(IntEnum):
     Qualified = 4
     Loved = 5
 
+    @override
     def __str__(self) -> str:
         return {
             self.NotSubmitted: "Unsubmitted",

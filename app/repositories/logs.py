@@ -20,7 +20,7 @@ class LogTable(Base):
     __tablename__ = "logs"
 
     id = Column("id", Integer, nullable=False, primary_key=True, autoincrement=True)
-    _from = Column("from", Integer, nullable=False)
+    from_ = Column("from", Integer, nullable=False)
     to = Column("to", Integer, nullable=False)
     action = Column("action", String(32), nullable=False)
     msg = Column("msg", String(2048, collation="utf8"), nullable=True)
@@ -29,7 +29,7 @@ class LogTable(Base):
 
 READ_PARAMS = (
     LogTable.id,
-    LogTable._from.label("from"),
+    LogTable.from_.label("from"),
     LogTable.to,
     LogTable.action,
     LogTable.msg,

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import app.repositories.user_achievements
 from app._typing import UNSET
-from app._typing import _UnsetSentinel
+from app._typing import Unset
 from app.repositories.user_achievements import UserAchievement
 
 
@@ -15,7 +15,7 @@ async def create(user_id: int, achievement_id: int) -> UserAchievement:
 
 
 async def fetch_many(
-    user_id: int | _UnsetSentinel = UNSET,
+    user_id: int | Unset = UNSET,
     page: int | None = None,
     page_size: int | None = None,
 ) -> list[UserAchievement]:

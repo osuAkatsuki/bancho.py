@@ -122,7 +122,7 @@ async def fetch_many(
         select_stmt = select_stmt.where(IngameLoginsTable.osu_stream == osu_stream)
 
     if page is not None and page_size is not None:
-        select_stmt.limit(page_size).offset((page - 1) * page_size)
+        select_stmt = select_stmt.limit(page_size).offset((page - 1) * page_size)
 
     ingame_logins = await app.state.services.database.fetch_all(select_stmt)
     return cast(list[IngameLogin], ingame_logins)

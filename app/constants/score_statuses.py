@@ -3,6 +3,8 @@ from __future__ import annotations
 from enum import IntEnum
 from enum import unique
 
+from typing_extensions import override
+
 from app.utils import escape_enum
 from app.utils import pymysql_encode
 
@@ -15,6 +17,7 @@ class SubmissionStatus(IntEnum):
     SUBMITTED = 1
     BEST = 2
 
+    @override
     def __repr__(self) -> str:
         return {
             self.FAILED: "Failed",

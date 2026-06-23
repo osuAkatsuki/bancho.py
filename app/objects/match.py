@@ -7,10 +7,14 @@ from datetime import datetime as datetime
 from datetime import timedelta as timedelta
 from enum import IntEnum
 from enum import unique
+from importlib import import_module
 from typing import TYPE_CHECKING
+from typing import Protocol
 from typing import TypedDict
+from typing import cast
 
-import app.packets
+from typing_extensions import override
+
 import app.settings
 import app.state
 from app.constants import regexes
@@ -29,6 +33,16 @@ if TYPE_CHECKING:
 
 
 MAX_MATCH_NAME_LENGTH = 50
+
+
+class PacketWriters(Protocol):
+    def update_match(self, m: Match, send_pw: bool = True) -> bytes: ...
+
+    def match_start(self, m: Match) -> bytes: ...
+
+
+def packets() -> PacketWriters:
+    return cast(PacketWriters, import_module("app.packets"))
 
 
 @unique
@@ -234,6 +248,7 @@ class Match:
         """Return all players with referee permissions."""
         return self.referees | {self.host}
 
+    @override
     def __repr__(self) -> str:
         return f"<{self.name} ({self.id})>"
 
@@ -296,14 +311,16 @@ class Match:
 
     def enqueue_state(self, lobby: bool = True) -> None:
         """Enqueue `self`'s state to players in the match & lobby."""
+        packet_writers = packets()
+
         # TODO: hmm this is pretty bad, writes twice
 
         # send password only to users currently in the match.
-        self.chat.enqueue(app.packets.update_match(self, send_pw=True))
+        self.chat.enqueue(packet_writers.update_match(self, send_pw=True))
 
         lchan = app.state.sessions.channels.get_by_name("#lobby")
         if lobby and lchan and lchan.players:
-            lchan.enqueue(app.packets.update_match(self, send_pw=False))
+            lchan.enqueue(packet_writers.update_match(self, send_pw=False))
 
     def unready_players(self, expected: SlotStatus = SlotStatus.ready) -> None:
         """Unready any players in the `expected` state."""
@@ -319,6 +336,8 @@ class Match:
 
     def start(self) -> None:
         """Start the match for all ready players with the map."""
+        packet_writers = packets()
+
         no_map: list[int] = []
 
         for s in self.slots:
@@ -330,7 +349,7 @@ class Match:
                     no_map.append(s.player.id)
 
         self.in_progress = True
-        self.enqueue(app.packets.match_start(self), immune=no_map, lobby=False)
+        self.enqueue(packet_writers.match_start(self), immune=no_map, lobby=False)
         self.enqueue_state()
 
     def reset_scrim(self) -> None:
@@ -465,7 +484,7 @@ class Match:
 
             msg.append(
                 f"{winner.name} takes the point! ({add_suffix(scores[winner])} "
-                f"[Match avg. {add_suffix(sum(scores.values()) / len(scores))}])",
+                + f"[Match avg. {add_suffix(sum(scores.values()) / len(scores))}])",
             )
 
             wmp = self.match_points[winner]
@@ -531,7 +550,7 @@ class Match:
 
                 msg.append(
                     f"{wname} takes the match, finishing {match_name} "
-                    f"with a score of {wmp} - {lmp}! Congratulations!",
+                    + f"with a score of {wmp} - {lmp}! Congratulations!",
                 )
             else:
                 # no winner, just announce the match points so far.
@@ -540,7 +559,7 @@ class Match:
         if didnt_submit:
             self.chat.send_bot(
                 "If you'd like to perform a rematch, "
-                "please use the `!mp rematch` command.",
+                + "please use the `!mp rematch` command.",
             )
 
         for line in msg:

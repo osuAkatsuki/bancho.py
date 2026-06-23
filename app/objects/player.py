@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import time
 import uuid
 from dataclasses import dataclass
@@ -11,9 +10,8 @@ from enum import unique
 from functools import cached_property
 from typing import TYPE_CHECKING
 from typing import TypedDict
-from typing import cast
 
-import databases.core
+from typing_extensions import override
 
 import app.packets
 import app.settings
@@ -34,11 +32,11 @@ from app.objects.match import Slot
 from app.objects.match import SlotStatus
 from app.objects.score import Grade
 from app.objects.score import Score
-from app.repositories import clans as clans_repo
 from app.repositories import logs as logs_repo
 from app.repositories import stats as stats_repo
 from app.repositories import users as users_repo
 from app.state.services import Geolocation
+from app.utils import create_background_task
 from app.utils import escape_enum
 from app.utils import make_safe_name
 from app.utils import pymysql_encode
@@ -259,7 +257,7 @@ class Player:
             def _noop_enqueue(data: bytes) -> None:
                 pass
 
-            self.enqueue = _noop_enqueue  # type: ignore[method-assign]
+            object.__setattr__(self, "enqueue", _noop_enqueue)
 
         self.away_msg: str | None = None
         self.in_lobby = False
@@ -289,6 +287,7 @@ class Player:
 
         self._packet_queue: list[bytes] = []
 
+    @override
     def __repr__(self) -> str:
         return f"<{self.name} ({self.id})>"
 
@@ -479,7 +478,7 @@ class Player:
         webhook_url = app.settings.DISCORD_AUDIT_LOG_WEBHOOK
         if webhook_url:
             webhook = Webhook(webhook_url, content=log_msg)
-            asyncio.create_task(webhook.post())  # type: ignore[unused-awaitable]
+            create_background_task(webhook.post())
 
         # refresh their client state
         if self.is_online:
@@ -516,7 +515,7 @@ class Player:
         webhook_url = app.settings.DISCORD_AUDIT_LOG_WEBHOOK
         if webhook_url:
             webhook = Webhook(webhook_url, content=log_msg)
-            asyncio.create_task(webhook.post())  # type: ignore[unused-awaitable]
+            create_background_task(webhook.post())
 
         if self.is_online:
             # log the user out if they're offline, this
@@ -911,23 +910,23 @@ class Player:
         if self.restricted:
             return 0
 
-        rank = await app.state.services.redis.zrevrank(
+        rank = await app.state.services.zrevrank(
             f"bancho:leaderboard:{mode.value}",
             str(self.id),
         )
-        return cast(int, rank) + 1 if rank is not None else 0
+        return rank + 1 if rank is not None else 0
 
     async def get_country_rank(self, mode: GameMode) -> int:
         if self.restricted:
             return 0
 
         country = self.geoloc["country"]["acronym"]
-        rank = await app.state.services.redis.zrevrank(
+        rank = await app.state.services.zrevrank(
             f"bancho:leaderboard:{mode.value}:{country}",
             str(self.id),
         )
 
-        return cast(int, rank) + 1 if rank is not None else 0
+        return rank + 1 if rank is not None else 0
 
     async def update_rank(self, mode: GameMode) -> int:
         country = self.geoloc["country"]["acronym"]
@@ -977,7 +976,7 @@ class Player:
             id=self.id,
             latest_activity=int(time.time()),
         )
-        app.state.loop.create_task(task)  # type: ignore[unused-awaitable]
+        create_background_task(task, loop=app.state.loop)
 
     def enqueue(self, data: bytes) -> None:
         """Add data to be sent to the client."""

@@ -4,6 +4,8 @@ import functools
 from enum import IntEnum
 from enum import unique
 
+from typing_extensions import override
+
 from app.constants.mods import Mods
 from app.utils import escape_enum
 from app.utils import pymysql_encode
@@ -56,7 +58,7 @@ class GameMode(IntEnum):
     @classmethod
     @functools.cache
     def valid_gamemodes(cls) -> list[GameMode]:
-        ret = []
+        ret: list[GameMode] = []
         for mode in cls:
             if mode not in (
                 cls.RELAX_MANIA,
@@ -71,5 +73,6 @@ class GameMode(IntEnum):
     def as_vanilla(self) -> int:
         return self.value % 4
 
+    @override
     def __repr__(self) -> str:
         return GAMEMODE_REPR_LIST[self.value]

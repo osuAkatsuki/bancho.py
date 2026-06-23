@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+import asyncio
 import ctypes
 import inspect
 import os
 import socket
 import sys
 from collections.abc import Callable
+from collections.abc import Coroutine
 from pathlib import Path
-from typing import TYPE_CHECKING
 from typing import Any
 from typing import TypedDict
 from typing import TypeVar
@@ -18,9 +19,6 @@ import pymysql
 import app.settings
 from app.logging import Ansi
 from app.logging import log
-
-if TYPE_CHECKING:
-    from app.repositories.users import User
 
 T = TypeVar("T")
 
@@ -34,10 +32,24 @@ _JPEG_JFIF_SIGNATURE = memoryview(b"JFIF\x00")
 _PNG_HEADER = memoryview(b"\x89PNG\r\n\x1a\n")
 _PNG_TRAILER = memoryview(b"\x49END\xae\x42\x60\x82")
 
+_BACKGROUND_TASKS: set[asyncio.Task[Any]] = set()
+
 
 def make_safe_name(name: str) -> str:
     """Return a name safe for usage in sql."""
     return name.lower().replace(" ", "_")
+
+
+def create_background_task(
+    coroutine: Coroutine[Any, Any, Any],
+    *,
+    loop: asyncio.AbstractEventLoop | None = None,
+) -> None:
+    task: asyncio.Task[Any] = (
+        asyncio.create_task(coroutine) if loop is None else loop.create_task(coroutine)
+    )
+    _BACKGROUND_TASKS.add(task)
+    task.add_done_callback(_BACKGROUND_TASKS.discard)
 
 
 def _download_achievement_images_osu(achievements_path: Path) -> bool:
@@ -207,10 +219,8 @@ def ensure_persistent_volumes_are_available() -> None:
 
 
 def is_running_as_admin() -> bool:
-    try:
-        return os.geteuid() == 0  # type: ignore[attr-defined, no-any-return, unused-ignore]
-    except AttributeError:
-        pass
+    if hasattr(os, "geteuid"):
+        return os.geteuid() == 0
 
     try:
         return ctypes.windll.shell32.IsUserAnAdmin() == 1  # type: ignore[attr-defined, no-any-return, unused-ignore]

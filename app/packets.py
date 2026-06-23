@@ -18,6 +18,8 @@ from typing import Any
 from typing import NamedTuple
 from typing import cast
 
+from typing_extensions import override
+
 # from app.objects.beatmap import BeatmapInfo
 
 if TYPE_CHECKING:
@@ -96,6 +98,7 @@ class ClientPackets(IntEnum):
     TOURNAMENT_JOIN_MATCH_CHANNEL = 108
     TOURNAMENT_LEAVE_MATCH_CHANNEL = 109
 
+    @override
     def __repr__(self) -> str:
         return f"<{self.name} ({self.value})>"
 
@@ -162,6 +165,7 @@ class ServerPackets(IntEnum):
     MATCH_ABORT = 106
     SWITCH_TOURNAMENT_SERVER = 107
 
+    @override
     def __repr__(self) -> str:
         return f"<{self.name} ({self.value})>"
 
@@ -263,6 +267,10 @@ class ReplayFrameBundle(NamedTuple):
     raw_data: memoryview  # readonly
 
 
+def _new_int_list() -> list[int]:
+    return []
+
+
 @dataclass
 class MultiplayerMatch:
     id: int = 0
@@ -277,9 +285,9 @@ class MultiplayerMatch:
     map_id: int = 0  # i32
     map_md5: str = ""
 
-    slot_statuses: list[int] = field(default_factory=list)  # i8
-    slot_teams: list[int] = field(default_factory=list)  # i8
-    slot_ids: list[int] = field(default_factory=list)  # i8
+    slot_statuses: list[int] = field(default_factory=_new_int_list)  # i8
+    slot_teams: list[int] = field(default_factory=_new_int_list)  # i8
+    slot_ids: list[int] = field(default_factory=_new_int_list)  # i8
 
     host_id: int = 0  # i32
 
@@ -288,7 +296,7 @@ class MultiplayerMatch:
     team_type: int = 0  # i8
 
     freemods: bool = False  # i8
-    slot_mods: list[int] = field(default_factory=list)  # i32
+    slot_mods: list[int] = field(default_factory=_new_int_list)  # i32
 
     seed: int = 0  # i32
 
@@ -837,7 +845,7 @@ def bot_stats(player: Player) -> bytes:
 
 
 # packet id: 11
-def _user_stats(
+def write_user_stats(
     user_id: int,
     action: int,
     info_text: str,
@@ -878,30 +886,20 @@ def _user_stats(
 
 def user_stats(player: Player) -> bytes:
     gm_stats = player.gm_stats
-    if gm_stats.pp > 0xFFFF:
-        # HACK: if pp is over osu!'s ingame cap,
-        # we can instead display it as ranked score
-        rscore = gm_stats.pp
-        pp = 0
-    else:
-        rscore = gm_stats.rscore
-        pp = gm_stats.pp
-
-    return write(
-        ServerPackets.USER_STATS,
-        (player.id, osuTypes.i32),
-        (player.status.action, osuTypes.u8),
-        (player.status.info_text, osuTypes.string),
-        (player.status.map_md5, osuTypes.string),
-        (player.status.mods, osuTypes.i32),
-        (player.status.mode.as_vanilla, osuTypes.u8),
-        (player.status.map_id, osuTypes.i32),
-        (rscore, osuTypes.i64),
-        (gm_stats.acc / 100.0, osuTypes.f32),
-        (gm_stats.plays, osuTypes.i32),
-        (gm_stats.tscore, osuTypes.i64),
-        (gm_stats.rank, osuTypes.i32),
-        (pp, osuTypes.u16),
+    return write_user_stats(
+        user_id=player.id,
+        action=player.status.action,
+        info_text=player.status.info_text,
+        map_md5=player.status.map_md5,
+        mods=player.status.mods,
+        mode=player.status.mode.as_vanilla,
+        map_id=player.status.map_id,
+        ranked_score=gm_stats.rscore,
+        accuracy=gm_stats.acc,
+        plays=gm_stats.plays,
+        total_score=gm_stats.tscore,
+        global_rank=gm_stats.rank,
+        pp=gm_stats.pp,
     )
 
 
@@ -1147,15 +1145,15 @@ def bot_presence(player: Player) -> bytes:
 
 
 # packet id: 83
-def _user_presence(
+def write_user_presence(
     user_id: int,
     name: str,
     utc_offset: int,
     country_code: int,
     bancho_privileges: int,
     mode: int,
-    latitude: int,
-    longitude: int,
+    latitude: float,
+    longitude: float,
     global_rank: int,
 ) -> bytes:
     return write(
@@ -1172,16 +1170,16 @@ def _user_presence(
 
 
 def user_presence(player: Player) -> bytes:
-    return write(
-        ServerPackets.USER_PRESENCE,
-        (player.id, osuTypes.i32),
-        (player.name, osuTypes.string),
-        (player.utc_offset + 24, osuTypes.u8),
-        (player.geoloc["country"]["numeric"], osuTypes.u8),
-        (player.bancho_priv | (player.status.mode.as_vanilla << 5), osuTypes.u8),
-        (player.geoloc["longitude"], osuTypes.f32),
-        (player.geoloc["latitude"], osuTypes.f32),
-        (player.gm_stats.rank, osuTypes.i32),
+    return write_user_presence(
+        user_id=player.id,
+        name=player.name,
+        utc_offset=player.utc_offset,
+        country_code=player.geoloc["country"]["numeric"],
+        bancho_privileges=player.bancho_priv,
+        mode=player.status.mode.as_vanilla,
+        longitude=player.geoloc["longitude"],
+        latitude=player.geoloc["latitude"],
+        global_rank=player.gm_stats.rank,
     )
 
 

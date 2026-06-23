@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
 from datetime import datetime
 from typing import TypedDict
 from typing import cast
@@ -13,7 +12,6 @@ from sqlalchemy import Integer
 from sqlalchemy import String
 from sqlalchemy import func
 from sqlalchemy import insert
-from sqlalchemy import or_
 from sqlalchemy import select
 from sqlalchemy import update
 from sqlalchemy.dialects.mysql import FLOAT
@@ -21,7 +19,7 @@ from sqlalchemy.dialects.mysql import TINYINT
 
 import app.state.services
 from app._typing import UNSET
-from app._typing import _UnsetSentinel
+from app._typing import Unset
 from app.constants.beatmap_statuses import RankedStatus
 from app.constants.privileges import Privileges
 from app.constants.score_statuses import SubmissionStatus
@@ -343,10 +341,8 @@ async def fetch_beatmap_leaderboard_scores(
         .where(
             ScoresTable.map_md5 == map_md5,
             ScoresTable.status == SubmissionStatus.BEST.value,
-            or_(
-                UsersTable.priv.bitwise_and(Privileges.UNRESTRICTED.value) != 0,
-                UsersTable.id == user_id,
-            ),
+            (UsersTable.priv.bitwise_and(Privileges.UNRESTRICTED.value) != 0)
+            | (UsersTable.id == user_id),
             ScoresTable.mode == mode,
         )
         .order_by(leaderboard_value.desc())
@@ -491,14 +487,14 @@ async def fetch_many(
 
 async def partial_update(
     id: int,
-    pp: float | _UnsetSentinel = UNSET,
-    status: int | _UnsetSentinel = UNSET,
+    pp: float | Unset = UNSET,
+    status: int | Unset = UNSET,
 ) -> Score | None:
     """Update an existing score."""
     update_stmt = update(ScoresTable).where(ScoresTable.id == id)
-    if not isinstance(pp, _UnsetSentinel):
+    if not isinstance(pp, Unset):
         update_stmt = update_stmt.values(pp=pp)
-    if not isinstance(status, _UnsetSentinel):
+    if not isinstance(status, Unset):
         update_stmt = update_stmt.values(status=status)
 
     await app.state.services.database.execute(update_stmt)

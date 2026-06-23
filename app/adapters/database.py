@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
+from typing import Protocol
 from typing import cast
 
 from databases import Database as _Database
 from databases.core import Transaction
+from databases.interfaces import Record
 from sqlalchemy.dialects.mysql.mysqldb import MySQLDialect_mysqldb
 from sqlalchemy.sql.compiler import Compiled
 from sqlalchemy.sql.expression import ClauseElement
@@ -25,9 +28,50 @@ MySQLParams = dict[str, Any] | None
 MySQLQuery = ClauseElement | str
 
 
+def _record_to_row(record: Record) -> MySQLRow:
+    mapping = cast(Mapping[str, Any], getattr(record, "_mapping"))
+    return dict(mapping)
+
+
+class _DatabaseClient(Protocol):
+    async def connect(self) -> None: ...
+
+    async def disconnect(self) -> None: ...
+
+    async def fetch_one(
+        self,
+        query: MySQLQuery,
+        values: MySQLParams = None,
+    ) -> Record | None: ...
+
+    async def fetch_all(
+        self,
+        query: MySQLQuery,
+        values: MySQLParams = None,
+    ) -> list[Record]: ...
+
+    async def fetch_val(
+        self,
+        query: MySQLQuery,
+        values: MySQLParams = None,
+        column: Any = 0,
+    ) -> Any: ...
+
+    async def execute(self, query: MySQLQuery, values: MySQLParams = None) -> Any: ...
+
+    async def execute_many(self, query: str, values: list[MySQLParams]) -> None: ...
+
+    def transaction(
+        self,
+        *,
+        force_rollback: bool = False,
+        **kwargs: Any,
+    ) -> Transaction: ...
+
+
 class Database:
     def __init__(self, url: str) -> None:
-        self._database = _Database(url)
+        self._database = cast(_DatabaseClient, _Database(url))
 
     async def connect(self) -> None:
         await self._database.connect()
@@ -64,7 +108,7 @@ class Database:
                 },
             )
 
-        return dict(row._mapping) if row is not None else None
+        return _record_to_row(row) if row is not None else None
 
     async def fetch_all(
         self,
@@ -88,7 +132,7 @@ class Database:
                 },
             )
 
-        return [dict(row._mapping) for row in rows]
+        return [_record_to_row(row) for row in rows]
 
     async def fetch_val(
         self,

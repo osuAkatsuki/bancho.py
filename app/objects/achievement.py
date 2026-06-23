@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
+from typing_extensions import override
+
 if TYPE_CHECKING:
     from app.objects.score import Score
 
@@ -25,5 +27,6 @@ class Achievement:
 
         self.cond = cond
 
+    @override
     def __repr__(self) -> str:
         return f"{self.file}+{self.name}+{self.desc}"

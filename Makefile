@@ -45,6 +45,7 @@ lint:
 
 type-check:
 	uv run mypy .
+	uv run pyright
 
 install:
 	uv sync --no-install-project

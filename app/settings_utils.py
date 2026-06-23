@@ -1,10 +1,8 @@
 from __future__ import annotations
 
+import logging
 import os
 from datetime import date
-
-from app.logging import Ansi
-from app.logging import log
 
 
 def read_bool(value: str) -> bool:
@@ -33,9 +31,8 @@ def support_deprecated_vars(
                 f'The "{deprecated_name}" config option has been deprecated as of {until.isoformat()} and is no longer supported. Use {new_name} instead.',
             )
 
-        log(
+        logging.warning(
             f'The "{deprecated_name}" config option has been deprecated and will be supported until {until.isoformat()}. Use {new_name} instead.',
-            Ansi.LYELLOW,
         )
         return val2
 

@@ -8,9 +8,10 @@ from enum import unique
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from typing_extensions import override
+
 import app.state
 import app.usecases.performance
-import app.utils
 from app.constants.clientflags import ClientFlags
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
@@ -131,6 +132,7 @@ class Score:
         self.rank: int | None = None
         self.prev_best: Score | None = None
 
+    @override
     def __repr__(self) -> str:
         # TODO: i really need to clean up my reprs
         try:
@@ -279,10 +281,10 @@ class Score:
 
         num_better_scores: int | None = await app.state.services.database.fetch_val(
             "SELECT COUNT(*) AS c FROM scores s "
-            "INNER JOIN users u ON u.id = s.userid "
-            "WHERE s.map_md5 = :map_md5 AND s.mode = :mode "
-            "AND s.status = 2 AND u.priv & 1 "
-            f"AND s.{scoring_metric} > :score",
+            + "INNER JOIN users u ON u.id = s.userid "
+            + "WHERE s.map_md5 = :map_md5 AND s.mode = :mode "
+            + "AND s.status = 2 AND u.priv & 1 "
+            + f"AND s.{scoring_metric} > :score",
             {
                 "map_md5": self.bmap.md5,
                 "mode": self.mode,
@@ -423,8 +425,8 @@ class Score:
         # TODO: apparently cached stats don't store replay views?
         #       need to refactor that to be able to use stats_repo here
         await app.state.services.database.execute(
-            f"UPDATE stats "
-            "SET replay_views = replay_views + 1 "
-            "WHERE id = :user_id AND mode = :mode",
+            "UPDATE stats "
+            + "SET replay_views = replay_views + 1 "
+            + "WHERE id = :user_id AND mode = :mode",
             {"user_id": self.player.id, "mode": self.mode},
         )

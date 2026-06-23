@@ -11,7 +11,7 @@ from sqlalchemy import select
 
 import app.state.services
 from app._typing import UNSET
-from app._typing import _UnsetSentinel
+from app._typing import Unset
 from app.repositories import Base
 
 
@@ -57,16 +57,16 @@ async def create(user_id: int, achievement_id: int) -> UserAchievement:
 
 
 async def fetch_many(
-    user_id: int | _UnsetSentinel = UNSET,
-    achievement_id: int | _UnsetSentinel = UNSET,
+    user_id: int | Unset = UNSET,
+    achievement_id: int | Unset = UNSET,
     page: int | None = None,
     page_size: int | None = None,
 ) -> list[UserAchievement]:
     """Fetch a list of user achievements."""
     select_stmt = select(*READ_PARAMS)
-    if not isinstance(user_id, _UnsetSentinel):
+    if not isinstance(user_id, Unset):
         select_stmt = select_stmt.where(UserAchievementsTable.userid == user_id)
-    if not isinstance(achievement_id, _UnsetSentinel):
+    if not isinstance(achievement_id, Unset):
         select_stmt = select_stmt.where(UserAchievementsTable.achid == achievement_id)
 
     if page and page_size:

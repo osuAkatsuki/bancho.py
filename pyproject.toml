@@ -46,6 +46,7 @@ dependencies = [
     "databases[mysql]>=0.9.0,<0.10",
     "python-json-logger>=4.1.0,<5",
     "anyio>=4.9.0,<5",
+    "typing-extensions>=4.15.0,<5",
 ]
 
 [tool.mypy]
@@ -74,6 +75,7 @@ dev = [
     "mypy==2.1.0",
     "types-pyyaml>=6.0.12.12,<7",
     "sqlalchemy2-stubs>=0.0.2a38,<0.0.3",
+    "pyright==1.1.410",
 ]
 
 [[tool.mypy.overrides]]
@@ -99,6 +101,26 @@ build-backend = "uv_build"
 init_forbid_extra = true
 init_typed = true
 warn_requird_dynamic_aliases = true
+
+[tool.pyright]
+include = ["app"]
+exclude = [
+    ".venv",
+    "coverage",
+]
+stubPath = "typings"
+pythonVersion = "3.11"
+typeCheckingMode = "strict"
+reportCallInDefaultInitializer = "none"
+reportDeprecated = "none"
+reportImplicitOverride = "error"
+reportImplicitStringConcatenation = "error"
+reportImportCycles = "error"
+reportMissingSuperCall = "none"
+reportMissingTypeStubs = "error"
+reportPropertyTypeMismatch = "error"
+reportUninitializedInstanceVariable = "error"
+reportUnnecessaryTypeIgnoreComment = "error"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
