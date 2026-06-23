@@ -46,7 +46,10 @@ def test_from_osuapi_response_initializes_beatmap() -> None:
     assert beatmap.set_id == 141
     assert beatmap.md5 == "60b725f10c9c85c70d97880dfe8191b3"
     assert beatmap.full_name == "Camellia - Exit This Earth's Atomosphere [Another]"
-    assert beatmap.filename == "Camellia - Exit This Earth's Atomosphere (cmyui) [Another].osu"
+    assert (
+        beatmap.filename
+        == "Camellia - Exit This Earth's Atomosphere (cmyui) [Another].osu"
+    )
     assert beatmap.last_update == datetime(2024, 1, 2, 3, 4, 5)
     assert beatmap.total_length == 215
     assert beatmap.max_combo == 1234
