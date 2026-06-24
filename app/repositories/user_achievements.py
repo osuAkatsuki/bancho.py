@@ -72,7 +72,7 @@ class UserAchievementsRepository:
             select_stmt = select_stmt.where(UserAchievementsTable.userid == user_id)
         if not isinstance(achievement_id, _UnsetSentinel):
             select_stmt = select_stmt.where(
-                UserAchievementsTable.achid == achievement_id
+                UserAchievementsTable.achid == achievement_id,
             )
 
         if page and page_size:

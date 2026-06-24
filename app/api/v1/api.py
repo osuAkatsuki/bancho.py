@@ -224,7 +224,7 @@ async def api_get_player_info(
 
         # get all stats
         all_stats = await usecase_dependencies.get_repositories().stats.fetch_many(
-            player_id=resolved_user_id
+            player_id=resolved_user_id,
         )
 
         for mode_stats in all_stats:

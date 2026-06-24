@@ -660,7 +660,7 @@ async def _map(ctx: Context) -> str | None:
             # update all maps in the set
             for _bmap in bmap.set.maps:
                 await repositories.maps.partial_update(
-                    _bmap.id, status=new_status, frozen=True
+                    _bmap.id, status=new_status, frozen=True,
                 )
 
             # make sure cache and db are synced about the newest change
@@ -679,7 +679,7 @@ async def _map(ctx: Context) -> str | None:
         else:
             # update only map
             await repositories.maps.partial_update(
-                bmap.id, status=new_status, frozen=True
+                bmap.id, status=new_status, frozen=True,
             )
 
             # make sure cache and db are synced about the newest change
