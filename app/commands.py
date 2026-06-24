@@ -60,10 +60,10 @@ from app.objects.player import Player
 from app.repositories import clans as clans_repo
 from app.repositories import logs as logs_repo
 from app.repositories import map_requests as map_requests_repo
-from app.repositories import maps as maps_repo
 from app.repositories import tourney_pool_maps as tourney_pool_maps_repo
 from app.repositories import tourney_pools as tourney_pools_repo
 from app.repositories import users as users_repo
+from app.usecases import dependencies as usecase_dependencies
 from app.usecases.performance import ScoreParams
 
 if TYPE_CHECKING:
@@ -653,11 +653,15 @@ async def _map(ctx: Context) -> str | None:
     # for updating cache would be faster?
     # surely this will not scale as well...
 
+    repositories = usecase_dependencies.get_repositories()
+
     async with app.state.services.database.transaction():
         if ctx.args[1] == "set":
             # update all maps in the set
             for _bmap in bmap.set.maps:
-                await maps_repo.partial_update(_bmap.id, status=new_status, frozen=True)
+                await repositories.maps.partial_update(
+                    _bmap.id, status=new_status, frozen=True
+                )
 
             # make sure cache and db are synced about the newest change
             for _bmap in app.state.cache.beatmapset[bmap.set_id].maps:
@@ -667,14 +671,16 @@ async def _map(ctx: Context) -> str | None:
             # select all map ids for clearing map requests.
             modified_beatmap_ids = [
                 row["id"]
-                for row in await maps_repo.fetch_many(
+                for row in await repositories.maps.fetch_many(
                     set_id=bmap.set_id,
                 )
             ]
 
         else:
             # update only map
-            await maps_repo.partial_update(bmap.id, status=new_status, frozen=True)
+            await repositories.maps.partial_update(
+                bmap.id, status=new_status, frozen=True
+            )
 
             # make sure cache and db are synced about the newest change
             if bmap.md5 in app.state.cache.beatmap:

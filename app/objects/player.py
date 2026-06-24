@@ -36,9 +36,8 @@ from app.objects.score import Grade
 from app.objects.score import Score
 from app.repositories import clans as clans_repo
 from app.repositories import logs as logs_repo
-from app.repositories import stats as stats_repo
 from app.repositories import users as users_repo
-from app.state.services import Geolocation
+from app.usecases import dependencies as usecase_dependencies
 from app.utils import escape_enum
 from app.utils import make_safe_name
 from app.utils import pymysql_encode
@@ -47,6 +46,7 @@ if TYPE_CHECKING:
     from app.constants.privileges import ClanPrivileges
     from app.objects.beatmap import Beatmap
     from app.objects.score import Score
+    from app.state.services import Geolocation
 
 
 @unique
@@ -950,7 +950,9 @@ class Player:
 
     async def stats_from_sql_full(self) -> None:
         """Retrieve `self`'s stats (all modes) from sql."""
-        for row in await stats_repo.fetch_many(player_id=self.id):
+        for row in await usecase_dependencies.get_repositories().stats.fetch_many(
+            player_id=self.id,
+        ):
             game_mode = GameMode(row["mode"])
             self.stats[game_mode] = ModeData(
                 tscore=row["tscore"],

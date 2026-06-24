@@ -16,7 +16,7 @@ from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
 from app.constants.score_statuses import SubmissionStatus
 from app.objects.beatmap import Beatmap
-from app.repositories import scores as scores_repo
+from app.usecases import dependencies as usecase_dependencies
 from app.usecases.performance import ScoreParams
 
 if TYPE_CHECKING:
@@ -147,7 +147,7 @@ class Score:
     @classmethod
     async def from_sql(cls, score_id: int) -> Score | None:
         """Create a score object from sql using its scoreid."""
-        rec = await scores_repo.fetch_one(score_id)
+        rec = await usecase_dependencies.get_repositories().scores.fetch_one(score_id)
 
         if rec is None:
             return None
@@ -321,7 +321,7 @@ class Score:
         assert self.player is not None
         assert self.bmap is not None
 
-        recs = await scores_repo.fetch_many(
+        recs = await usecase_dependencies.get_repositories().scores.fetch_many(
             user_id=self.player.id,
             map_md5=self.bmap.md5,
             mode=self.mode,
@@ -421,7 +421,7 @@ class Score:
         assert self.player is not None
 
         # TODO: apparently cached stats don't store replay views?
-        #       need to refactor that to be able to use stats_repo here
+        #       need to refactor that to be able to use StatsRepository here
         await app.state.services.database.execute(
             f"UPDATE stats "
             "SET replay_views = replay_views + 1 "

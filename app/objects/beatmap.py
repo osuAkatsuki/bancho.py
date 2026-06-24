@@ -19,7 +19,7 @@ from app.constants.beatmap_statuses import RankedStatus
 from app.constants.gamemodes import GameMode
 from app.logging import Ansi
 from app.logging import log
-from app.repositories import maps as maps_repo
+from app.usecases import dependencies as usecase_dependencies
 
 # from dataclasses import dataclass
 
@@ -305,7 +305,9 @@ class Beatmap:
 
             if set_id <= 0:
                 # set id not provided - fetch it from the map md5
-                rec = await maps_repo.fetch_one(md5=md5)
+                rec = await usecase_dependencies.get_repositories().maps.fetch_one(
+                    md5=md5,
+                )
 
                 if rec is not None:
                     # set found in db
@@ -348,7 +350,7 @@ class Beatmap:
             # to be efficient, we want to cache the whole set
             # at once rather than caching the individual map
 
-            rec = await maps_repo.fetch_one(id=bid)
+            rec = await usecase_dependencies.get_repositories().maps.fetch_one(id=bid)
 
             if rec is not None:
                 # set found in db
@@ -746,8 +748,9 @@ class BeatmapSet:
             return None
 
         bmap_set = cls(id=bsid, last_osuapi_check=last_osuapi_check)
+        maps = usecase_dependencies.get_repositories().maps
 
-        for row in await maps_repo.fetch_many(set_id=bsid):
+        for row in await maps.fetch_many(set_id=bsid):
             bmap = Beatmap(
                 md5=row["md5"],
                 id=row["id"],
@@ -787,7 +790,7 @@ class BeatmapSet:
                     )
                     .translate(IGNORED_BEATMAP_CHARS)
                 )
-                await maps_repo.partial_update(bmap.id, filename=bmap.filename)
+                await maps.partial_update(bmap.id, filename=bmap.filename)
 
             bmap_set.maps.append(bmap)
 

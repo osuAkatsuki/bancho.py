@@ -13,8 +13,8 @@ from app.api.v2.common.responses import Success
 from app.api.v2.models.players import Player
 from app.api.v2.models.players import PlayerStats
 from app.api.v2.models.players import PlayerStatus
-from app.repositories import stats as stats_repo
 from app.repositories import users as users_repo
+from app.usecases import dependencies as usecase_dependencies
 
 router = APIRouter()
 
@@ -100,7 +100,10 @@ async def get_player_mode_stats(
     player_id: int,
     mode: int,
 ) -> Success[PlayerStats] | Failure:
-    data = await stats_repo.fetch_one(player_id, mode)
+    data = await usecase_dependencies.get_repositories().stats.fetch_one(
+        player_id,
+        mode,
+    )
     if data is None:
         return responses.failure(
             message="Player stats not found.",
@@ -117,12 +120,12 @@ async def get_player_stats(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
 ) -> Success[list[PlayerStats]] | Failure:
-    data = await stats_repo.fetch_many(
+    data = await usecase_dependencies.get_repositories().stats.fetch_many(
         player_id=player_id,
         page=page,
         page_size=page_size,
     )
-    total_stats = await stats_repo.fetch_count(
+    total_stats = await usecase_dependencies.get_repositories().stats.fetch_count(
         player_id=player_id,
     )
 

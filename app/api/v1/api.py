@@ -26,11 +26,10 @@ from app.constants.mods import Mods
 from app.objects.beatmap import Beatmap
 from app.objects.beatmap import ensure_osu_file_is_available
 from app.repositories import clans as clans_repo
-from app.repositories import scores as scores_repo
-from app.repositories import stats as stats_repo
 from app.repositories import tourney_pool_maps as tourney_pool_maps_repo
 from app.repositories import tourney_pools as tourney_pools_repo
 from app.repositories import users as users_repo
+from app.usecases import dependencies as usecase_dependencies
 from app.usecases.performance import ScoreParams
 
 AVATARS_PATH = SystemPath.cwd() / ".data/avatars"
@@ -224,7 +223,9 @@ async def api_get_player_info(
         api_data["stats"] = {}
 
         # get all stats
-        all_stats = await stats_repo.fetch_many(player_id=resolved_user_id)
+        all_stats = await usecase_dependencies.get_repositories().stats.fetch_many(
+            player_id=resolved_user_id
+        )
 
         for mode_stats in all_stats:
             rank = cast(
@@ -682,7 +683,7 @@ async def api_get_score_info(
     score_id: int = Query(..., alias="id", ge=0, le=9_223_372_036_854_775_807),
 ) -> Response:
     """Return information about a given score."""
-    score = await scores_repo.fetch_one(score_id)
+    score = await usecase_dependencies.get_repositories().scores.fetch_one(score_id)
 
     if score is None:
         return ORJSONResponse(

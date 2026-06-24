@@ -175,14 +175,14 @@ async def test_fetch_leaderboard_scores_fetches_personal_best_rank() -> None:
         personal_best_rank=3,
     )
 
-    result = await score_leaderboards.fetch_leaderboard_scores(
+    service = score_leaderboards.ScoreLeaderboardsService(scores=scores)
+    result = await service.fetch_leaderboard_scores(
         leaderboard_type=LeaderboardType.Top,
         map_md5="map-md5",
         mode=0,
         mods=Mods.HIDDEN,
         player=player,
         scoring_metric="score",
-        scores=scores,
     )
 
     assert result.score_rows == [score_row]
@@ -228,14 +228,14 @@ async def test_fetch_leaderboard_scores_skips_personal_best_when_empty() -> None
     )
     scores = _FakeScoresRepository(score_rows=[])
 
-    result = await score_leaderboards.fetch_leaderboard_scores(
+    service = score_leaderboards.ScoreLeaderboardsService(scores=scores)
+    result = await service.fetch_leaderboard_scores(
         leaderboard_type=LeaderboardType.Top,
         map_md5="map-md5",
         mode=0,
         mods=Mods.HIDDEN,
         player=player,
         scoring_metric="score",
-        scores=scores,
     )
 
     assert result.score_rows == []
@@ -254,14 +254,14 @@ async def test_fetch_leaderboard_scores_applies_mods_filter() -> None:
         score_rows=[_beatmap_leaderboard_score(id=10, score=123.45)],
     )
 
-    await score_leaderboards.fetch_leaderboard_scores(
+    service = score_leaderboards.ScoreLeaderboardsService(scores=scores)
+    await service.fetch_leaderboard_scores(
         leaderboard_type=LeaderboardType.Mods,
         map_md5="map-md5",
         mode=4,
         mods=Mods.HIDDEN | Mods.RELAX,
         player=player,
         scoring_metric="pp",
-        scores=scores,
     )
 
     assert scores.leaderboard_fetches[0]["mods"] == (Mods.HIDDEN | Mods.RELAX).value
@@ -279,14 +279,14 @@ async def test_fetch_leaderboard_scores_applies_friends_filter() -> None:
         score_rows=[_beatmap_leaderboard_score(id=10, score=123.45)],
     )
 
-    await score_leaderboards.fetch_leaderboard_scores(
+    service = score_leaderboards.ScoreLeaderboardsService(scores=scores)
+    await service.fetch_leaderboard_scores(
         leaderboard_type=LeaderboardType.Friends,
         map_md5="map-md5",
         mode=4,
         mods=Mods.HIDDEN | Mods.RELAX,
         player=player,
         scoring_metric="pp",
-        scores=scores,
     )
 
     assert scores.leaderboard_fetches[0]["mods"] is None
@@ -304,14 +304,14 @@ async def test_fetch_leaderboard_scores_applies_country_filter() -> None:
         score_rows=[_beatmap_leaderboard_score(id=10, score=123.45)],
     )
 
-    await score_leaderboards.fetch_leaderboard_scores(
+    service = score_leaderboards.ScoreLeaderboardsService(scores=scores)
+    await service.fetch_leaderboard_scores(
         leaderboard_type=LeaderboardType.Country,
         map_md5="map-md5",
         mode=4,
         mods=Mods.HIDDEN | Mods.RELAX,
         player=player,
         scoring_metric="pp",
-        scores=scores,
     )
 
     assert scores.leaderboard_fetches[0]["mods"] is None

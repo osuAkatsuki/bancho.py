@@ -10,7 +10,7 @@ from app.api.v2.common import responses
 from app.api.v2.common.responses import Failure
 from app.api.v2.common.responses import Success
 from app.api.v2.models.scores import Score
-from app.repositories import scores as scores_repo
+from app.usecases import dependencies as usecase_dependencies
 
 router = APIRouter()
 
@@ -25,7 +25,7 @@ async def get_all_scores(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
 ) -> Success[list[Score]] | Failure:
-    scores = await scores_repo.fetch_many(
+    scores = await usecase_dependencies.get_repositories().scores.fetch_many(
         map_md5=map_md5,
         mods=mods,
         status=status,
@@ -34,7 +34,7 @@ async def get_all_scores(
         page=page,
         page_size=page_size,
     )
-    total_scores = await scores_repo.fetch_count(
+    total_scores = await usecase_dependencies.get_repositories().scores.fetch_count(
         map_md5=map_md5,
         mods=mods,
         status=status,
@@ -56,7 +56,7 @@ async def get_all_scores(
 
 @router.get("/scores/{score_id}")
 async def get_score(score_id: int) -> Success[Score] | Failure:
-    data = await scores_repo.fetch_one(id=score_id)
+    data = await usecase_dependencies.get_repositories().scores.fetch_one(id=score_id)
     if data is None:
         return responses.failure(
             message="Score not found.",

@@ -1,8 +1,11 @@
 from __future__ import annotations
 
-from app.repositories import scores as scores_repo
+import app.state.services
 from app.repositories import users as users_repo
+from app.repositories.scores import ScoresRepository
 from tests import factories
+
+scores_repo = ScoresRepository(app.state.services.database)
 
 
 async def test_fetch_beatmap_leaderboard_scores_orders_scores_and_filters_restricted_users() -> (

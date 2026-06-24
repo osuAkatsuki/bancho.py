@@ -61,16 +61,11 @@ from app.repositories import clans as clans_repo
 from app.repositories import comments as comments_repo
 from app.repositories import favourites as favourites_repo
 from app.repositories import mail as mail_repo
-from app.repositories import maps as maps_repo
 from app.repositories import ratings as ratings_repo
-from app.repositories import scores as scores_repo
-from app.repositories import stats as stats_repo
 from app.repositories import users as users_repo
 from app.repositories.achievements import Achievement
-from app.usecases import achievements as achievements_usecases
-from app.usecases import score_leaderboards as score_leaderboards_usecases
+from app.usecases import dependencies as usecase_dependencies
 from app.usecases import score_submission as score_submission_usecases
-from app.usecases import user_achievements as user_achievements_usecases
 
 BEATMAPS_PATH = SystemPath.cwd() / ".data/osu"
 REPLAYS_PATH = SystemPath.cwd() / ".data/osr"
@@ -193,7 +188,9 @@ async def osuGetBeatmapInfo(
     for idx, map_filename in enumerate(form_data.Filenames):
         # try getting the map from sql
 
-        beatmap = await maps_repo.fetch_one(filename=map_filename)
+        beatmap = await usecase_dependencies.get_repositories().maps.fetch_one(
+            filename=map_filename,
+        )
 
         if not beatmap:
             continue
@@ -204,7 +201,7 @@ async def osuGetBeatmapInfo(
         #       (in theory we could make this user-customizable)
         grades = ["N", "N", "N", "N"]
 
-        for score in await scores_repo.fetch_many(
+        for score in await usecase_dependencies.get_repositories().scores.fetch_many(
             map_md5=beatmap["md5"],
             user_id=player.id,
             mode=player.status.mode.as_vanilla,
@@ -730,37 +727,21 @@ async def osuSubmitModularSelector(
         osu_version,
     )
 
-    submitted_score = await score_submission_usecases.submit_score(
-        score_submission_usecases.ScoreSubmissionRequest(
-            score_data=score_data,
-            password_md5=pw_md5,
-            osu_version=osu_version,
-            client_hash=client_hash_decoded,
-            unique_ids=unique_ids,
-            storyboard_md5=storyboard_md5,
-            updated_beatmap_hash=updated_beatmap_hash,
-            score_time=score_time,
-            fail_time=fail_time,
-            replay_file=replay_file,
-        ),
-        replays_path=REPLAYS_PATH,
-        restriction_admin=app.state.sessions.bot,
-        fetch_beatmap=fetch_score_submission_beatmap,
-        authenticate_player=authenticate_score_submitter,
-        score_submission_locks=app.state.score_submission_locks,
-        database=app.state.services.database,
-        scores=scores_repo,
-        stats=stats_repo,
-        maps=maps_repo,
-        achievements=achievements_usecases,
-        user_achievements=user_achievements_usecases,
-        ensure_osu_file_is_available=ensure_osu_file_is_available,
-        publish_user_stats=publish_score_submitter_stats,
-        send_personal_best_notification=send_personal_best_notification,
-        announce_channel=app.state.sessions.channels.get_by_name("#announce"),
-        domain=app.settings.DOMAIN,
-        increment_metric=increment_score_submission_metric,
-        record_submission_integrity_failure=record_score_submission_integrity_failure,
+    submitted_score = (
+        await usecase_dependencies.get_score_submission_service().submit_score(
+            score_submission_usecases.ScoreSubmissionRequest(
+                score_data=score_data,
+                password_md5=pw_md5,
+                osu_version=osu_version,
+                client_hash=client_hash_decoded,
+                unique_ids=unique_ids,
+                storyboard_md5=storyboard_md5,
+                updated_beatmap_hash=updated_beatmap_hash,
+                score_time=score_time,
+                fail_time=fail_time,
+                replay_file=replay_file,
+            ),
+        )
     )
     if isinstance(submitted_score, score_submission_usecases.ScoreSubmissionError):
         return Response(build_score_submission_error_response(submitted_score))
@@ -921,7 +902,7 @@ async def getScores(
             # and we don't have the set id, so we must
             # look it up in sql from the filename.
             map_exists = (
-                await maps_repo.fetch_one(
+                await usecase_dependencies.get_repositories().maps.fetch_one(
                     filename=map_filename,
                 )
                 is not None
@@ -951,14 +932,14 @@ async def getScores(
     # fetch scores & personal best
     # TODO: create a leaderboard cache
     if not requesting_from_editor_song_select:
-        leaderboard_scores = await score_leaderboards_usecases.fetch_leaderboard_scores(
+        score_leaderboards = usecase_dependencies.get_score_leaderboards_service()
+        leaderboard_scores = await score_leaderboards.fetch_leaderboard_scores(
             leaderboard_type=leaderboard_type,
             map_md5=bmap.md5,
             mode=mode,
             mods=mods,
             player=player,
             scoring_metric=scoring_metric,
-            scores=scores_repo,
         )
         score_rows = leaderboard_scores.score_rows
         personal_best_score_row = leaderboard_scores.personal_best_score_row
@@ -1368,7 +1349,9 @@ async def register_account(
             )
 
             # add to `stats` table.
-            await stats_repo.create_all_modes(player_id=player["id"])
+            await usecase_dependencies.get_repositories().stats.create_all_modes(
+                player_id=player["id"],
+            )
 
         if app.state.services.datadog:
             app.state.services.datadog.increment("bancho.registrations")  # type: ignore[no-untyped-call]

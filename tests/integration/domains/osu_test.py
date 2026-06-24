@@ -10,10 +10,13 @@ import respx
 from fastapi import status
 from httpx import AsyncClient
 
+import app.state.services
 from app import encryption
-from app.repositories import scores as scores_repo
 from app.repositories import users as users_repo
+from app.repositories.scores import ScoresRepository
 from testing.sample_data import sample_beatmap_data
+
+scores_repo = ScoresRepository(app.state.services.database)
 
 
 async def test_score_submission(

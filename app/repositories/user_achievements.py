@@ -9,9 +9,9 @@ from sqlalchemy import Integer
 from sqlalchemy import insert
 from sqlalchemy import select
 
-import app.state.services
 from app._typing import UNSET
 from app._typing import _UnsetSentinel
+from app.adapters.database import Database
 from app.repositories import Base
 
 
@@ -38,42 +38,47 @@ class UserAchievement(TypedDict):
     achid: int
 
 
-async def create(user_id: int, achievement_id: int) -> UserAchievement:
-    """Creates a new user achievement entry."""
-    insert_stmt = insert(UserAchievementsTable).values(
-        userid=user_id,
-        achid=achievement_id,
-    )
-    await app.state.services.database.execute(insert_stmt)
+class UserAchievementsRepository:
+    def __init__(self, database: Database) -> None:
+        self._database = database
 
-    select_stmt = (
-        select(*READ_PARAMS)
-        .where(UserAchievementsTable.userid == user_id)
-        .where(UserAchievementsTable.achid == achievement_id)
-    )
-    user_achievement = await app.state.services.database.fetch_one(select_stmt)
-    assert user_achievement is not None
-    return cast(UserAchievement, user_achievement)
+    async def create(self, user_id: int, achievement_id: int) -> UserAchievement:
+        """Creates a new user achievement entry."""
+        insert_stmt = insert(UserAchievementsTable).values(
+            userid=user_id,
+            achid=achievement_id,
+        )
+        await self._database.execute(insert_stmt)
 
+        select_stmt = (
+            select(*READ_PARAMS)
+            .where(UserAchievementsTable.userid == user_id)
+            .where(UserAchievementsTable.achid == achievement_id)
+        )
+        user_achievement = await self._database.fetch_one(select_stmt)
+        assert user_achievement is not None
+        return cast(UserAchievement, user_achievement)
 
-async def fetch_many(
-    user_id: int | _UnsetSentinel = UNSET,
-    achievement_id: int | _UnsetSentinel = UNSET,
-    page: int | None = None,
-    page_size: int | None = None,
-) -> list[UserAchievement]:
-    """Fetch a list of user achievements."""
-    select_stmt = select(*READ_PARAMS)
-    if not isinstance(user_id, _UnsetSentinel):
-        select_stmt = select_stmt.where(UserAchievementsTable.userid == user_id)
-    if not isinstance(achievement_id, _UnsetSentinel):
-        select_stmt = select_stmt.where(UserAchievementsTable.achid == achievement_id)
+    async def fetch_many(
+        self,
+        user_id: int | _UnsetSentinel = UNSET,
+        achievement_id: int | _UnsetSentinel = UNSET,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> list[UserAchievement]:
+        """Fetch a list of user achievements."""
+        select_stmt = select(*READ_PARAMS)
+        if not isinstance(user_id, _UnsetSentinel):
+            select_stmt = select_stmt.where(UserAchievementsTable.userid == user_id)
+        if not isinstance(achievement_id, _UnsetSentinel):
+            select_stmt = select_stmt.where(
+                UserAchievementsTable.achid == achievement_id
+            )
 
-    if page and page_size:
-        select_stmt = select_stmt.limit(page_size).offset((page - 1) * page_size)
+        if page and page_size:
+            select_stmt = select_stmt.limit(page_size).offset((page - 1) * page_size)
 
-    user_achievements = await app.state.services.database.fetch_all(select_stmt)
-    return cast(list[UserAchievement], user_achievements)
+        user_achievements = await self._database.fetch_all(select_stmt)
+        return cast(list[UserAchievement], user_achievements)
 
-
-# TODO: delete?
+    # TODO: delete?

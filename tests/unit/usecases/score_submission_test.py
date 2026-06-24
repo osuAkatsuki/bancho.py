@@ -4,6 +4,7 @@ import hashlib
 from datetime import date
 from datetime import datetime
 from ipaddress import IPv4Address
+from pathlib import Path
 from types import SimpleNamespace
 from types import TracebackType
 from typing import TypedDict
@@ -951,6 +952,57 @@ class _FakePlayer:
         self.is_online = False
 
 
+async def _record_no_submission_integrity_failure() -> None:
+    pass
+
+
+def _score_submission_service(
+    *,
+    replays_path: Path = Path("/tmp"),
+    restriction_admin: object | None = None,
+    fetch_beatmap: object | None = None,
+    authenticate_player: object | None = None,
+    score_submission_locks: object | None = None,
+    database: object | None = None,
+    scores: object | None = None,
+    stats: object | None = None,
+    maps: object | None = None,
+    achievements: object | None = None,
+    user_achievements: object | None = None,
+    ensure_osu_file_is_available: object | None = None,
+    publish_user_stats=None,
+    send_personal_best_notification=None,
+    announce_channel: object | None = None,
+    domain: str = "osu.cmyui.xyz",
+    increment_metric=None,
+    record_submission_integrity_failure=None,
+) -> score_submission.ScoreSubmissionService:
+    return score_submission.ScoreSubmissionService(
+        replays_path=replays_path,
+        restriction_admin=restriction_admin or _FakePlayer(stats=_mode_data()),
+        fetch_beatmap=fetch_beatmap or _FakeBeatmapFetcher(None),
+        authenticate_player=authenticate_player or _FakePlayerAuthenticator(None),
+        score_submission_locks=score_submission_locks
+        or _FakeScoreSubmissionLocks(_FakeScoreSubmissionLock()),
+        database=database or _FakeDatabaseTransactions(),
+        scores=scores or _FakeScoresRepository(),
+        stats=stats or _FakeStatsRepository(),
+        maps=maps or _FakeMapsRepository(),
+        achievements=achievements or _FakeAchievements(),
+        user_achievements=user_achievements or _FakeUserAchievements(),
+        ensure_osu_file_is_available=ensure_osu_file_is_available
+        or _FakeOsuFileAvailability(),
+        publish_user_stats=publish_user_stats or (lambda player: None),
+        send_personal_best_notification=send_personal_best_notification
+        or (lambda player, message: None),
+        announce_channel=announce_channel,
+        domain=domain,
+        increment_metric=increment_metric or (lambda metric: None),
+        record_submission_integrity_failure=record_submission_integrity_failure
+        or _record_no_submission_integrity_failure,
+    )
+
+
 async def test_persist_submitted_score_demotes_previous_best_before_creating_score() -> (
     None
 ):
@@ -1064,12 +1116,12 @@ async def test_persist_score_submission_stats_updates_ranked_best_score_side_eff
     )
     maps_repo = _FakeMapsRepository()
 
-    result = await score_submission.persist_score_submission_stats(
-        score,
+    service = _score_submission_service(
         stats=stats_repo,
         scores=scores_repo,
         maps=maps_repo,
     )
+    result = await service.persist_score_submission_stats(score)
 
     assert result.previous_stats.plays == 0
     assert result.current_stats.plays == 1
@@ -1139,12 +1191,12 @@ async def test_persist_score_submission_stats_updates_failed_score_without_weigh
     stats_repo = _FakeStatsRepository()
     maps_repo = _FakeMapsRepository()
 
-    result = await score_submission.persist_score_submission_stats(
-        score,
+    service = _score_submission_service(
         stats=stats_repo,
         scores=_FailingScorePerformanceRepository(),
         maps=maps_repo,
     )
+    result = await service.persist_score_submission_stats(score)
 
     assert result.previous_stats.plays == 2
     assert result.current_stats.plays == 3
@@ -1186,12 +1238,12 @@ async def test_persist_score_submission_stats_skips_public_updates_for_restricte
     stats_repo = _FakeStatsRepository()
     maps_repo = _FakeMapsRepository()
 
-    result = await score_submission.persist_score_submission_stats(
-        score,
+    service = _score_submission_service(
         stats=stats_repo,
         scores=_FakeScorePerformanceRepository(),
         maps=maps_repo,
     )
+    result = await service.persist_score_submission_stats(score)
 
     assert stats_repo.partial_updates != []
     assert not result.is_public_submission
@@ -1222,8 +1274,7 @@ async def test_persist_score_submission_wraps_db_writes_in_transaction() -> None
     maps = _FakeMapsRepository()
     user_achievements = _FakeUserAchievements()
 
-    result = await score_submission.persist_score_submission(
-        score,
+    service = _score_submission_service(
         database=database,
         scores=scores,
         stats=_FakeStatsRepository(),
@@ -1231,6 +1282,7 @@ async def test_persist_score_submission_wraps_db_writes_in_transaction() -> None
         achievements=_FakeAchievements(),
         user_achievements=user_achievements,
     )
+    result = await service.persist_score_submission(score)
 
     assert database.calls == ["transaction", "transaction_enter", "transaction_exit"]
     assert database.transactions[0].exception_type is None
@@ -1287,8 +1339,7 @@ async def test_persist_score_submission_restores_memory_state_on_failure() -> No
     database = _FakeDatabaseTransactions()
 
     with pytest.raises(RuntimeError, match="map update failed"):
-        await score_submission.persist_score_submission(
-            score,
+        service = _score_submission_service(
             database=database,
             scores=_FakeScoresRepository(
                 best_scores=[
@@ -1301,6 +1352,7 @@ async def test_persist_score_submission_restores_memory_state_on_failure() -> No
             achievements=_FakeAchievements(),
             user_achievements=_FakeUserAchievements(),
         )
+        await service.persist_score_submission(score)
 
     assert database.calls == ["transaction", "transaction_enter", "transaction_exit"]
     assert database.transactions[0].exception_type is RuntimeError
@@ -1375,8 +1427,7 @@ async def test_submit_score_orchestrates_submission_side_effects(
         nonlocal integrity_failures
         integrity_failures += 1
 
-    result = await score_submission.submit_score(
-        request,
+    service = _score_submission_service(
         replays_path=tmp_path,
         restriction_admin=player,
         fetch_beatmap=beatmap_fetcher,
@@ -1398,6 +1449,7 @@ async def test_submit_score_orchestrates_submission_side_effects(
         increment_metric=metrics.append,
         record_submission_integrity_failure=record_submission_integrity_failure,
     )
+    result = await service.submit_score(request)
 
     assert isinstance(result, score_submission.SubmittedScore)
     submitted_score = result.score
@@ -1453,8 +1505,7 @@ async def test_submit_score_rejects_duplicate_inside_submission_lock(tmp_path) -
     async def record_submission_integrity_failure() -> None:
         raise AssertionError("valid integrity should not be logged")
 
-    result = await score_submission.submit_score(
-        request,
+    service = _score_submission_service(
         replays_path=tmp_path,
         restriction_admin=player,
         fetch_beatmap=_FakeBeatmapFetcher(score.bmap),
@@ -1474,6 +1525,7 @@ async def test_submit_score_rejects_duplicate_inside_submission_lock(tmp_path) -
         increment_metric=metrics.append,
         record_submission_integrity_failure=record_submission_integrity_failure,
     )
+    result = await service.submit_score(request)
 
     assert result == score_submission.ScoreSubmissionError(
         code=score_submission.ScoreSubmissionErrorCode.DUPLICATE_SUBMISSION,
@@ -1517,8 +1569,7 @@ async def test_submit_score_maps_duplicate_insert_to_duplicate_submission(
     async def record_submission_integrity_failure() -> None:
         raise AssertionError("valid integrity should not be logged")
 
-    result = await score_submission.submit_score(
-        request,
+    service = _score_submission_service(
         replays_path=tmp_path,
         restriction_admin=player,
         fetch_beatmap=_FakeBeatmapFetcher(score.bmap),
@@ -1538,6 +1589,7 @@ async def test_submit_score_maps_duplicate_insert_to_duplicate_submission(
         increment_metric=metrics.append,
         record_submission_integrity_failure=record_submission_integrity_failure,
     )
+    result = await service.submit_score(request)
 
     assert result == score_submission.ScoreSubmissionError(
         code=score_submission.ScoreSubmissionErrorCode.DUPLICATE_SUBMISSION,
@@ -1565,8 +1617,7 @@ async def test_submit_score_returns_error_when_beatmap_is_missing(tmp_path) -> N
     async def record_submission_integrity_failure() -> None:
         raise AssertionError("integrity should not be checked without a beatmap")
 
-    result = await score_submission.submit_score(
-        request,
+    service = _score_submission_service(
         replays_path=tmp_path,
         restriction_admin=player,
         fetch_beatmap=beatmap_fetcher,
@@ -1586,6 +1637,7 @@ async def test_submit_score_returns_error_when_beatmap_is_missing(tmp_path) -> N
         increment_metric=metrics.append,
         record_submission_integrity_failure=record_submission_integrity_failure,
     )
+    result = await service.submit_score(request)
 
     assert result == score_submission.ScoreSubmissionError(
         code=score_submission.ScoreSubmissionErrorCode.BEATMAP_NOT_FOUND,
@@ -1609,8 +1661,7 @@ async def test_submit_score_returns_error_when_player_authentication_fails(
     async def record_submission_integrity_failure() -> None:
         raise AssertionError("integrity should not be checked without a player")
 
-    result = await score_submission.submit_score(
-        request,
+    service = _score_submission_service(
         replays_path=tmp_path,
         restriction_admin=player,
         fetch_beatmap=_FakeBeatmapFetcher(score.bmap),
@@ -1630,6 +1681,7 @@ async def test_submit_score_returns_error_when_player_authentication_fails(
         increment_metric=metrics.append,
         record_submission_integrity_failure=record_submission_integrity_failure,
     )
+    result = await service.submit_score(request)
 
     assert result == score_submission.ScoreSubmissionError(
         code=score_submission.ScoreSubmissionErrorCode.PLAYER_NOT_FOUND,
@@ -1679,8 +1731,7 @@ async def test_submit_score_logs_integrity_failure_and_continues(
         nonlocal integrity_failures
         integrity_failures += 1
 
-    result = await score_submission.submit_score(
-        request,
+    service = _score_submission_service(
         replays_path=tmp_path,
         restriction_admin=player,
         fetch_beatmap=_FakeBeatmapFetcher(score.bmap),
@@ -1700,6 +1751,7 @@ async def test_submit_score_logs_integrity_failure_and_continues(
         increment_metric=lambda metric: None,
         record_submission_integrity_failure=record_submission_integrity_failure,
     )
+    result = await service.submit_score(request)
 
     assert isinstance(result, score_submission.SubmittedScore)
     assert integrity_failures == 1

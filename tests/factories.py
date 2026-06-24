@@ -3,11 +3,20 @@ from __future__ import annotations
 import secrets
 from datetime import datetime
 
+import app.state.services
 from app.repositories import clans as clans_repo
-from app.repositories import maps as maps_repo
-from app.repositories import scores as scores_repo
-from app.repositories import stats as stats_repo
 from app.repositories import users as users_repo
+from app.repositories.maps import Map
+from app.repositories.maps import MapServer
+from app.repositories.maps import MapsRepository
+from app.repositories.scores import Score
+from app.repositories.scores import ScoresRepository
+from app.repositories.stats import Stat
+from app.repositories.stats import StatsRepository
+
+maps_repo = MapsRepository(app.state.services.database)
+scores_repo = ScoresRepository(app.state.services.database)
+stats_repo = StatsRepository(app.state.services.database)
 
 
 async def create_user(
@@ -40,7 +49,7 @@ async def create_player_stats(
     mode: int = 0,
     pp: int = 123,
     plays: int = 7,
-) -> stats_repo.Stat:
+) -> Stat:
     await stats_repo.create_all_modes(player_id)
 
     stat = await stats_repo.partial_update(
@@ -69,7 +78,7 @@ async def create_map(
     *,
     set_id: int | None = None,
     mode: int = 0,
-) -> maps_repo.Map:
+) -> Map:
     map_id = secrets.randbelow(1_000_000) + 1_000_000
     if set_id is None:
         set_id = secrets.randbelow(1_000_000) + 2_000_000
@@ -77,7 +86,7 @@ async def create_map(
     suffix = secrets.token_hex(4)
     return await maps_repo.create(
         id=map_id,
-        server=maps_repo.MapServer.OSU,
+        server=MapServer.OSU,
         set_id=set_id,
         status=2,
         md5=secrets.token_hex(16),
@@ -111,7 +120,7 @@ async def create_score(
     mods: int = 64,
     status: int = 2,
     mode: int = 0,
-) -> scores_repo.Score:
+) -> Score:
     return await scores_repo.create(
         map_md5=map_md5,
         score=score,
