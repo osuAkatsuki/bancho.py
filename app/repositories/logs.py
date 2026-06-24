@@ -12,7 +12,7 @@ from sqlalchemy import func
 from sqlalchemy import insert
 from sqlalchemy import select
 
-import app.state.services
+from app.adapters.database import Database
 from app.repositories import Base
 
 
@@ -46,25 +46,30 @@ class Log(TypedDict):
     time: datetime
 
 
-async def create(
-    _from: int,
-    to: int,
-    action: str,
-    msg: str,
-) -> Log:
-    """Create a new log entry in the database."""
-    insert_stmt = insert(LogTable).values(
-        {
-            "from": _from,
-            "to": to,
-            "action": action,
-            "msg": msg,
-            "time": func.now(),
-        },
-    )
-    rec_id = await app.state.services.database.execute(insert_stmt)
+class LogsRepository:
+    def __init__(self, database: Database) -> None:
+        self._database = database
 
-    select_stmt = select(*READ_PARAMS).where(LogTable.id == rec_id)
-    log = await app.state.services.database.fetch_one(select_stmt)
-    assert log is not None
-    return cast(Log, log)
+    async def create(
+        self,
+        _from: int,
+        to: int,
+        action: str,
+        msg: str,
+    ) -> Log:
+        """Create a new log entry in the database."""
+        insert_stmt = insert(LogTable).values(
+            {
+                "from": _from,
+                "to": to,
+                "action": action,
+                "msg": msg,
+                "time": func.now(),
+            },
+        )
+        rec_id = await self._database.execute(insert_stmt)
+
+        select_stmt = select(*READ_PARAMS).where(LogTable.id == rec_id)
+        log = await self._database.fetch_one(select_stmt)
+        assert log is not None
+        return cast(Log, log)

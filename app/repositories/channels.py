@@ -14,9 +14,9 @@ from sqlalchemy import select
 from sqlalchemy import update
 from sqlalchemy.dialects.mysql import TINYINT
 
-import app.state.services
 from app._typing import UNSET
 from app._typing import _UnsetSentinel
+from app.adapters.database import Database
 from app.repositories import Base
 
 
@@ -55,130 +55,135 @@ class Channel(TypedDict):
     auto_join: bool
 
 
-async def create(
-    name: str,
-    topic: str,
-    read_priv: int,
-    write_priv: int,
-    auto_join: bool,
-) -> Channel:
-    """Create a new channel."""
-    insert_stmt = insert(ChannelsTable).values(
-        name=name,
-        topic=topic,
-        read_priv=read_priv,
-        write_priv=write_priv,
-        auto_join=auto_join,
-    )
-    rec_id = await app.state.services.database.execute(insert_stmt)
+class ChannelsRepository:
+    def __init__(self, database: Database) -> None:
+        self._database = database
 
-    select_stmt = select(*READ_PARAMS).where(ChannelsTable.id == rec_id)
-    channel = await app.state.services.database.fetch_one(select_stmt)
+    async def create(
+        self,
+        name: str,
+        topic: str,
+        read_priv: int,
+        write_priv: int,
+        auto_join: bool,
+    ) -> Channel:
+        """Create a new channel."""
+        insert_stmt = insert(ChannelsTable).values(
+            name=name,
+            topic=topic,
+            read_priv=read_priv,
+            write_priv=write_priv,
+            auto_join=auto_join,
+        )
+        rec_id = await self._database.execute(insert_stmt)
 
-    assert channel is not None
-    return cast(Channel, channel)
+        select_stmt = select(*READ_PARAMS).where(ChannelsTable.id == rec_id)
+        channel = await self._database.fetch_one(select_stmt)
 
+        assert channel is not None
+        return cast(Channel, channel)
 
-async def fetch_one(
-    id: int | None = None,
-    name: str | None = None,
-) -> Channel | None:
-    """Fetch a single channel."""
-    if id is None and name is None:
-        raise ValueError("Must provide at least one parameter.")
+    async def fetch_one(
+        self,
+        id: int | None = None,
+        name: str | None = None,
+    ) -> Channel | None:
+        """Fetch a single channel."""
+        if id is None and name is None:
+            raise ValueError("Must provide at least one parameter.")
 
-    select_stmt = select(*READ_PARAMS)
+        select_stmt = select(*READ_PARAMS)
 
-    if id is not None:
-        select_stmt = select_stmt.where(ChannelsTable.id == id)
-    if name is not None:
-        select_stmt = select_stmt.where(ChannelsTable.name == name)
+        if id is not None:
+            select_stmt = select_stmt.where(ChannelsTable.id == id)
+        if name is not None:
+            select_stmt = select_stmt.where(ChannelsTable.name == name)
 
-    channel = await app.state.services.database.fetch_one(select_stmt)
-    return cast(Channel | None, channel)
+        channel = await self._database.fetch_one(select_stmt)
+        return cast(Channel | None, channel)
 
+    async def fetch_count(
+        self,
+        read_priv: int | None = None,
+        write_priv: int | None = None,
+        auto_join: bool | None = None,
+    ) -> int:
+        if read_priv is None and write_priv is None and auto_join is None:
+            raise ValueError("Must provide at least one parameter.")
 
-async def fetch_count(
-    read_priv: int | None = None,
-    write_priv: int | None = None,
-    auto_join: bool | None = None,
-) -> int:
-    if read_priv is None and write_priv is None and auto_join is None:
-        raise ValueError("Must provide at least one parameter.")
+        select_stmt = select(func.count().label("count")).select_from(ChannelsTable)
 
-    select_stmt = select(func.count().label("count")).select_from(ChannelsTable)
+        if read_priv is not None:
+            select_stmt = select_stmt.where(ChannelsTable.read_priv == read_priv)
+        if write_priv is not None:
+            select_stmt = select_stmt.where(ChannelsTable.write_priv == write_priv)
+        if auto_join is not None:
+            select_stmt = select_stmt.where(ChannelsTable.auto_join == auto_join)
 
-    if read_priv is not None:
-        select_stmt = select_stmt.where(ChannelsTable.read_priv == read_priv)
-    if write_priv is not None:
-        select_stmt = select_stmt.where(ChannelsTable.write_priv == write_priv)
-    if auto_join is not None:
-        select_stmt = select_stmt.where(ChannelsTable.auto_join == auto_join)
+        rec = await self._database.fetch_one(select_stmt)
+        assert rec is not None
+        return cast(int, rec["count"])
 
-    rec = await app.state.services.database.fetch_one(select_stmt)
-    assert rec is not None
-    return cast(int, rec["count"])
+    async def fetch_many(
+        self,
+        read_priv: int | None = None,
+        write_priv: int | None = None,
+        auto_join: bool | None = None,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> list[Channel]:
+        """Fetch multiple channels from the database."""
+        select_stmt = select(*READ_PARAMS)
 
+        if read_priv is not None:
+            select_stmt = select_stmt.where(ChannelsTable.read_priv == read_priv)
+        if write_priv is not None:
+            select_stmt = select_stmt.where(ChannelsTable.write_priv == write_priv)
+        if auto_join is not None:
+            select_stmt = select_stmt.where(ChannelsTable.auto_join == auto_join)
 
-async def fetch_many(
-    read_priv: int | None = None,
-    write_priv: int | None = None,
-    auto_join: bool | None = None,
-    page: int | None = None,
-    page_size: int | None = None,
-) -> list[Channel]:
-    """Fetch multiple channels from the database."""
-    select_stmt = select(*READ_PARAMS)
+        if page is not None and page_size is not None:
+            select_stmt = select_stmt.limit(page_size).offset((page - 1) * page_size)
 
-    if read_priv is not None:
-        select_stmt = select_stmt.where(ChannelsTable.read_priv == read_priv)
-    if write_priv is not None:
-        select_stmt = select_stmt.where(ChannelsTable.write_priv == write_priv)
-    if auto_join is not None:
-        select_stmt = select_stmt.where(ChannelsTable.auto_join == auto_join)
+        channels = await self._database.fetch_all(select_stmt)
+        return cast(list[Channel], channels)
 
-    if page is not None and page_size is not None:
-        select_stmt = select_stmt.limit(page_size).offset((page - 1) * page_size)
+    async def partial_update(
+        self,
+        name: str,
+        topic: str | _UnsetSentinel = UNSET,
+        read_priv: int | _UnsetSentinel = UNSET,
+        write_priv: int | _UnsetSentinel = UNSET,
+        auto_join: bool | _UnsetSentinel = UNSET,
+    ) -> Channel | None:
+        """Update a channel in the database."""
+        update_stmt = update(ChannelsTable).where(ChannelsTable.name == name)
 
-    channels = await app.state.services.database.fetch_all(select_stmt)
-    return cast(list[Channel], channels)
+        if not isinstance(topic, _UnsetSentinel):
+            update_stmt = update_stmt.values(topic=topic)
+        if not isinstance(read_priv, _UnsetSentinel):
+            update_stmt = update_stmt.values(read_priv=read_priv)
+        if not isinstance(write_priv, _UnsetSentinel):
+            update_stmt = update_stmt.values(write_priv=write_priv)
+        if not isinstance(auto_join, _UnsetSentinel):
+            update_stmt = update_stmt.values(auto_join=auto_join)
 
+        await self._database.execute(update_stmt)
 
-async def partial_update(
-    name: str,
-    topic: str | _UnsetSentinel = UNSET,
-    read_priv: int | _UnsetSentinel = UNSET,
-    write_priv: int | _UnsetSentinel = UNSET,
-    auto_join: bool | _UnsetSentinel = UNSET,
-) -> Channel | None:
-    """Update a channel in the database."""
-    update_stmt = update(ChannelsTable).where(ChannelsTable.name == name)
+        select_stmt = select(*READ_PARAMS).where(ChannelsTable.name == name)
+        channel = await self._database.fetch_one(select_stmt)
+        return cast(Channel | None, channel)
 
-    if not isinstance(topic, _UnsetSentinel):
-        update_stmt = update_stmt.values(topic=topic)
-    if not isinstance(read_priv, _UnsetSentinel):
-        update_stmt = update_stmt.values(read_priv=read_priv)
-    if not isinstance(write_priv, _UnsetSentinel):
-        update_stmt = update_stmt.values(write_priv=write_priv)
-    if not isinstance(auto_join, _UnsetSentinel):
-        update_stmt = update_stmt.values(auto_join=auto_join)
+    async def delete_one(
+        self,
+        name: str,
+    ) -> Channel | None:
+        """Delete a channel from the database."""
+        select_stmt = select(*READ_PARAMS).where(ChannelsTable.name == name)
+        channel = await self._database.fetch_one(select_stmt)
+        if channel is None:
+            return None
 
-    await app.state.services.database.execute(update_stmt)
-
-    select_stmt = select(*READ_PARAMS).where(ChannelsTable.name == name)
-    channel = await app.state.services.database.fetch_one(select_stmt)
-    return cast(Channel | None, channel)
-
-
-async def delete_one(
-    name: str,
-) -> Channel | None:
-    """Delete a channel from the database."""
-    select_stmt = select(*READ_PARAMS).where(ChannelsTable.name == name)
-    channel = await app.state.services.database.fetch_one(select_stmt)
-    if channel is None:
-        return None
-
-    delete_stmt = delete(ChannelsTable).where(ChannelsTable.name == name)
-    await app.state.services.database.execute(delete_stmt)
-    return cast(Channel | None, channel)
+        delete_stmt = delete(ChannelsTable).where(ChannelsTable.name == name)
+        await self._database.execute(delete_stmt)
+        return cast(Channel | None, channel)

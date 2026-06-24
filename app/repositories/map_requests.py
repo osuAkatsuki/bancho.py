@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy import update
 from sqlalchemy.dialects.mysql import TINYINT
 
-import app.state.services
+from app.adapters.database import Database
 from app.repositories import Base
 
 
@@ -44,54 +44,58 @@ class MapRequest(TypedDict):
     active: bool
 
 
-async def create(
-    map_id: int,
-    player_id: int,
-    active: bool,
-) -> MapRequest:
-    """Create a new map request entry in the database."""
-    insert_stmt = insert(MapRequestsTable).values(
-        map_id=map_id,
-        player_id=player_id,
-        datetime=func.now(),
-        active=active,
-    )
-    rec_id = await app.state.services.database.execute(insert_stmt)
+class MapRequestsRepository:
+    def __init__(self, database: Database) -> None:
+        self._database = database
 
-    select_stmt = select(*READ_PARAMS).where(MapRequestsTable.id == rec_id)
-    map_request = await app.state.services.database.fetch_one(select_stmt)
-    assert map_request is not None
+    async def create(
+        self,
+        map_id: int,
+        player_id: int,
+        active: bool,
+    ) -> MapRequest:
+        """Create a new map request entry in the database."""
+        insert_stmt = insert(MapRequestsTable).values(
+            map_id=map_id,
+            player_id=player_id,
+            datetime=func.now(),
+            active=active,
+        )
+        rec_id = await self._database.execute(insert_stmt)
 
-    return cast(MapRequest, map_request)
+        select_stmt = select(*READ_PARAMS).where(MapRequestsTable.id == rec_id)
+        map_request = await self._database.fetch_one(select_stmt)
+        assert map_request is not None
 
+        return cast(MapRequest, map_request)
 
-async def fetch_all(
-    map_id: int | None = None,
-    player_id: int | None = None,
-    active: bool | None = None,
-) -> list[MapRequest]:
-    """Fetch a list of map requests from the database."""
-    select_stmt = select(*READ_PARAMS)
-    if map_id is not None:
-        select_stmt = select_stmt.where(MapRequestsTable.map_id == map_id)
-    if player_id is not None:
-        select_stmt = select_stmt.where(MapRequestsTable.player_id == player_id)
-    if active is not None:
-        select_stmt = select_stmt.where(MapRequestsTable.active == active)
+    async def fetch_all(
+        self,
+        map_id: int | None = None,
+        player_id: int | None = None,
+        active: bool | None = None,
+    ) -> list[MapRequest]:
+        """Fetch a list of map requests from the database."""
+        select_stmt = select(*READ_PARAMS)
+        if map_id is not None:
+            select_stmt = select_stmt.where(MapRequestsTable.map_id == map_id)
+        if player_id is not None:
+            select_stmt = select_stmt.where(MapRequestsTable.player_id == player_id)
+        if active is not None:
+            select_stmt = select_stmt.where(MapRequestsTable.active == active)
 
-    map_requests = await app.state.services.database.fetch_all(select_stmt)
-    return cast(list[MapRequest], map_requests)
+        map_requests = await self._database.fetch_all(select_stmt)
+        return cast(list[MapRequest], map_requests)
 
+    async def mark_batch_as_inactive(self, map_ids: list[Any]) -> list[MapRequest]:
+        """Mark a map request as inactive."""
+        update_stmt = (
+            update(MapRequestsTable)
+            .where(MapRequestsTable.map_id.in_(map_ids))
+            .values(active=False)
+        )
+        await self._database.execute(update_stmt)
 
-async def mark_batch_as_inactive(map_ids: list[Any]) -> list[MapRequest]:
-    """Mark a map request as inactive."""
-    update_stmt = (
-        update(MapRequestsTable)
-        .where(MapRequestsTable.map_id.in_(map_ids))
-        .values(active=False)
-    )
-    await app.state.services.database.execute(update_stmt)
-
-    select_stmt = select(*READ_PARAMS).where(MapRequestsTable.map_id.in_(map_ids))
-    map_requests = await app.state.services.database.fetch_all(select_stmt)
-    return cast(list[MapRequest], map_requests)
+        select_stmt = select(*READ_PARAMS).where(MapRequestsTable.map_id.in_(map_ids))
+        map_requests = await self._database.fetch_all(select_stmt)
+        return cast(list[MapRequest], map_requests)

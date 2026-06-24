@@ -61,11 +61,9 @@ from app.packets import BanchoPacketReader
 from app.packets import BasePacket
 from app.packets import ClientPackets
 from app.packets import LoginFailureReason
-from app.repositories import client_hashes as client_hashes_repo
-from app.repositories import ingame_logins as logins_repo
-from app.repositories import mail as mail_repo
-from app.repositories import users as users_repo
+from app.repositories.users import User
 from app.state import services
+from app.usecases import dependencies as usecase_dependencies
 from app.usecases.performance import ScoreParams
 
 OSU_API_V2_CHANGELOG_URL = "https://osu.ppy.sh/api/v2/changelog"
@@ -601,8 +599,8 @@ def parse_adapters_string(adapters_string: str) -> tuple[list[str], bool]:
 async def authenticate(
     username: str,
     untrusted_password: bytes,
-) -> users_repo.User | None:
-    user_info = await users_repo.fetch_one(
+) -> User | None:
+    user_info = await usecase_dependencies.get_repositories().users.fetch_one(
         name=username,
         fetch_all_fields=True,
     )
@@ -737,14 +735,14 @@ async def handle_osu_login_request(
 
     """ login credentials verified """
 
-    await logins_repo.create(
+    await usecase_dependencies.get_repositories().ingame_logins.create(
         user_id=user_info["id"],
         ip=str(ip),
         osu_ver=osu_version.date,
         osu_stream=osu_version.stream,
     )
 
-    await client_hashes_repo.create(
+    await usecase_dependencies.get_repositories().client_hashes.create(
         userid=user_info["id"],
         osupath=login_data["osu_path_md5"],
         adapters=login_data["adapters_md5"],
@@ -765,7 +763,7 @@ async def handle_osu_login_request(
     else:
         disk_signature_md5 = None
 
-    hw_matches = await client_hashes_repo.fetch_any_hardware_matches_for_user(
+    hw_matches = await usecase_dependencies.get_repositories().client_hashes.fetch_any_hardware_matches_for_user(
         userid=user_info["id"],
         running_under_wine=running_under_wine,
         adapters=login_data["adapters_md5"],
@@ -829,7 +827,7 @@ async def handle_osu_login_request(
         # country wasn't stored on registration.
         log(f"Fixing {login_data['username']}'s country.", Ansi.LGREEN)
 
-        await users_repo.partial_update(
+        await usecase_dependencies.get_repositories().users.partial_update(
             id=user_info["id"],
             country=geoloc["country"]["acronym"],
         )
@@ -944,9 +942,11 @@ async def handle_osu_login_request(
 
         # the player may have been sent mail while offline,
         # enqueue any messages from their respective authors.
-        mail_rows = await mail_repo.fetch_all_mail_to_user(
-            user_id=player.id,
-            read=False,
+        mail_rows = (
+            await usecase_dependencies.get_repositories().mail.fetch_all_mail_to_user(
+                user_id=player.id,
+                read=False,
+            )
         )
 
         sent_to: set[int] = set()
@@ -1212,7 +1212,7 @@ class SendPrivateMessage(BasePacket):
                 )
 
             # insert mail into db, marked as unread.
-            await mail_repo.create(
+            await usecase_dependencies.get_repositories().mail.create(
                 from_id=player.id,
                 to_id=target.id,
                 msg=msg,

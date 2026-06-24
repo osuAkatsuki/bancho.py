@@ -15,7 +15,7 @@ from sqlalchemy import or_
 from sqlalchemy import select
 from sqlalchemy.dialects.mysql import FLOAT
 
-import app.state.services
+from app.adapters.database import Database
 from app.repositories import Base
 from app.repositories.users import UsersTable
 
@@ -59,67 +59,72 @@ class Comment(TypedDict):
     colour: str | None
 
 
-async def create(
-    target_id: int,
-    target_type: TargetType,
-    userid: int,
-    time: float,
-    comment: str,
-    colour: str | None,
-) -> Comment:
-    """Create a new comment entry in the database."""
-    insert_stmt = insert(CommentsTable).values(
-        target_id=target_id,
-        target_type=target_type,
-        userid=userid,
-        time=time,
-        comment=comment,
-        colour=colour,
-    )
-    rec_id = await app.state.services.database.execute(insert_stmt)
-
-    select_stmt = select(*READ_PARAMS).where(CommentsTable.id == rec_id)
-    _comment = await app.state.services.database.fetch_one(select_stmt)
-
-    assert _comment is not None
-    return cast(Comment, _comment)
-
-
 class CommentWithUserPrivileges(Comment):
     priv: int
 
 
-async def fetch_all_relevant_to_replay(
-    score_id: int | None = None,
-    map_set_id: int | None = None,
-    map_id: int | None = None,
-) -> list[CommentWithUserPrivileges]:
-    """\
-    Fetch all comments from the database where any of the following match:
-        - `score_id`
-        - `map_set_id`
-        - `map_id`
-    """
-    select_stmt = (
-        select(READ_PARAMS, UsersTable.priv)
-        .join(UsersTable, CommentsTable.userid == UsersTable.id)
-        .where(
-            or_(
-                and_(
-                    CommentsTable.target_type == TargetType.REPLAY,
-                    CommentsTable.target_id == score_id,
-                ),
-                and_(
-                    CommentsTable.target_type == TargetType.SONG,
-                    CommentsTable.target_id == map_set_id,
-                ),
-                and_(
-                    CommentsTable.target_type == TargetType.BEATMAP,
-                    CommentsTable.target_id == map_id,
-                ),
-            ),
-        )
-    )
+class CommentsRepository:
+    def __init__(self, database: Database) -> None:
+        self._database = database
 
-    comments = await app.state.services.database.fetch_all(select_stmt)
-    return cast(list[CommentWithUserPrivileges], comments)
+    async def create(
+        self,
+        target_id: int,
+        target_type: TargetType,
+        userid: int,
+        time: float,
+        comment: str,
+        colour: str | None,
+    ) -> Comment:
+        """Create a new comment entry in the database."""
+        insert_stmt = insert(CommentsTable).values(
+            target_id=target_id,
+            target_type=target_type,
+            userid=userid,
+            time=time,
+            comment=comment,
+            colour=colour,
+        )
+        rec_id = await self._database.execute(insert_stmt)
+
+        select_stmt = select(*READ_PARAMS).where(CommentsTable.id == rec_id)
+        _comment = await self._database.fetch_one(select_stmt)
+
+        assert _comment is not None
+        return cast(Comment, _comment)
+
+    async def fetch_all_relevant_to_replay(
+        self,
+        score_id: int | None = None,
+        map_set_id: int | None = None,
+        map_id: int | None = None,
+    ) -> list[CommentWithUserPrivileges]:
+        """\
+        Fetch all comments from the database where any of the following match:
+            - `score_id`
+            - `map_set_id`
+            - `map_id`
+        """
+        select_stmt = (
+            select(READ_PARAMS, UsersTable.priv)
+            .join(UsersTable, CommentsTable.userid == UsersTable.id)
+            .where(
+                or_(
+                    and_(
+                        CommentsTable.target_type == TargetType.REPLAY,
+                        CommentsTable.target_id == score_id,
+                    ),
+                    and_(
+                        CommentsTable.target_type == TargetType.SONG,
+                        CommentsTable.target_id == map_set_id,
+                    ),
+                    and_(
+                        CommentsTable.target_type == TargetType.BEATMAP,
+                        CommentsTable.target_id == map_id,
+                    ),
+                ),
+            )
+        )
+
+        comments = await self._database.fetch_all(select_stmt)
+        return cast(list[CommentWithUserPrivileges], comments)

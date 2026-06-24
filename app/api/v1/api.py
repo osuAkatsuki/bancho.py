@@ -25,10 +25,8 @@ from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
 from app.objects.beatmap import Beatmap
 from app.objects.beatmap import ensure_osu_file_is_available
-from app.repositories import clans as clans_repo
-from app.repositories import tourney_pool_maps as tourney_pool_maps_repo
-from app.repositories import tourney_pools as tourney_pools_repo
-from app.repositories import users as users_repo
+from app.repositories.clans import Clan
+from app.repositories.users import User
 from app.usecases import dependencies as usecase_dependencies
 from app.usecases.performance import ScoreParams
 
@@ -178,7 +176,7 @@ async def api_get_player_count() -> Response:
             "counts": {
                 # -1 for the bot, who is always online
                 "online": len(app.state.sessions.players.unrestricted) - 1,
-                "total": await users_repo.fetch_count(),
+                "total": await usecase_dependencies.get_repositories().users.fetch_count(),
             },
         },
     )
@@ -199,9 +197,13 @@ async def api_get_player_info(
 
     # get user info from username or user id
     if username:
-        user_info = await users_repo.fetch_one(name=username)
+        user_info = await usecase_dependencies.get_repositories().users.fetch_one(
+            name=username,
+        )
     else:  # if user_id
-        user_info = await users_repo.fetch_one(id=user_id)
+        user_info = await usecase_dependencies.get_repositories().users.fetch_one(
+            id=user_id,
+        )
 
     if user_info is None:
         return ORJSONResponse(
@@ -297,9 +299,13 @@ async def api_get_player_status(
         # no such player online, return their last seen time if they exist in sql
 
         if username:
-            row = await users_repo.fetch_one(name=username)
+            row = await usecase_dependencies.get_repositories().users.fetch_one(
+                name=username,
+            )
         else:  # if userid
-            row = await users_repo.fetch_one(id=user_id)
+            row = await usecase_dependencies.get_repositories().users.fetch_one(
+                id=user_id,
+            )
 
         if not row:
             return ORJSONResponse(
@@ -456,9 +462,11 @@ async def api_get_player_scores(
         bmap = await Beatmap.from_md5(row.pop("map_md5"))
         row["beatmap"] = bmap.as_dict if bmap else None
 
-    clan: clans_repo.Clan | None = None
+    clan: Clan | None = None
     if player.clan_id:
-        clan = await clans_repo.fetch_one(id=player.clan_id)
+        clan = await usecase_dependencies.get_repositories().clans.fetch_one(
+            id=player.clan_id,
+        )
 
     player_info = {
         "id": player.id,
@@ -909,14 +917,16 @@ async def api_get_clan(
     clan_id: int = Query(..., alias="id", ge=1, le=2_147_483_647),
 ) -> Response:
     """Return information of a given clan."""
-    clan = await clans_repo.fetch_one(id=clan_id)
+    clan = await usecase_dependencies.get_repositories().clans.fetch_one(id=clan_id)
     if not clan:
         return ORJSONResponse(
             {"status": "Clan not found."},
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
-    clan_members = await users_repo.fetch_many(clan_id=clan["id"])
+    clan_members = await usecase_dependencies.get_repositories().users.fetch_many(
+        clan_id=clan["id"],
+    )
 
     owner = await app.state.sessions.players.from_cache_or_sql(id=clan["owner"])
     assert owner is not None
@@ -951,7 +961,11 @@ async def api_get_pool(
 ) -> Response:
     """Return information of a given mappool."""
 
-    tourney_pool = await tourney_pools_repo.fetch_by_id(id=pool_id)
+    tourney_pool = (
+        await usecase_dependencies.get_repositories().tourney_pools.fetch_by_id(
+            id=pool_id,
+        )
+    )
     if tourney_pool is None:
         return ORJSONResponse(
             {"status": "Pool not found."},
@@ -959,7 +973,11 @@ async def api_get_pool(
         )
 
     tourney_pool_maps: dict[tuple[int, int], Beatmap] = {}
-    for pool_map in await tourney_pool_maps_repo.fetch_many(pool_id=pool_id):
+    for (
+        pool_map
+    ) in await usecase_dependencies.get_repositories().tourney_pool_maps.fetch_many(
+        pool_id=pool_id,
+    ):
         bmap = await Beatmap.from_bid(pool_map["map_id"])
         if bmap is not None:
             tourney_pool_maps[(pool_map["mods"], pool_map["slot"])] = bmap
@@ -973,14 +991,18 @@ async def api_get_pool(
         )
 
     pool_creator_clan = (
-        await clans_repo.fetch_one(id=pool_creator.clan_id)
+        await usecase_dependencies.get_repositories().clans.fetch_one(
+            id=pool_creator.clan_id,
+        )
         if pool_creator.clan_id is not None
         else None
     )
-    pool_creator_clan_members: list[users_repo.User] = []
+    pool_creator_clan_members: list[User] = []
     if pool_creator_clan is not None:
-        pool_creator_clan_members = await users_repo.fetch_many(
-            clan_id=pool_creator.clan_id,
+        pool_creator_clan_members = (
+            await usecase_dependencies.get_repositories().users.fetch_many(
+                clan_id=pool_creator.clan_id,
+            )
         )
 
     return ORJSONResponse(

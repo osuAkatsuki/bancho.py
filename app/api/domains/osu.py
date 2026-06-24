@@ -57,13 +57,8 @@ from app.objects.beatmap import ensure_osu_file_is_available
 from app.objects.player import ModeData
 from app.objects.player import Player
 from app.objects.score import Score
-from app.repositories import clans as clans_repo
-from app.repositories import comments as comments_repo
-from app.repositories import favourites as favourites_repo
-from app.repositories import mail as mail_repo
-from app.repositories import ratings as ratings_repo
-from app.repositories import users as users_repo
 from app.repositories.achievements import Achievement
+from app.repositories.comments import TargetType
 from app.usecases import dependencies as usecase_dependencies
 from app.usecases import score_submission as score_submission_usecases
 
@@ -232,7 +227,9 @@ async def osuGetBeatmapInfo(
 async def osuGetFavourites(
     player: Player = Depends(authenticate_player_session(Query, "u", "h")),
 ) -> Response:
-    favourites = await favourites_repo.fetch_all(userid=player.id)
+    favourites = await usecase_dependencies.get_repositories().favourites.fetch_all(
+        userid=player.id,
+    )
 
     return Response(
         "\n".join([str(favourite["setid"]) for favourite in favourites]).encode(),
@@ -245,11 +242,14 @@ async def osuAddFavourite(
     map_set_id: int = Query(..., alias="a"),
 ) -> Response:
     # check if they already have this favourited.
-    if await favourites_repo.fetch_one(player.id, map_set_id):
+    if await usecase_dependencies.get_repositories().favourites.fetch_one(
+        player.id,
+        map_set_id,
+    ):
         return Response(b"You've already favourited this beatmap!")
 
     # add favourite
-    await favourites_repo.create(
+    await usecase_dependencies.get_repositories().favourites.create(
         userid=player.id,
         setid=map_set_id,
     )
@@ -801,13 +801,22 @@ async def osuRate(
         # osu! client is checking whether we can rate the map or not.
         # the client hasn't rated the map, so simply
         # tell them that they can submit a rating.
-        if not await ratings_repo.fetch_one(map_md5=map_md5, userid=player.id):
+        if not await usecase_dependencies.get_repositories().ratings.fetch_one(
+            map_md5=map_md5,
+            userid=player.id,
+        ):
             return Response(b"ok")
     else:
         # the client is submitting a rating for the map.
-        await ratings_repo.create(userid=player.id, map_md5=map_md5, rating=rating)
+        await usecase_dependencies.get_repositories().ratings.create(
+            userid=player.id,
+            map_md5=map_md5,
+            rating=rating,
+        )
 
-    map_ratings = await ratings_repo.fetch_many(map_md5=map_md5)
+    map_ratings = await usecase_dependencies.get_repositories().ratings.fetch_many(
+        map_md5=map_md5,
+    )
     ratings = [row["rating"] for row in map_ratings]
 
     # send back the average rating
@@ -948,7 +957,7 @@ async def getScores(
         personal_best_score_row = None
 
     # fetch beatmap rating
-    map_ratings = await ratings_repo.fetch_many(
+    map_ratings = await usecase_dependencies.get_repositories().ratings.fetch_many(
         map_md5=bmap.md5,
         page=None,
         page_size=None,
@@ -973,7 +982,9 @@ async def getScores(
 
     if personal_best_score_row is not None:
         user_clan = (
-            await clans_repo.fetch_one(id=player.clan_id)
+            await usecase_dependencies.get_repositories().clans.fetch_one(
+                id=player.clan_id,
+            )
             if player.clan_id is not None
             else None
         )
@@ -1025,7 +1036,7 @@ async def osuComment(
 ) -> Response:
     if action == "get":
         # client is requesting all comments
-        comments = await comments_repo.fetch_all_relevant_to_replay(
+        comments = await usecase_dependencies.get_repositories().comments.fetch_all_relevant_to_replay(
             score_id=score_id,
             map_set_id=map_set_id,
             map_id=map_id,
@@ -1079,9 +1090,9 @@ async def osuComment(
             )
 
         # insert into sql
-        await comments_repo.create(
+        await usecase_dependencies.get_repositories().comments.create(
             target_id=target_id,
-            target_type=comments_repo.TargetType(target),
+            target_type=TargetType(target),
             userid=player.id,
             time=start_time,
             comment=comment,
@@ -1109,7 +1120,7 @@ async def osuMarkAsRead(
     target = await app.state.sessions.players.from_cache_or_sql(name=target_name)
     if target:
         # mark any unread mail from this user as read.
-        await mail_repo.mark_conversation_as_read(
+        await usecase_dependencies.get_repositories().mail.mark_conversation_as_read(
             to_id=player.id,
             from_id=target.id,
         )
@@ -1292,7 +1303,7 @@ async def register_account(
         errors["username"].append("Disallowed username; pick another.")
 
     if "username" not in errors:
-        if await users_repo.fetch_one(name=username):
+        if await usecase_dependencies.get_repositories().users.fetch_one(name=username):
             errors["username"].append("Username already taken by another player.")
 
     # Emails must:
@@ -1301,7 +1312,7 @@ async def register_account(
     if not regexes.EMAIL.match(email):
         errors["user_email"].append("Invalid email syntax.")
     else:
-        if await users_repo.fetch_one(email=email):
+        if await usecase_dependencies.get_repositories().users.fetch_one(email=email):
             errors["user_email"].append("Email already taken by another player.")
 
     # Passwords must:
@@ -1341,7 +1352,7 @@ async def register_account(
 
         async with app.state.services.database.transaction():
             # add to `users` table.
-            player = await users_repo.create(
+            player = await usecase_dependencies.get_repositories().users.create(
                 name=username,
                 email=email,
                 pw_bcrypt=pw_bcrypt,

@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy import update
 from sqlalchemy.dialects.mysql import TINYINT
 
-import app.state.services
+from app.adapters.database import Database
 from app.repositories import Base
 
 
@@ -51,63 +51,68 @@ class MailWithUsernames(Mail):
     to_name: str
 
 
-async def create(from_id: int, to_id: int, msg: str) -> Mail:
-    """Create a new mail entry in the database."""
-    insert_stmt = insert(MailTable).values(
-        from_id=from_id,
-        to_id=to_id,
-        msg=msg,
-        time=func.unix_timestamp(),
-    )
-    rec_id = await app.state.services.database.execute(insert_stmt)
-
-    select_stmt = select(*READ_PARAMS).where(MailTable.id == rec_id)
-    mail = await app.state.services.database.fetch_one(select_stmt)
-    assert mail is not None
-    return cast(Mail, mail)
-
-
 from app.repositories.users import UsersTable
 
 
-async def fetch_all_mail_to_user(
-    user_id: int,
-    read: bool | None = None,
-) -> list[MailWithUsernames]:
-    """Fetch all of mail to a given target from the database."""
-    from_subquery = select(UsersTable.name).where(UsersTable.id == MailTable.from_id)
-    to_subquery = select(UsersTable.name).where(UsersTable.id == MailTable.to_id)
+class MailRepository:
+    def __init__(self, database: Database) -> None:
+        self._database = database
 
-    select_stmt = select(
-        *READ_PARAMS,
-        from_subquery.label("from_name"),
-        to_subquery.label("to_name"),
-    ).where(MailTable.to_id == user_id)
+    async def create(self, from_id: int, to_id: int, msg: str) -> Mail:
+        """Create a new mail entry in the database."""
+        insert_stmt = insert(MailTable).values(
+            from_id=from_id,
+            to_id=to_id,
+            msg=msg,
+            time=func.unix_timestamp(),
+        )
+        rec_id = await self._database.execute(insert_stmt)
 
-    if read is not None:
-        select_stmt = select_stmt.where(MailTable.read == read)
+        select_stmt = select(*READ_PARAMS).where(MailTable.id == rec_id)
+        mail = await self._database.fetch_one(select_stmt)
+        assert mail is not None
+        return cast(Mail, mail)
 
-    mail = await app.state.services.database.fetch_all(select_stmt)
-    return cast(list[MailWithUsernames], mail)
+    async def fetch_all_mail_to_user(
+        self,
+        user_id: int,
+        read: bool | None = None,
+    ) -> list[MailWithUsernames]:
+        """Fetch all of mail to a given target from the database."""
+        from_subquery = select(UsersTable.name).where(
+            UsersTable.id == MailTable.from_id,
+        )
+        to_subquery = select(UsersTable.name).where(UsersTable.id == MailTable.to_id)
 
+        select_stmt = select(
+            *READ_PARAMS,
+            from_subquery.label("from_name"),
+            to_subquery.label("to_name"),
+        ).where(MailTable.to_id == user_id)
 
-async def mark_conversation_as_read(to_id: int, from_id: int) -> list[Mail]:
-    """Mark any mail in a user's conversation with another user as read."""
-    select_stmt = select(*READ_PARAMS).where(
-        MailTable.to_id == to_id,
-        MailTable.from_id == from_id,
-        MailTable.read == False,
-    )
-    mail = await app.state.services.database.fetch_all(select_stmt)
-    if not mail:
-        return []
+        if read is not None:
+            select_stmt = select_stmt.where(MailTable.read == read)
 
-    update_stmt = (
-        update(MailTable)
-        .where(MailTable.to_id == to_id)
-        .where(MailTable.from_id == from_id)
-        .where(MailTable.read == False)
-        .values(read=True)
-    )
-    await app.state.services.database.execute(update_stmt)
-    return cast(list[Mail], mail)
+        mail = await self._database.fetch_all(select_stmt)
+        return cast(list[MailWithUsernames], mail)
+
+    async def mark_conversation_as_read(self, to_id: int, from_id: int) -> list[Mail]:
+        """Mark any mail in a user's conversation with another user as read."""
+        select_stmt = select(*READ_PARAMS).where(
+            MailTable.to_id == to_id,
+            MailTable.from_id == from_id,
+            MailTable.read == False,
+        )
+        mail = await self._database.fetch_all(select_stmt)
+        if not mail:
+            return []
+
+        update_stmt = (
+            update(MailTable)
+            .where(MailTable.to_id == to_id)
+            .where(MailTable.from_id == from_id)
+            .where(MailTable.read == False)
+            .values(read=True)
+        )
+        await self._database.execute(update_stmt)
+        return cast(list[Mail], mail)

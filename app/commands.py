@@ -57,12 +57,7 @@ from app.objects.match import MatchWinConditions
 from app.objects.match import SlotStatus
 from app.objects.match import StartingTimers
 from app.objects.player import Player
-from app.repositories import clans as clans_repo
-from app.repositories import logs as logs_repo
-from app.repositories import map_requests as map_requests_repo
-from app.repositories import tourney_pool_maps as tourney_pool_maps_repo
-from app.repositories import tourney_pools as tourney_pools_repo
-from app.repositories import users as users_repo
+from app.repositories.map_requests import MapRequest
 from app.usecases import dependencies as usecase_dependencies
 from app.usecases.performance import ScoreParams
 
@@ -275,11 +270,14 @@ async def changename(ctx: Context) -> str | None:
     if name in app.settings.DISALLOWED_NAMES:
         return "Disallowed username; pick another."
 
-    if await users_repo.fetch_one(name=name):
+    if await usecase_dependencies.get_repositories().users.fetch_one(name=name):
         return "Username already taken by another player."
 
     # all checks passed, update their name
-    await users_repo.partial_update(ctx.player.id, name=name)
+    await usecase_dependencies.get_repositories().users.partial_update(
+        ctx.player.id,
+        name=name,
+    )
 
     ctx.player.enqueue(
         app.packets.notification(f"Your username has been changed to {name}!"),
@@ -379,10 +377,14 @@ async def top(ctx: Context) -> str | None:
             return "Invalid username."
 
         # specific player provided
-        user = await users_repo.fetch_one(name=ctx.args[1])
+        user = await usecase_dependencies.get_repositories().users.fetch_one(
+            name=ctx.args[1],
+        )
     else:
         # no player provided, use self
-        user = await users_repo.fetch_one(id=ctx.player.id)
+        user = await usecase_dependencies.get_repositories().users.fetch_one(
+            id=ctx.player.id,
+        )
 
     if user is None:
         return "Player not found."
@@ -541,7 +543,7 @@ async def request(ctx: Context) -> str | None:
     if bmap.status != RankedStatus.Pending:
         return "Only pending maps may be requested for status change."
 
-    map_requests = await map_requests_repo.fetch_all(
+    map_requests = await usecase_dependencies.get_repositories().map_requests.fetch_all(
         map_id=bmap.id,
         player_id=ctx.player.id,
         active=True,
@@ -549,7 +551,11 @@ async def request(ctx: Context) -> str | None:
     if map_requests:
         return "You already have an active nomination request for that map."
 
-    await map_requests_repo.create(map_id=bmap.id, player_id=ctx.player.id, active=True)
+    await usecase_dependencies.get_repositories().map_requests.create(
+        map_id=bmap.id,
+        player_id=ctx.player.id,
+        active=True,
+    )
 
     return "Request submitted."
 
@@ -567,7 +573,10 @@ async def apikey(ctx: Context) -> str | None:
     # generate new token
     ctx.player.api_key = str(uuid.uuid4())
 
-    await users_repo.partial_update(ctx.player.id, api_key=ctx.player.api_key)
+    await usecase_dependencies.get_repositories().users.partial_update(
+        ctx.player.id,
+        api_key=ctx.player.api_key,
+    )
     app.state.sessions.api_keys[ctx.player.api_key] = ctx.player.id
 
     return f"API key generated. Copy your api key from (this url)[http://{ctx.player.api_key}]."
@@ -585,13 +594,15 @@ async def requests(ctx: Context) -> str | None:
     if ctx.args:
         return "Invalid syntax: !requests"
 
-    rows = await map_requests_repo.fetch_all(active=True)
+    rows = await usecase_dependencies.get_repositories().map_requests.fetch_all(
+        active=True,
+    )
 
     if not rows:
         return "The queue is clean! (0 map request(s))"
 
     # group rows into {map_id: [map_request, ...]}
-    grouped: dict[int, list[map_requests_repo.MapRequest]] = {}
+    grouped: dict[int, list[MapRequest]] = {}
     for row in rows:
         if row["map_id"] not in grouped:
             grouped[row["map_id"]] = []
@@ -660,7 +671,9 @@ async def _map(ctx: Context) -> str | None:
             # update all maps in the set
             for _bmap in bmap.set.maps:
                 await repositories.maps.partial_update(
-                    _bmap.id, status=new_status, frozen=True,
+                    _bmap.id,
+                    status=new_status,
+                    frozen=True,
                 )
 
             # make sure cache and db are synced about the newest change
@@ -679,7 +692,9 @@ async def _map(ctx: Context) -> str | None:
         else:
             # update only map
             await repositories.maps.partial_update(
-                bmap.id, status=new_status, frozen=True,
+                bmap.id,
+                status=new_status,
+                frozen=True,
             )
 
             # make sure cache and db are synced about the newest change
@@ -690,7 +705,9 @@ async def _map(ctx: Context) -> str | None:
             modified_beatmap_ids = [bmap.id]
 
         # deactivate rank requests for all ids
-        await map_requests_repo.mark_batch_as_inactive(map_ids=modified_beatmap_ids)
+        await usecase_dependencies.get_repositories().map_requests.mark_batch_as_inactive(
+            map_ids=modified_beatmap_ids,
+        )
 
     return f"{bmap.embed} updated to {new_status!s}."
 
@@ -762,7 +779,7 @@ async def addnote(ctx: Context) -> str | None:
     if not target:
         return f'"{ctx.args[0]}" not found.'
 
-    await logs_repo.create(
+    await usecase_dependencies.get_repositories().logs.create(
         _from=ctx.player.id,
         to=target.id,
         action="note",
@@ -877,7 +894,7 @@ async def user(ctx: Context) -> str | None:
     )
 
     user_clan = (
-        await clans_repo.fetch_one(id=player.clan_id)
+        await usecase_dependencies.get_repositories().clans.fetch_one(id=player.clan_id)
         if player.clan_id is not None
         else None
     )
@@ -1911,7 +1928,9 @@ async def mp_loadpool(ctx: Context, match: Match) -> str | None:
 
     name = ctx.args[0]
 
-    tourney_pool = await tourney_pools_repo.fetch_by_name(name)
+    tourney_pool = (
+        await usecase_dependencies.get_repositories().tourney_pools.fetch_by_name(name)
+    )
     if tourney_pool is None:
         return "Could not find a pool by that name!"
 
@@ -1963,7 +1982,7 @@ async def mp_ban(ctx: Context, match: Match) -> str | None:
     mods = Mods.from_modstr(r_match[1])
     slot = int(r_match[2])
 
-    map_pick = await tourney_pool_maps_repo.fetch_by_pool_and_pick(
+    map_pick = await usecase_dependencies.get_repositories().tourney_pool_maps.fetch_by_pool_and_pick(
         pool_id=match.tourney_pool["id"],
         mods=mods,
         slot=slot,
@@ -1999,7 +2018,7 @@ async def mp_unban(ctx: Context, match: Match) -> str | None:
     mods = Mods.from_modstr(r_match[1])
     slot = int(r_match[2])
 
-    map_pick = await tourney_pool_maps_repo.fetch_by_pool_and_pick(
+    map_pick = await usecase_dependencies.get_repositories().tourney_pool_maps.fetch_by_pool_and_pick(
         pool_id=match.tourney_pool["id"],
         mods=mods,
         slot=slot,
@@ -2035,7 +2054,7 @@ async def mp_pick(ctx: Context, match: Match) -> str | None:
     mods = Mods.from_modstr(r_match[1])
     slot = int(r_match[2])
 
-    map_pick = await tourney_pool_maps_repo.fetch_by_pool_and_pick(
+    map_pick = await usecase_dependencies.get_repositories().tourney_pool_maps.fetch_by_pool_and_pick(
         pool_id=match.tourney_pool["id"],
         mods=mods,
         slot=slot,
@@ -2103,11 +2122,13 @@ async def pool_create(ctx: Context) -> str | None:
 
     name = ctx.args[0]
 
-    existing_pool = await tourney_pools_repo.fetch_by_name(name)
+    existing_pool = (
+        await usecase_dependencies.get_repositories().tourney_pools.fetch_by_name(name)
+    )
     if existing_pool is not None:
         return "Pool already exists by that name!"
 
-    tourney_pool = await tourney_pools_repo.create(
+    tourney_pool = await usecase_dependencies.get_repositories().tourney_pools.create(
         name=name,
         created_by=ctx.player.id,
     )
@@ -2123,12 +2144,18 @@ async def pool_delete(ctx: Context) -> str | None:
 
     name = ctx.args[0]
 
-    existing_pool = await tourney_pools_repo.fetch_by_name(name)
+    existing_pool = (
+        await usecase_dependencies.get_repositories().tourney_pools.fetch_by_name(name)
+    )
     if existing_pool is None:
         return "Could not find a pool by that name!"
 
-    await tourney_pools_repo.delete_by_id(existing_pool["id"])
-    await tourney_pool_maps_repo.delete_all_in_pool(pool_id=existing_pool["id"])
+    await usecase_dependencies.get_repositories().tourney_pools.delete_by_id(
+        existing_pool["id"],
+    )
+    await usecase_dependencies.get_repositories().tourney_pool_maps.delete_all_in_pool(
+        pool_id=existing_pool["id"],
+    )
 
     return f"{name} deleted."
 
@@ -2158,12 +2185,16 @@ async def pool_add(ctx: Context) -> str | None:
     mods = Mods.from_modstr(r_match[1])
     slot = int(r_match[2])
 
-    tourney_pool = await tourney_pools_repo.fetch_by_name(name)
+    tourney_pool = (
+        await usecase_dependencies.get_repositories().tourney_pools.fetch_by_name(name)
+    )
     if tourney_pool is None:
         return "Could not find a pool by that name!"
 
-    tourney_pool_maps = await tourney_pool_maps_repo.fetch_many(
-        pool_id=tourney_pool["id"],
+    tourney_pool_maps = (
+        await usecase_dependencies.get_repositories().tourney_pool_maps.fetch_many(
+            pool_id=tourney_pool["id"],
+        )
     )
     for pool_map in tourney_pool_maps:
         if mods == pool_map["mods"] and slot == pool_map["slot"]:
@@ -2174,7 +2205,7 @@ async def pool_add(ctx: Context) -> str | None:
         if pool_map["map_id"] == bmap.id:
             return f"{bmap.embed} is already in the pool!"
 
-    await tourney_pool_maps_repo.create(
+    await usecase_dependencies.get_repositories().tourney_pool_maps.create(
         map_id=bmap.id,
         pool_id=tourney_pool["id"],
         mods=mods,
@@ -2202,11 +2233,13 @@ async def pool_remove(ctx: Context) -> str | None:
     mods = Mods.from_modstr(r_match[1])
     slot = int(r_match[2])
 
-    tourney_pool = await tourney_pools_repo.fetch_by_name(name)
+    tourney_pool = (
+        await usecase_dependencies.get_repositories().tourney_pools.fetch_by_name(name)
+    )
     if tourney_pool is None:
         return "Could not find a pool by that name!"
 
-    map_pick = await tourney_pool_maps_repo.fetch_by_pool_and_pick(
+    map_pick = await usecase_dependencies.get_repositories().tourney_pool_maps.fetch_by_pool_and_pick(
         pool_id=tourney_pool["id"],
         mods=mods,
         slot=slot,
@@ -2214,7 +2247,7 @@ async def pool_remove(ctx: Context) -> str | None:
     if map_pick is None:
         return f"Found no {mods_slot} pick in the pool."
 
-    await tourney_pool_maps_repo.delete_map_from_pool(
+    await usecase_dependencies.get_repositories().tourney_pool_maps.delete_map_from_pool(
         map_pick["pool_id"],
         map_pick["map_id"],
     )
@@ -2225,14 +2258,21 @@ async def pool_remove(ctx: Context) -> str | None:
 @pool_commands.add(Privileges.TOURNEY_MANAGER, aliases=["l"], hidden=True)
 async def pool_list(ctx: Context) -> str | None:
     """List all existing mappools information."""
-    tourney_pools = await tourney_pools_repo.fetch_many(page=None, page_size=None)
+    tourney_pools = (
+        await usecase_dependencies.get_repositories().tourney_pools.fetch_many(
+            page=None,
+            page_size=None,
+        )
+    )
     if not tourney_pools:
         return "There are currently no pools!"
 
     l = [f"Mappools ({len(tourney_pools)})"]
 
     for pool in tourney_pools:
-        created_by = await users_repo.fetch_one(id=pool["created_by"])
+        created_by = await usecase_dependencies.get_repositories().users.fetch_one(
+            id=pool["created_by"],
+        )
         if created_by is None:
             log(f"Could not find pool creator (Id {pool['created_by']}).", Ansi.LRED)
             continue
@@ -2253,7 +2293,9 @@ async def pool_info(ctx: Context) -> str | None:
 
     name = ctx.args[0]
 
-    tourney_pool = await tourney_pools_repo.fetch_by_name(name)
+    tourney_pool = (
+        await usecase_dependencies.get_repositories().tourney_pools.fetch_by_name(name)
+    )
     if tourney_pool is None:
         return "Could not find a pool by that name!"
 
@@ -2265,7 +2307,9 @@ async def pool_info(ctx: Context) -> str | None:
     ]
 
     for tourney_map in sorted(
-        await tourney_pool_maps_repo.fetch_many(pool_id=tourney_pool["id"]),
+        await usecase_dependencies.get_repositories().tourney_pool_maps.fetch_many(
+            pool_id=tourney_pool["id"],
+        ),
         key=lambda x: (repr(Mods(x["mods"])), x["slot"]),
     ):
         bmap = await Beatmap.from_bid(tourney_map["map_id"])
@@ -2314,19 +2358,21 @@ async def clan_create(ctx: Context) -> str | None:
         return "Clan name may be 2-16 characters long."
 
     if ctx.player.clan_id:
-        clan = await clans_repo.fetch_one(id=ctx.player.clan_id)
+        clan = await usecase_dependencies.get_repositories().clans.fetch_one(
+            id=ctx.player.clan_id,
+        )
         if clan:
             clan_display_name = f"[{clan['tag']}] {clan['name']}"
             return f"You're already a member of {clan_display_name}!"
 
-    if await clans_repo.fetch_one(name=name):
+    if await usecase_dependencies.get_repositories().clans.fetch_one(name=name):
         return "That name has already been claimed by another clan."
 
-    if await clans_repo.fetch_one(tag=tag):
+    if await usecase_dependencies.get_repositories().clans.fetch_one(tag=tag):
         return "That tag has already been claimed by another clan."
 
     # add clan to sql
-    new_clan = await clans_repo.create(
+    new_clan = await usecase_dependencies.get_repositories().clans.create(
         name=name,
         tag=tag,
         owner=ctx.player.id,
@@ -2336,7 +2382,7 @@ async def clan_create(ctx: Context) -> str | None:
     ctx.player.clan_id = new_clan["id"]
     ctx.player.clan_priv = ClanPrivileges.Owner
 
-    await users_repo.partial_update(
+    await usecase_dependencies.get_repositories().users.partial_update(
         ctx.player.id,
         clan_id=new_clan["id"],
         clan_priv=ClanPrivileges.Owner,
@@ -2360,7 +2406,9 @@ async def clan_disband(ctx: Context) -> str | None:
         if ctx.player not in app.state.sessions.players.staff:
             return "Only staff members may disband the clans of others."
 
-        clan = await clans_repo.fetch_one(tag=" ".join(ctx.args).upper())
+        clan = await usecase_dependencies.get_repositories().clans.fetch_one(
+            tag=" ".join(ctx.args).upper(),
+        )
         if not clan:
             return "Could not find a clan by that tag."
     else:
@@ -2368,19 +2416,27 @@ async def clan_disband(ctx: Context) -> str | None:
             return "You're not a member of a clan!"
 
         # disband the player's clan
-        clan = await clans_repo.fetch_one(id=ctx.player.clan_id)
+        clan = await usecase_dependencies.get_repositories().clans.fetch_one(
+            id=ctx.player.clan_id,
+        )
         if not clan:
             return "You're not a member of a clan!"
 
-    await clans_repo.delete_one(clan["id"])
+    await usecase_dependencies.get_repositories().clans.delete_one(clan["id"])
 
     # remove all members from the clan
     clan_member_ids = [
         clan_member["id"]
-        for clan_member in await users_repo.fetch_many(clan_id=clan["id"])
+        for clan_member in await usecase_dependencies.get_repositories().users.fetch_many(
+            clan_id=clan["id"],
+        )
     ]
     for member_id in clan_member_ids:
-        await users_repo.partial_update(member_id, clan_id=0, clan_priv=0)
+        await usecase_dependencies.get_repositories().users.partial_update(
+            member_id,
+            clan_id=0,
+            clan_priv=0,
+        )
 
         member = app.state.sessions.players.get(id=member_id)
         if member:
@@ -2403,7 +2459,9 @@ async def clan_info(ctx: Context) -> str | None:
     if not ctx.args:
         return "Invalid syntax: !clan info <tag>"
 
-    clan = await clans_repo.fetch_one(tag=" ".join(ctx.args).upper())
+    clan = await usecase_dependencies.get_repositories().clans.fetch_one(
+        tag=" ".join(ctx.args).upper(),
+    )
     if not clan:
         return "Could not find a clan by that tag."
 
@@ -2411,7 +2469,9 @@ async def clan_info(ctx: Context) -> str | None:
     msg = [f"{clan_display_name} | Founded {clan['created_at']:%b %d, %Y}."]
 
     # get members privs from sql
-    clan_members = await users_repo.fetch_many(clan_id=clan["id"])
+    clan_members = await usecase_dependencies.get_repositories().users.fetch_many(
+        clan_id=clan["id"],
+    )
     for member in sorted(clan_members, key=lambda m: m["clan_priv"], reverse=True):
         priv_str = ("Member", "Officer", "Owner")[member["clan_priv"] - 1]
         msg.append(f"[{priv_str}] {member['name']}")
@@ -2427,13 +2487,21 @@ async def clan_leave(ctx: Context) -> str | None:
     elif ctx.player.clan_priv == ClanPrivileges.Owner:
         return "You must transfer your clan's ownership before leaving it. Alternatively, you can use !clan disband."
 
-    clan = await clans_repo.fetch_one(id=ctx.player.clan_id)
+    clan = await usecase_dependencies.get_repositories().clans.fetch_one(
+        id=ctx.player.clan_id,
+    )
     if not clan:
         return "You're not in a clan."
 
-    clan_members = await users_repo.fetch_many(clan_id=clan["id"])
+    clan_members = await usecase_dependencies.get_repositories().users.fetch_many(
+        clan_id=clan["id"],
+    )
 
-    await users_repo.partial_update(ctx.player.id, clan_id=0, clan_priv=0)
+    await usecase_dependencies.get_repositories().users.partial_update(
+        ctx.player.id,
+        clan_id=0,
+        clan_priv=0,
+    )
     ctx.player.clan_id = None
     ctx.player.clan_priv = None
 
@@ -2441,7 +2509,7 @@ async def clan_leave(ctx: Context) -> str | None:
 
     if not clan_members:
         # no members left, disband clan
-        await clans_repo.delete_one(clan["id"])
+        await usecase_dependencies.get_repositories().clans.delete_one(clan["id"])
 
         # announce clan disbanding
         announce_chan = app.state.sessions.channels.get_by_name("#announce")
@@ -2466,7 +2534,10 @@ async def clan_list(ctx: Context) -> str | None:
     else:
         offset = 0
 
-    all_clans = await clans_repo.fetch_many(page=None, page_size=None)
+    all_clans = await usecase_dependencies.get_repositories().clans.fetch_many(
+        page=None,
+        page_size=None,
+    )
     num_clans = len(all_clans)
     if offset >= num_clans:
         return "No clans found."

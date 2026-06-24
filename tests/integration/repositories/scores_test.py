@@ -1,11 +1,7 @@
 from __future__ import annotations
 
-import app.state.services
-from app.repositories import users as users_repo
-from app.repositories.scores import ScoresRepository
+from app.usecases import dependencies as usecase_dependencies
 from tests import factories
-
-scores_repo = ScoresRepository(app.state.services.database)
 
 
 async def test_fetch_beatmap_leaderboard_scores_orders_scores_and_filters_restricted_users() -> (
@@ -15,11 +11,11 @@ async def test_fetch_beatmap_leaderboard_scores_orders_scores_and_filters_restri
     requester = await factories.create_user()
     unrestricted_user = await factories.create_user()
     restricted_user = await factories.create_user()
-    await users_repo.partial_update(
+    await usecase_dependencies.get_repositories().users.partial_update(
         id=requester["id"],
         priv=0,
     )
-    await users_repo.partial_update(
+    await usecase_dependencies.get_repositories().users.partial_update(
         id=restricted_user["id"],
         priv=0,
     )
@@ -43,7 +39,7 @@ async def test_fetch_beatmap_leaderboard_scores_orders_scores_and_filters_restri
         mods=0,
     )
 
-    score_rows = await scores_repo.fetch_beatmap_leaderboard_scores(
+    score_rows = await usecase_dependencies.get_repositories().scores.fetch_beatmap_leaderboard_scores(
         map_md5=beatmap["md5"],
         mode=0,
         user_id=requester["id"],
@@ -64,7 +60,7 @@ async def test_fetch_beatmap_leaderboard_scores_orders_by_pp_and_formats_clan_na
     clan_player = await factories.create_user()
     other_player = await factories.create_user()
     clan = await factories.create_clan(owner_id=clan_player["id"])
-    await users_repo.partial_update(
+    await usecase_dependencies.get_repositories().users.partial_update(
         id=clan_player["id"],
         clan_id=clan["id"],
     )
@@ -84,7 +80,7 @@ async def test_fetch_beatmap_leaderboard_scores_orders_by_pp_and_formats_clan_na
         mods=0,
     )
 
-    score_rows = await scores_repo.fetch_beatmap_leaderboard_scores(
+    score_rows = await usecase_dependencies.get_repositories().scores.fetch_beatmap_leaderboard_scores(
         map_md5=beatmap["md5"],
         mode=0,
         user_id=clan_player["id"],
@@ -109,7 +105,7 @@ async def test_fetch_first_place_score_uses_metric_and_ignores_restricted_users(
     first_place_player = await factories.create_user()
     higher_score_player = await factories.create_user()
     restricted_higher_pp_player = await factories.create_user()
-    await users_repo.partial_update(
+    await usecase_dependencies.get_repositories().users.partial_update(
         id=restricted_higher_pp_player["id"],
         priv=0,
     )
@@ -136,10 +132,12 @@ async def test_fetch_first_place_score_uses_metric_and_ignores_restricted_users(
         mods=0,
     )
 
-    first_place_score = await scores_repo.fetch_first_place_score(
-        map_md5=beatmap["md5"],
-        mode=0,
-        scoring_metric="pp",
+    first_place_score = (
+        await usecase_dependencies.get_repositories().scores.fetch_first_place_score(
+            map_md5=beatmap["md5"],
+            mode=0,
+            scoring_metric="pp",
+        )
     )
 
     assert first_place_score == {
@@ -156,10 +154,12 @@ async def test_fetch_one_by_online_checksum_returns_matching_score() -> None:
         map_md5=beatmap["md5"],
     )
 
-    fetched_score = await scores_repo.fetch_one_by_online_checksum(
+    fetched_score = await usecase_dependencies.get_repositories().scores.fetch_one_by_online_checksum(
         score["online_checksum"],
     )
-    missing_score = await scores_repo.fetch_one_by_online_checksum("missing-checksum")
+    missing_score = await usecase_dependencies.get_repositories().scores.fetch_one_by_online_checksum(
+        "missing-checksum",
+    )
 
     assert fetched_score is not None
     assert fetched_score["id"] == score["id"]
@@ -171,7 +171,7 @@ async def test_fetch_personal_best_leaderboard_rank_ignores_restricted_scores() 
     player = await factories.create_user()
     higher_unrestricted_user = await factories.create_user()
     higher_restricted_user = await factories.create_user()
-    await users_repo.partial_update(
+    await usecase_dependencies.get_repositories().users.partial_update(
         id=higher_restricted_user["id"],
         priv=0,
     )
@@ -195,13 +195,13 @@ async def test_fetch_personal_best_leaderboard_rank_ignores_restricted_scores() 
         mods=0,
     )
 
-    personal_best = await scores_repo.fetch_personal_best_leaderboard_score(
+    personal_best = await usecase_dependencies.get_repositories().scores.fetch_personal_best_leaderboard_score(
         map_md5=beatmap["md5"],
         mode=0,
         user_id=player["id"],
         scoring_metric="score",
     )
-    rank = await scores_repo.fetch_personal_best_leaderboard_rank(
+    rank = await usecase_dependencies.get_repositories().scores.fetch_personal_best_leaderboard_rank(
         map_md5=beatmap["md5"],
         mode=0,
         scoring_metric="score",
@@ -219,7 +219,7 @@ async def test_fetch_personal_best_leaderboard_score_and_rank_use_pp_metric() ->
     higher_pp_user = await factories.create_user()
     lower_pp_user = await factories.create_user()
     restricted_higher_pp_user = await factories.create_user()
-    await users_repo.partial_update(
+    await usecase_dependencies.get_repositories().users.partial_update(
         id=restricted_higher_pp_user["id"],
         priv=0,
     )
@@ -260,13 +260,13 @@ async def test_fetch_personal_best_leaderboard_score_and_rank_use_pp_metric() ->
         mods=0,
     )
 
-    personal_best = await scores_repo.fetch_personal_best_leaderboard_score(
+    personal_best = await usecase_dependencies.get_repositories().scores.fetch_personal_best_leaderboard_score(
         map_md5=beatmap["md5"],
         mode=0,
         user_id=player["id"],
         scoring_metric="pp",
     )
-    rank = await scores_repo.fetch_personal_best_leaderboard_rank(
+    rank = await usecase_dependencies.get_repositories().scores.fetch_personal_best_leaderboard_rank(
         map_md5=beatmap["md5"],
         mode=0,
         scoring_metric="pp",
@@ -313,21 +313,21 @@ async def test_fetch_beatmap_leaderboard_scores_applies_mods_friends_and_country
         mods=0,
     )
 
-    mods_rows = await scores_repo.fetch_beatmap_leaderboard_scores(
+    mods_rows = await usecase_dependencies.get_repositories().scores.fetch_beatmap_leaderboard_scores(
         map_md5=beatmap["md5"],
         mode=0,
         user_id=requester["id"],
         scoring_metric="score",
         mods=64,
     )
-    friend_rows = await scores_repo.fetch_beatmap_leaderboard_scores(
+    friend_rows = await usecase_dependencies.get_repositories().scores.fetch_beatmap_leaderboard_scores(
         map_md5=beatmap["md5"],
         mode=0,
         user_id=requester["id"],
         scoring_metric="score",
         friend_ids={requester["id"], friend["id"]},
     )
-    country_rows = await scores_repo.fetch_beatmap_leaderboard_scores(
+    country_rows = await usecase_dependencies.get_repositories().scores.fetch_beatmap_leaderboard_scores(
         map_md5=beatmap["md5"],
         mode=0,
         user_id=requester["id"],

@@ -16,7 +16,7 @@ from sqlalchemy.dialects.mysql import insert as mysql_insert
 from sqlalchemy.sql import ColumnElement
 from sqlalchemy.types import Boolean
 
-import app.state.services
+from app.adapters.database import Database
 from app.repositories import Base
 from app.repositories.users import UsersTable
 
@@ -59,75 +59,82 @@ class ClientHashWithPlayer(ClientHash):
     priv: int
 
 
-async def create(
-    userid: int,
-    osupath: str,
-    adapters: str,
-    uninstall_id: str,
-    disk_serial: str,
-) -> ClientHash:
-    """Create a new client hash entry in the database."""
-    insert_stmt: MysqlInsert = (
-        mysql_insert(ClientHashesTable)
-        .values(
-            userid=userid,
-            osupath=osupath,
-            adapters=adapters,
-            uninstall_id=uninstall_id,
-            disk_serial=disk_serial,
-            latest_time=func.now(),
-            occurrences=1,
+class ClientHashesRepository:
+    def __init__(self, database: Database) -> None:
+        self._database = database
+
+    async def create(
+        self,
+        userid: int,
+        osupath: str,
+        adapters: str,
+        uninstall_id: str,
+        disk_serial: str,
+    ) -> ClientHash:
+        """Create a new client hash entry in the database."""
+        insert_stmt: MysqlInsert = (
+            mysql_insert(ClientHashesTable)
+            .values(
+                userid=userid,
+                osupath=osupath,
+                adapters=adapters,
+                uninstall_id=uninstall_id,
+                disk_serial=disk_serial,
+                latest_time=func.now(),
+                occurrences=1,
+            )
+            .on_duplicate_key_update(
+                latest_time=func.now(),
+                occurrences=ClientHashesTable.occurrences + 1,
+            )
         )
-        .on_duplicate_key_update(
-            latest_time=func.now(),
-            occurrences=ClientHashesTable.occurrences + 1,
+
+        await self._database.execute(insert_stmt)
+
+        select_stmt = (
+            select(*READ_PARAMS)
+            .where(ClientHashesTable.userid == userid)
+            .where(ClientHashesTable.osupath == osupath)
+            .where(ClientHashesTable.adapters == adapters)
+            .where(ClientHashesTable.uninstall_id == uninstall_id)
+            .where(ClientHashesTable.disk_serial == disk_serial)
         )
-    )
+        client_hash = await self._database.fetch_one(select_stmt)
 
-    await app.state.services.database.execute(insert_stmt)
+        assert client_hash is not None
+        return cast(ClientHash, client_hash)
 
-    select_stmt = (
-        select(*READ_PARAMS)
-        .where(ClientHashesTable.userid == userid)
-        .where(ClientHashesTable.osupath == osupath)
-        .where(ClientHashesTable.adapters == adapters)
-        .where(ClientHashesTable.uninstall_id == uninstall_id)
-        .where(ClientHashesTable.disk_serial == disk_serial)
-    )
-    client_hash = await app.state.services.database.fetch_one(select_stmt)
+    async def fetch_any_hardware_matches_for_user(
+        self,
+        userid: int,
+        running_under_wine: bool,
+        adapters: str,
+        uninstall_id: str,
+        disk_serial: str | None = None,
+    ) -> list[ClientHashWithPlayer]:
+        """\
+        Fetch a list of matching hardware addresses where any of
+        `adapters`, `uninstall_id` or `disk_serial` match other users
+        from the database.
+        """
+        select_stmt = (
+            select(*READ_PARAMS, UsersTable.name, UsersTable.priv)
+            .join(UsersTable, ClientHashesTable.userid == UsersTable.id)
+            .where(ClientHashesTable.userid != userid)
+        )
 
-    assert client_hash is not None
-    return cast(ClientHash, client_hash)
+        if running_under_wine:
+            select_stmt = select_stmt.where(
+                ClientHashesTable.uninstall_id == uninstall_id,
+            )
+        else:
+            # make disk serial optional in the OR
+            oneof_filters: list[ColumnElement[Boolean]] = []
+            oneof_filters.append(ClientHashesTable.adapters == adapters)
+            oneof_filters.append(ClientHashesTable.uninstall_id == uninstall_id)
+            if disk_serial is not None:
+                oneof_filters.append(ClientHashesTable.disk_serial == disk_serial)
+            select_stmt = select_stmt.where(or_(*oneof_filters))
 
-
-async def fetch_any_hardware_matches_for_user(
-    userid: int,
-    running_under_wine: bool,
-    adapters: str,
-    uninstall_id: str,
-    disk_serial: str | None = None,
-) -> list[ClientHashWithPlayer]:
-    """\
-    Fetch a list of matching hardware addresses where any of
-    `adapters`, `uninstall_id` or `disk_serial` match other users
-    from the database.
-    """
-    select_stmt = (
-        select(*READ_PARAMS, UsersTable.name, UsersTable.priv)
-        .join(UsersTable, ClientHashesTable.userid == UsersTable.id)
-        .where(ClientHashesTable.userid != userid)
-    )
-
-    if running_under_wine:
-        select_stmt = select_stmt.where(ClientHashesTable.uninstall_id == uninstall_id)
-    else:
-        # make disk serial optional in the OR
-        oneof_filters: list[ColumnElement[Boolean]] = []
-        oneof_filters.append(ClientHashesTable.adapters == adapters)
-        oneof_filters.append(ClientHashesTable.uninstall_id == uninstall_id)
-        if disk_serial is not None:
-            oneof_filters.append(ClientHashesTable.disk_serial == disk_serial)
-        select_stmt = select_stmt.where(or_(*oneof_filters))
-
-    client_hashes = await app.state.services.database.fetch_all(select_stmt)
-    return cast(list[ClientHashWithPlayer], client_hashes)
+        client_hashes = await self._database.fetch_all(select_stmt)
+        return cast(list[ClientHashWithPlayer], client_hashes)

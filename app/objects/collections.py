@@ -17,9 +17,7 @@ from app.logging import log
 from app.objects.channel import Channel
 from app.objects.match import Match
 from app.objects.player import Player
-from app.repositories import channels as channels_repo
-from app.repositories import clans as clans_repo
-from app.repositories import users as users_repo
+from app.usecases import dependencies as usecase_dependencies
 from app.utils import make_safe_name
 
 
@@ -75,7 +73,7 @@ class Channels(list[Channel]):
     async def prepare(self) -> None:
         """Fetch data from sql & return; preparing to run the server."""
         log("Fetching channels from sql.", Ansi.LCYAN)
-        for row in await channels_repo.fetch_many():
+        for row in await usecase_dependencies.get_repositories().channels.fetch_many():
             self.append(
                 Channel(
                     name=row["name"],
@@ -188,7 +186,7 @@ class Players(list[Player]):
     ) -> Player | None:
         """Get a player by token, id, or name from sql."""
         # try to get from sql.
-        player = await users_repo.fetch_one(
+        player = await usecase_dependencies.get_repositories().users.fetch_one(
             id=id,
             name=name,
             fetch_all_fields=True,
@@ -291,7 +289,7 @@ async def initialize_ram_caches() -> None:
     # fetch channels, clans and pools from db
     await app.state.sessions.channels.prepare()
 
-    bot = await users_repo.fetch_one(id=1)
+    bot = await usecase_dependencies.get_repositories().users.fetch_one(id=1)
     if bot is None:
         raise RuntimeError("Bot account not found in database.")
 
