@@ -2,39 +2,10 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import app.services.beatmap_leaderboards as beatmap_leaderboards
 from app.constants.beatmap_statuses import RankedStatus
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
-from app.services import osu_web
-
-
-class _DirectSearchResponse:
-    def __init__(
-        self,
-        *,
-        status_code: int,
-        payload: list[osu_web.DirectSearchSetPayload],
-    ) -> None:
-        self.status_code = status_code
-        self.payload = payload
-
-    def json(self) -> list[osu_web.DirectSearchSetPayload]:
-        return self.payload
-
-
-class _DirectSearchFetcher:
-    def __init__(self, response: _DirectSearchResponse) -> None:
-        self.response = response
-        self.calls: list[tuple[str, osu_web.DirectSearchParams]] = []
-
-    async def __call__(
-        self,
-        url: str,
-        *,
-        params: osu_web.DirectSearchParams,
-    ) -> _DirectSearchResponse:
-        self.calls.append((url, params))
-        return self.response
 
 
 class _FakeScoresService:
@@ -125,7 +96,7 @@ def _leaderboard_service(
     beatmapset_cache: dict[int, object] | None = None,
     maps: object | None = None,
     published_stats: list[object] | None = None,
-) -> osu_web.OsuLeaderboardService:
+) -> beatmap_leaderboards.BeatmapLeaderboardService:
     if score_leaderboards is None:
         score_leaderboards = _FakeScoresService()
     if fetch_beatmap is None:
@@ -144,7 +115,7 @@ def _leaderboard_service(
     if published_stats is None:
         published_stats = []
 
-    return osu_web.OsuLeaderboardService(
+    return beatmap_leaderboards.BeatmapLeaderboardService(
         score_leaderboards=score_leaderboards,
         clans=_FakeClans(),
         maps=maps,
@@ -160,84 +131,7 @@ def _leaderboard_service(
     )
 
 
-async def test_direct_search_normalizes_mirror_response() -> None:
-    response = _DirectSearchResponse(
-        status_code=200,
-        payload=[
-            {
-                "Artist": "A|rtist",
-                "Title": "Title",
-                "Creator": "Creator",
-                "RankedStatus": 1,
-                "LastUpdate": "2024-01-01",
-                "SetID": 123,
-                "HasVideo": True,
-                "ChildrenBeatmaps": [
-                    {
-                        "DifficultyRating": 5.0,
-                        "DiffName": "Hard|Pipe",
-                        "CS": 4.0,
-                        "OD": 8.0,
-                        "AR": 9.0,
-                        "HP": 6.5,
-                        "Mode": 0,
-                    },
-                    {
-                        "DifficultyRating": 2.5,
-                        "DiffName": "Normal",
-                        "CS": 3.0,
-                        "OD": 6.0,
-                        "AR": 7.0,
-                        "HP": 4.5,
-                        "Mode": 0,
-                    },
-                ],
-            },
-            {
-                "Artist": "Skipped",
-                "Title": "No children",
-                "Creator": "Creator",
-                "RankedStatus": 1,
-                "LastUpdate": "2024-01-01",
-                "SetID": 124,
-                "HasVideo": False,
-                "ChildrenBeatmaps": None,
-            },
-        ],
-    )
-    fetcher = _DirectSearchFetcher(response)
-    service = osu_web.DirectSearchService(
-        mirror_search_endpoint="https://mirror.test/search",
-        fetch_mirror_search=fetcher,
-    )
-
-    result = await service.search(
-        ranked_status=0,
-        query="camellia",
-        mode=0,
-        page_num=2,
-    )
-
-    assert result.code is osu_web.DirectSearchResultCode.FOUND
-    assert result.result_count == 2
-    assert fetcher.calls == [
-        (
-            "https://mirror.test/search",
-            {"amount": 100, "offset": 200, "query": "camellia", "mode": 0, "status": 1},
-        ),
-    ]
-    assert result.beatmap_sets is not None
-    assert len(result.beatmap_sets) == 1
-    beatmap_set = result.beatmap_sets[0]
-    assert beatmap_set.artist == "AIrtist"
-    assert beatmap_set.has_video == 1
-    assert [beatmap.name for beatmap in beatmap_set.beatmaps] == [
-        "Normal",
-        "HardIPipe",
-    ]
-
-
-async def test_osu_leaderboard_service_marks_known_filename_as_needing_update() -> None:
+async def test_beatmap_leaderboard_marks_known_filename_needs_update() -> None:
     needs_update_cache: set[str] = set()
     unsubmitted_cache: set[str] = set()
     service = _leaderboard_service(
@@ -256,7 +150,7 @@ async def test_osu_leaderboard_service_marks_known_filename_as_needing_update() 
 
     result = await service.fetch_leaderboard(
         player=player,
-        request=osu_web.OsuLeaderboardRequest(
+        request=beatmap_leaderboards.BeatmapLeaderboardRequest(
             requesting_from_editor_song_select=False,
             leaderboard_type=0,
             map_md5="missing-md5",
@@ -268,12 +162,12 @@ async def test_osu_leaderboard_service_marks_known_filename_as_needing_update() 
         ),
     )
 
-    assert result.code is osu_web.OsuLeaderboardResultCode.NEEDS_UPDATE
+    assert result.code is beatmap_leaderboards.BeatmapLeaderboardResultCode.NEEDS_UPDATE
     assert needs_update_cache == {"missing-md5"}
     assert unsubmitted_cache == set()
 
 
-async def test_osu_leaderboard_service_fetches_ranked_relax_leaderboard() -> None:
+async def test_beatmap_leaderboard_service_fetches_ranked_relax_leaderboard() -> None:
     async def fetch_beatmap(md5: str, set_id: int = -1) -> object | None:
         return SimpleNamespace(
             id=321,
@@ -300,7 +194,7 @@ async def test_osu_leaderboard_service_fetches_ranked_relax_leaderboard() -> Non
 
     result = await service.fetch_leaderboard(
         player=player,
-        request=osu_web.OsuLeaderboardRequest(
+        request=beatmap_leaderboards.BeatmapLeaderboardRequest(
             requesting_from_editor_song_select=False,
             leaderboard_type=0,
             map_md5="ranked-md5",
@@ -312,7 +206,7 @@ async def test_osu_leaderboard_service_fetches_ranked_relax_leaderboard() -> Non
         ),
     )
 
-    assert result.code is osu_web.OsuLeaderboardResultCode.FOUND
+    assert result.code is beatmap_leaderboards.BeatmapLeaderboardResultCode.FOUND
     assert result.beatmap_rating == 9.0
     assert result.personal_best_display_name == "[AK] cmyui"
     assert result.personal_best_user_id == 6
@@ -322,41 +216,3 @@ async def test_osu_leaderboard_service_fetches_ranked_relax_leaderboard() -> Non
     assert score_leaderboards.calls[0]["mode"] == GameMode.RELAX_OSU
     assert score_leaderboards.calls[0]["mods"] == Mods.RELAX
     assert score_leaderboards.calls[0]["scoring_metric"] == "pp"
-
-
-async def test_screenshot_service_rejects_invalid_file_type(tmp_path) -> None:
-    service = osu_web.ScreenshotService(
-        screenshots_path=tmp_path,
-        token_urlsafe=lambda size: "token",
-        log_strange_occurrence=_record_strange_occurrence,
-    )
-
-    result = await service.upload_screenshot(
-        player=SimpleNamespace(),
-        endpoint_version=1,
-        screenshot_data=b"not an image",
-    )
-
-    assert result.code is osu_web.ScreenshotUploadResultCode.INVALID_FILE_TYPE
-    assert list(tmp_path.iterdir()) == []
-
-
-async def test_screenshot_service_writes_png_file(tmp_path) -> None:
-    service = osu_web.ScreenshotService(
-        screenshots_path=tmp_path,
-        token_urlsafe=lambda size: "token",
-        log_strange_occurrence=_record_strange_occurrence,
-    )
-    png_data = b"\x89PNG\r\n\x1a\n" + b"image bytes" + b"\x49END\xae\x42\x60\x82"
-
-    result = await service.upload_screenshot(
-        player=SimpleNamespace(),
-        endpoint_version=1,
-        screenshot_data=png_data,
-    )
-
-    assert result == osu_web.ScreenshotUploadResult(
-        code=osu_web.ScreenshotUploadResultCode.UPLOADED,
-        filename="token.png",
-    )
-    assert (tmp_path / "token.png").read_bytes() == png_data

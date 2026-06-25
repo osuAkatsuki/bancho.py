@@ -7,6 +7,8 @@ import pytest
 from starlette.datastructures import FormData
 from starlette.datastructures import UploadFile
 
+import app.services.beatmap_leaderboards as beatmap_leaderboards
+import app.services.score_submission as score_submission
 from app.api.domains import osu
 from app.constants.beatmap_statuses import RankedStatus
 from app.constants.gamemodes import GameMode
@@ -15,8 +17,6 @@ from app.objects.player import ModeData
 from app.objects.score import Grade
 from app.objects.score import Score
 from app.repositories.achievements import Achievement
-from app.services import osu_web
-from app.services import score_submission
 
 
 def _score() -> Score:
@@ -278,8 +278,8 @@ def test_build_score_submission_error_response_maps_domain_errors_to_osu_protoco
 
 def test_format_scores_response_formats_personal_best_and_leaderboard_rows() -> None:
     response = osu.format_scores_response(
-        osu_web.OsuLeaderboardResult(
-            code=osu_web.OsuLeaderboardResultCode.FOUND,
+        beatmap_leaderboards.BeatmapLeaderboardResult(
+            code=beatmap_leaderboards.BeatmapLeaderboardResultCode.FOUND,
             ranked_status=RankedStatus.Ranked,
             beatmap_id=321,
             beatmap_set_id=654,

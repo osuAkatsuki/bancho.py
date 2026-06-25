@@ -43,6 +43,15 @@ from app.objects.player import ModeData
 from app.objects.player import Player
 from app.objects.score import Score
 from app.repositories.achievements import Achievement
+from app.services.beatmap_leaderboards import BeatmapLeaderboardRequest
+from app.services.beatmap_leaderboards import BeatmapLeaderboardResult
+from app.services.beatmap_leaderboards import BeatmapLeaderboardResultCode
+from app.services.beatmap_leaderboards import BeatmapLeaderboardService
+from app.services.client_integrity import ClientIntegrityResult
+from app.services.client_integrity import ClientIntegrityService
+from app.services.direct_search import DirectSearchResult
+from app.services.direct_search import DirectSearchResultCode
+from app.services.direct_search import DirectSearchService
 from app.services.osu_web import AccountRegistrationResultCode
 from app.services.osu_web import AccountRegistrationService
 from app.services.osu_web import AddFavouriteResult
@@ -51,25 +60,16 @@ from app.services.osu_web import BeatmapRatingResultCode
 from app.services.osu_web import BeatmapRatingService
 from app.services.osu_web import BeatmapSetService
 from app.services.osu_web import CommentsService
-from app.services.osu_web import DirectSearchResult
-from app.services.osu_web import DirectSearchResultCode
-from app.services.osu_web import DirectSearchService
 from app.services.osu_web import FavouritesService
-from app.services.osu_web import LastFmResult
-from app.services.osu_web import LastFmService
 from app.services.osu_web import MailReadService
-from app.services.osu_web import OsuLeaderboardRequest
-from app.services.osu_web import OsuLeaderboardResult
-from app.services.osu_web import OsuLeaderboardResultCode
-from app.services.osu_web import OsuLeaderboardService
-from app.services.osu_web import ReplayResultCode
-from app.services.osu_web import ReplayService
-from app.services.osu_web import ScreenshotService
-from app.services.osu_web import ScreenshotUploadResultCode
+from app.services.replays import ReplayResultCode
+from app.services.replays import ReplayService
 from app.services.score_submission import ScoreSubmissionError
 from app.services.score_submission import ScoreSubmissionErrorCode
 from app.services.score_submission import ScoreSubmissionRequest
 from app.services.score_submission import ScoreSubmissionService
+from app.services.screenshots import ScreenshotService
+from app.services.screenshots import ScreenshotUploadResultCode
 
 BEATMAPS_PATH = SystemPath.cwd() / ".data/osu"
 SCREENSHOTS_PATH = SystemPath.cwd() / ".data/ss"
@@ -254,16 +254,16 @@ async def lastFM(
         alias="b",
     ),
     player: Player = Depends(authenticate_player_session(Query, "us", "ha")),
-    lastfm_service: Annotated[
-        LastFmService,
-        Depends(api_dependencies.get_lastfm_service),
+    client_integrity_service: Annotated[
+        ClientIntegrityService,
+        Depends(api_dependencies.get_client_integrity_service),
     ],
 ) -> Response:
-    result = await lastfm_service.handle_client_integrity_flags(
+    result = await client_integrity_service.handle_lastfm_flags(
         player=player,
         beatmap_id_or_hidden_flag=beatmap_id_or_hidden_flag,
     )
-    if result is LastFmResult.STOP_SENDING:
+    if result is ClientIntegrityResult.STOP_SENDING:
         return Response(b"-3")
 
     return Response(b"")
@@ -676,7 +676,7 @@ SCORE_LISTING_FMTSTR = (
 )
 
 
-def format_scores_response(leaderboard: OsuLeaderboardResult) -> bytes:
+def format_scores_response(leaderboard: BeatmapLeaderboardResult) -> bytes:
     assert leaderboard.ranked_status is not None
     assert leaderboard.beatmap_id is not None
     assert leaderboard.beatmap_set_id is not None
@@ -743,14 +743,14 @@ async def getScores(
     mods_arg: int = Query(..., alias="mods", ge=0, le=2_147_483_647),
     map_package_hash: str = Query(..., alias="h"),  # TODO: further validation
     aqn_files_found: bool = Query(..., alias="a"),
-    osu_leaderboard_service: Annotated[
-        OsuLeaderboardService,
-        Depends(api_dependencies.get_osu_leaderboard_service),
+    beatmap_leaderboard_service: Annotated[
+        BeatmapLeaderboardService,
+        Depends(api_dependencies.get_beatmap_leaderboard_service),
     ],
 ) -> Response:
-    leaderboard = await osu_leaderboard_service.fetch_leaderboard(
+    leaderboard = await beatmap_leaderboard_service.fetch_leaderboard(
         player=player,
-        request=OsuLeaderboardRequest(
+        request=BeatmapLeaderboardRequest(
             requesting_from_editor_song_select=requesting_from_editor_song_select,
             leaderboard_type=leaderboard_type,
             map_md5=map_md5,
@@ -762,11 +762,11 @@ async def getScores(
         ),
     )
 
-    if leaderboard.code is OsuLeaderboardResultCode.NOT_SUBMITTED:
+    if leaderboard.code is BeatmapLeaderboardResultCode.NOT_SUBMITTED:
         return Response(b"-1|false")
-    if leaderboard.code is OsuLeaderboardResultCode.NEEDS_UPDATE:
+    if leaderboard.code is BeatmapLeaderboardResultCode.NEEDS_UPDATE:
         return Response(b"1|false")
-    if leaderboard.code is OsuLeaderboardResultCode.NO_LEADERBOARD:
+    if leaderboard.code is BeatmapLeaderboardResultCode.NO_LEADERBOARD:
         assert leaderboard.ranked_status is not None
         return Response(f"{int(leaderboard.ranked_status)}|false".encode())
 

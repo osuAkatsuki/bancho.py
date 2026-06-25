@@ -35,27 +35,27 @@ from app.repositories.tourney_pools import TourneyPoolsRepository
 from app.repositories.user_achievements import UserAchievementsRepository
 from app.repositories.users import UsersRepository
 from app.services.bancho import BanchoLoginService
+from app.services.beatmap_leaderboards import BeatmapLeaderboardService
 from app.services.clans import ClansService
+from app.services.client_integrity import ClientIntegrityService
+from app.services.direct_search import DirectSearchParams
+from app.services.direct_search import DirectSearchService
 from app.services.maps import MapsService
 from app.services.osu_web import AccountRegistrationService
 from app.services.osu_web import BeatmapInfoService
 from app.services.osu_web import BeatmapRatingService
 from app.services.osu_web import BeatmapSetService
 from app.services.osu_web import CommentsService
-from app.services.osu_web import DirectSearchParams
-from app.services.osu_web import DirectSearchService
 from app.services.osu_web import FavouritesService
-from app.services.osu_web import LastFmService
 from app.services.osu_web import MailReadService
-from app.services.osu_web import OsuLeaderboardService
-from app.services.osu_web import ReplayService
-from app.services.osu_web import ScreenshotService
 from app.services.performance import PerformanceService
 from app.services.players import PlayersService
 from app.services.public_api import PublicApiService
+from app.services.replays import ReplayService
 from app.services.score_leaderboards import ScoreLeaderboardsService
 from app.services.score_submission import ScoreSubmissionService
 from app.services.scores import ScoresService
+from app.services.screenshots import ScreenshotService
 
 SCREENSHOTS_PATH = Path.cwd() / ".data/ss"
 
@@ -204,8 +204,8 @@ def get_screenshot_service() -> ScreenshotService:
     )
 
 
-def get_lastfm_service() -> LastFmService:
-    return LastFmService(
+def get_client_integrity_service() -> ClientIntegrityService:
+    return ClientIntegrityService(
         restriction_admin=app.state.sessions.bot,
         restriction_roll=random.randrange,
         send_notification=_send_notification,
@@ -316,7 +316,7 @@ def get_score_leaderboards_service(
     return ScoreLeaderboardsService(scores=scores)
 
 
-def get_osu_leaderboard_service(
+def get_beatmap_leaderboard_service(
     score_leaderboards: Annotated[
         ScoreLeaderboardsService,
         Depends(get_score_leaderboards_service),
@@ -324,8 +324,8 @@ def get_osu_leaderboard_service(
     clans: Annotated[ClansRepository, Depends(get_clans_repository)],
     maps: Annotated[MapsRepository, Depends(get_maps_repository)],
     ratings: Annotated[RatingsRepository, Depends(get_ratings_repository)],
-) -> OsuLeaderboardService:
-    return OsuLeaderboardService(
+) -> BeatmapLeaderboardService:
+    return BeatmapLeaderboardService(
         score_leaderboards=score_leaderboards,
         clans=clans,
         maps=maps,

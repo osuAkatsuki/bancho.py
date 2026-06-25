@@ -12,6 +12,7 @@ from typing import cast
 
 import pytest
 
+import app.services.score_submission as score_submission
 from app._typing import UNSET
 from app.constants.beatmap_statuses import RankedStatus
 from app.constants.clientflags import ClientFlags
@@ -30,7 +31,6 @@ from app.repositories.scores import DuplicateScoreError
 from app.repositories.scores import FirstPlaceScore
 from app.repositories.scores import ScorePerformanceRow
 from app.repositories.user_achievements import UserAchievement
-from app.services import score_submission
 
 
 class _FirstPlaceScoreFetch(TypedDict):

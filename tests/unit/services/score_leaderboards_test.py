@@ -3,12 +3,12 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import TypedDict
 
+import app.services.score_leaderboards as score_leaderboards
 from app.constants.leaderboard_types import LeaderboardType
 from app.constants.mods import Mods
 from app.constants.scoring_metrics import ScoringMetric
 from app.repositories.scores import BeatmapLeaderboardScoreRow
 from app.repositories.scores import PersonalBestLeaderboardScoreRow
-from app.services import score_leaderboards
 
 
 class _LeaderboardFetch(TypedDict):
