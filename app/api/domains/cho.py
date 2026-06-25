@@ -182,12 +182,13 @@ matches:
 @router.post("/")
 async def bancho_handler(
     request: Request,
+    *,
+    osu_token: str | None = Header(None),
+    user_agent: Literal["osu!"] = Header(...),
     bancho_login_service: Annotated[
         BanchoLoginService,
         Depends(api_dependencies.get_bancho_login_service),
     ],
-    osu_token: str | None = Header(None),
-    user_agent: Literal["osu!"] = Header(...),
 ) -> Response:
     ip = app.state.services.ip_resolver.get_ip(request.headers)
 

@@ -65,12 +65,7 @@ DATETIME_OFFSET = 0x89F7FF5F7B58000
 
 @router.get("/calculate_pp")
 async def api_calculate_pp(
-    token: HTTPCredentials | None = Depends(http_bearer_scheme),
     *,
-    performance_service: Annotated[
-        PerformanceService,
-        Depends(api_dependencies.get_performance_service),
-    ],
     beatmap_id: int = Query(None, alias="id", min=0, max=2_147_483_647),
     nkatu: int = Query(None, max=2_147_483_647),
     ngeki: int = Query(None, max=2_147_483_647),
@@ -81,6 +76,11 @@ async def api_calculate_pp(
     mode: int = Query(0, min=0, max=11),
     combo: int = Query(None, max=2_147_483_647),
     acclist: list[float] = Query([100, 99, 98, 95], alias="acc"),
+    token: HTTPCredentials | None = Depends(http_bearer_scheme),
+    performance_service: Annotated[
+        PerformanceService,
+        Depends(api_dependencies.get_performance_service),
+    ],
 ) -> Response:
     """Calculates the PP of a specified map with specified score parameters."""
 
@@ -194,12 +194,13 @@ async def api_get_player_count(
 @router.get("/get_player_info")
 async def api_get_player_info(
     scope: Literal["stats", "info", "all"],
+    *,
+    user_id: int | None = Query(None, alias="id", ge=3, le=2_147_483_647),
+    username: str | None = Query(None, alias="name", pattern=regexes.USERNAME.pattern),
     public_api_service: Annotated[
         PublicApiService,
         Depends(api_dependencies.get_public_api_service),
     ],
-    user_id: int | None = Query(None, alias="id", ge=3, le=2_147_483_647),
-    username: str | None = Query(None, alias="name", pattern=regexes.USERNAME.pattern),
 ) -> Response:
     """Return information about a given player."""
     if not (username or user_id) or (username and user_id):
@@ -356,10 +357,7 @@ async def api_get_player_status(
 @router.get("/get_player_scores")
 async def api_get_player_scores(
     scope: Literal["recent", "best"],
-    public_api_service: Annotated[
-        PublicApiService,
-        Depends(api_dependencies.get_public_api_service),
-    ],
+    *,
     user_id: int | None = Query(None, alias="id", ge=3, le=2_147_483_647),
     username: str | None = Query(None, alias="name", pattern=regexes.USERNAME.pattern),
     mods_arg: str | None = Query(None, alias="mods"),
@@ -367,6 +365,10 @@ async def api_get_player_scores(
     limit: int = Query(25, ge=1, le=100),
     include_loved: bool = False,
     include_failed: bool = True,
+    public_api_service: Annotated[
+        PublicApiService,
+        Depends(api_dependencies.get_public_api_service),
+    ],
 ) -> Response:
     """Return a list of a given user's recent/best scores."""
     if mode_arg in (
@@ -551,15 +553,16 @@ async def api_get_map_info(
 @router.get("/get_map_scores")
 async def api_get_map_scores(
     scope: Literal["recent", "best"],
-    public_api_service: Annotated[
-        PublicApiService,
-        Depends(api_dependencies.get_public_api_service),
-    ],
+    *,
     map_id: int | None = Query(None, alias="id", ge=0, le=2_147_483_647),
     map_md5: str | None = Query(None, alias="md5", min_length=32, max_length=32),
     mods_arg: str | None = Query(None, alias="mods"),
     mode_arg: int = Query(0, alias="mode", ge=0, le=11),
     limit: int = Query(50, ge=1, le=100),
+    public_api_service: Annotated[
+        PublicApiService,
+        Depends(api_dependencies.get_public_api_service),
+    ],
 ) -> Response:
     """Return the top n scores on a given beatmap."""
     if mode_arg in (
