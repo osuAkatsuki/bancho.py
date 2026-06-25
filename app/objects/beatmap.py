@@ -19,7 +19,7 @@ from app.constants.beatmap_statuses import RankedStatus
 from app.constants.gamemodes import GameMode
 from app.logging import Ansi
 from app.logging import log
-from app.repositories import factory as repository_factory
+from app.repositories.legacy import get_legacy_repositories
 
 # from dataclasses import dataclass
 
@@ -305,7 +305,7 @@ class Beatmap:
 
             if set_id <= 0:
                 # set id not provided - fetch it from the map md5
-                rec = await repository_factory.get_repositories().maps.fetch_one(
+                rec = await get_legacy_repositories().maps.fetch_one(
                     md5=md5,
                 )
 
@@ -350,7 +350,9 @@ class Beatmap:
             # to be efficient, we want to cache the whole set
             # at once rather than caching the individual map
 
-            rec = await repository_factory.get_repositories().maps.fetch_one(id=bid)
+            rec = await get_legacy_repositories().maps.fetch_one(
+                id=bid,
+            )
 
             if rec is not None:
                 # set found in db
@@ -748,7 +750,7 @@ class BeatmapSet:
             return None
 
         bmap_set = cls(id=bsid, last_osuapi_check=last_osuapi_check)
-        maps = repository_factory.get_repositories().maps
+        maps = get_legacy_repositories().maps
 
         for row in await maps.fetch_many(set_id=bsid):
             bmap = Beatmap(

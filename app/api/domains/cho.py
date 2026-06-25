@@ -62,7 +62,7 @@ from app.packets import BanchoPacketReader
 from app.packets import BasePacket
 from app.packets import ClientPackets
 from app.packets import LoginFailureReason
-from app.repositories import factory as repository_factory
+from app.repositories.legacy import get_legacy_repositories
 from app.services.bancho import BanchoLoginService
 from app.services.performance import PerformanceService
 from app.services.performance import ScoreParams
@@ -1190,7 +1190,7 @@ class SendPrivateMessage(BasePacket):
                 )
 
             # insert mail into db, marked as unread.
-            await repository_factory.get_repositories().mail.create(
+            await get_legacy_repositories().mail.create(
                 from_id=player.id,
                 to_id=target.id,
                 msg=msg,

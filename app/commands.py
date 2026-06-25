@@ -56,7 +56,7 @@ from app.objects.match import MatchWinConditions
 from app.objects.match import SlotStatus
 from app.objects.match import StartingTimers
 from app.objects.player import Player
-from app.repositories import factory as repository_factory
+from app.repositories.legacy import get_legacy_repositories
 from app.repositories.map_requests import MapRequest
 from app.services.performance import PerformanceService
 from app.services.performance import ScoreParams
@@ -270,11 +270,11 @@ async def changename(ctx: Context) -> str | None:
     if name in app.settings.DISALLOWED_NAMES:
         return "Disallowed username; pick another."
 
-    if await repository_factory.get_repositories().users.fetch_one(name=name):
+    if await get_legacy_repositories().users.fetch_one(name=name):
         return "Username already taken by another player."
 
     # all checks passed, update their name
-    await repository_factory.get_repositories().users.partial_update(
+    await get_legacy_repositories().users.partial_update(
         ctx.player.id,
         name=name,
     )
@@ -377,12 +377,12 @@ async def top(ctx: Context) -> str | None:
             return "Invalid username."
 
         # specific player provided
-        user = await repository_factory.get_repositories().users.fetch_one(
+        user = await get_legacy_repositories().users.fetch_one(
             name=ctx.args[1],
         )
     else:
         # no player provided, use self
-        user = await repository_factory.get_repositories().users.fetch_one(
+        user = await get_legacy_repositories().users.fetch_one(
             id=ctx.player.id,
         )
 
@@ -543,7 +543,7 @@ async def request(ctx: Context) -> str | None:
     if bmap.status != RankedStatus.Pending:
         return "Only pending maps may be requested for status change."
 
-    map_requests = await repository_factory.get_repositories().map_requests.fetch_all(
+    map_requests = await get_legacy_repositories().map_requests.fetch_all(
         map_id=bmap.id,
         player_id=ctx.player.id,
         active=True,
@@ -551,7 +551,7 @@ async def request(ctx: Context) -> str | None:
     if map_requests:
         return "You already have an active nomination request for that map."
 
-    await repository_factory.get_repositories().map_requests.create(
+    await get_legacy_repositories().map_requests.create(
         map_id=bmap.id,
         player_id=ctx.player.id,
         active=True,
@@ -573,7 +573,7 @@ async def apikey(ctx: Context) -> str | None:
     # generate new token
     ctx.player.api_key = str(uuid.uuid4())
 
-    await repository_factory.get_repositories().users.partial_update(
+    await get_legacy_repositories().users.partial_update(
         ctx.player.id,
         api_key=ctx.player.api_key,
     )
@@ -594,7 +594,7 @@ async def requests(ctx: Context) -> str | None:
     if ctx.args:
         return "Invalid syntax: !requests"
 
-    rows = await repository_factory.get_repositories().map_requests.fetch_all(
+    rows = await get_legacy_repositories().map_requests.fetch_all(
         active=True,
     )
 
@@ -664,7 +664,7 @@ async def _map(ctx: Context) -> str | None:
     # for updating cache would be faster?
     # surely this will not scale as well...
 
-    repositories = repository_factory.get_repositories()
+    repositories = get_legacy_repositories()
 
     async with app.state.services.database.transaction():
         if ctx.args[1] == "set":
@@ -705,7 +705,7 @@ async def _map(ctx: Context) -> str | None:
             modified_beatmap_ids = [bmap.id]
 
         # deactivate rank requests for all ids
-        await repository_factory.get_repositories().map_requests.mark_batch_as_inactive(
+        await get_legacy_repositories().map_requests.mark_batch_as_inactive(
             map_ids=modified_beatmap_ids,
         )
 
@@ -779,7 +779,7 @@ async def addnote(ctx: Context) -> str | None:
     if not target:
         return f'"{ctx.args[0]}" not found.'
 
-    await repository_factory.get_repositories().logs.create(
+    await get_legacy_repositories().logs.create(
         _from=ctx.player.id,
         to=target.id,
         action="note",
@@ -894,7 +894,9 @@ async def user(ctx: Context) -> str | None:
     )
 
     user_clan = (
-        await repository_factory.get_repositories().clans.fetch_one(id=player.clan_id)
+        await get_legacy_repositories().clans.fetch_one(
+            id=player.clan_id,
+        )
         if player.clan_id is not None
         else None
     )
@@ -1928,8 +1930,8 @@ async def mp_loadpool(ctx: Context, match: Match) -> str | None:
 
     name = ctx.args[0]
 
-    tourney_pool = (
-        await repository_factory.get_repositories().tourney_pools.fetch_by_name(name)
+    tourney_pool = await get_legacy_repositories().tourney_pools.fetch_by_name(
+        name,
     )
     if tourney_pool is None:
         return "Could not find a pool by that name!"
@@ -1982,7 +1984,7 @@ async def mp_ban(ctx: Context, match: Match) -> str | None:
     mods = Mods.from_modstr(r_match[1])
     slot = int(r_match[2])
 
-    map_pick = await repository_factory.get_repositories().tourney_pool_maps.fetch_by_pool_and_pick(
+    map_pick = await get_legacy_repositories().tourney_pool_maps.fetch_by_pool_and_pick(
         pool_id=match.tourney_pool["id"],
         mods=mods,
         slot=slot,
@@ -2018,7 +2020,7 @@ async def mp_unban(ctx: Context, match: Match) -> str | None:
     mods = Mods.from_modstr(r_match[1])
     slot = int(r_match[2])
 
-    map_pick = await repository_factory.get_repositories().tourney_pool_maps.fetch_by_pool_and_pick(
+    map_pick = await get_legacy_repositories().tourney_pool_maps.fetch_by_pool_and_pick(
         pool_id=match.tourney_pool["id"],
         mods=mods,
         slot=slot,
@@ -2054,7 +2056,7 @@ async def mp_pick(ctx: Context, match: Match) -> str | None:
     mods = Mods.from_modstr(r_match[1])
     slot = int(r_match[2])
 
-    map_pick = await repository_factory.get_repositories().tourney_pool_maps.fetch_by_pool_and_pick(
+    map_pick = await get_legacy_repositories().tourney_pool_maps.fetch_by_pool_and_pick(
         pool_id=match.tourney_pool["id"],
         mods=mods,
         slot=slot,
@@ -2122,13 +2124,13 @@ async def pool_create(ctx: Context) -> str | None:
 
     name = ctx.args[0]
 
-    existing_pool = (
-        await repository_factory.get_repositories().tourney_pools.fetch_by_name(name)
+    existing_pool = await get_legacy_repositories().tourney_pools.fetch_by_name(
+        name,
     )
     if existing_pool is not None:
         return "Pool already exists by that name!"
 
-    tourney_pool = await repository_factory.get_repositories().tourney_pools.create(
+    tourney_pool = await get_legacy_repositories().tourney_pools.create(
         name=name,
         created_by=ctx.player.id,
     )
@@ -2144,16 +2146,16 @@ async def pool_delete(ctx: Context) -> str | None:
 
     name = ctx.args[0]
 
-    existing_pool = (
-        await repository_factory.get_repositories().tourney_pools.fetch_by_name(name)
+    existing_pool = await get_legacy_repositories().tourney_pools.fetch_by_name(
+        name,
     )
     if existing_pool is None:
         return "Could not find a pool by that name!"
 
-    await repository_factory.get_repositories().tourney_pools.delete_by_id(
+    await get_legacy_repositories().tourney_pools.delete_by_id(
         existing_pool["id"],
     )
-    await repository_factory.get_repositories().tourney_pool_maps.delete_all_in_pool(
+    await get_legacy_repositories().tourney_pool_maps.delete_all_in_pool(
         pool_id=existing_pool["id"],
     )
 
@@ -2185,16 +2187,14 @@ async def pool_add(ctx: Context) -> str | None:
     mods = Mods.from_modstr(r_match[1])
     slot = int(r_match[2])
 
-    tourney_pool = (
-        await repository_factory.get_repositories().tourney_pools.fetch_by_name(name)
+    tourney_pool = await get_legacy_repositories().tourney_pools.fetch_by_name(
+        name,
     )
     if tourney_pool is None:
         return "Could not find a pool by that name!"
 
-    tourney_pool_maps = (
-        await repository_factory.get_repositories().tourney_pool_maps.fetch_many(
-            pool_id=tourney_pool["id"],
-        )
+    tourney_pool_maps = await get_legacy_repositories().tourney_pool_maps.fetch_many(
+        pool_id=tourney_pool["id"],
     )
     for pool_map in tourney_pool_maps:
         if mods == pool_map["mods"] and slot == pool_map["slot"]:
@@ -2205,7 +2205,7 @@ async def pool_add(ctx: Context) -> str | None:
         if pool_map["map_id"] == bmap.id:
             return f"{bmap.embed} is already in the pool!"
 
-    await repository_factory.get_repositories().tourney_pool_maps.create(
+    await get_legacy_repositories().tourney_pool_maps.create(
         map_id=bmap.id,
         pool_id=tourney_pool["id"],
         mods=mods,
@@ -2233,13 +2233,13 @@ async def pool_remove(ctx: Context) -> str | None:
     mods = Mods.from_modstr(r_match[1])
     slot = int(r_match[2])
 
-    tourney_pool = (
-        await repository_factory.get_repositories().tourney_pools.fetch_by_name(name)
+    tourney_pool = await get_legacy_repositories().tourney_pools.fetch_by_name(
+        name,
     )
     if tourney_pool is None:
         return "Could not find a pool by that name!"
 
-    map_pick = await repository_factory.get_repositories().tourney_pool_maps.fetch_by_pool_and_pick(
+    map_pick = await get_legacy_repositories().tourney_pool_maps.fetch_by_pool_and_pick(
         pool_id=tourney_pool["id"],
         mods=mods,
         slot=slot,
@@ -2247,7 +2247,7 @@ async def pool_remove(ctx: Context) -> str | None:
     if map_pick is None:
         return f"Found no {mods_slot} pick in the pool."
 
-    await repository_factory.get_repositories().tourney_pool_maps.delete_map_from_pool(
+    await get_legacy_repositories().tourney_pool_maps.delete_map_from_pool(
         map_pick["pool_id"],
         map_pick["map_id"],
     )
@@ -2258,11 +2258,9 @@ async def pool_remove(ctx: Context) -> str | None:
 @pool_commands.add(Privileges.TOURNEY_MANAGER, aliases=["l"], hidden=True)
 async def pool_list(ctx: Context) -> str | None:
     """List all existing mappools information."""
-    tourney_pools = (
-        await repository_factory.get_repositories().tourney_pools.fetch_many(
-            page=None,
-            page_size=None,
-        )
+    tourney_pools = await get_legacy_repositories().tourney_pools.fetch_many(
+        page=None,
+        page_size=None,
     )
     if not tourney_pools:
         return "There are currently no pools!"
@@ -2270,7 +2268,7 @@ async def pool_list(ctx: Context) -> str | None:
     l = [f"Mappools ({len(tourney_pools)})"]
 
     for pool in tourney_pools:
-        created_by = await repository_factory.get_repositories().users.fetch_one(
+        created_by = await get_legacy_repositories().users.fetch_one(
             id=pool["created_by"],
         )
         if created_by is None:
@@ -2293,8 +2291,8 @@ async def pool_info(ctx: Context) -> str | None:
 
     name = ctx.args[0]
 
-    tourney_pool = (
-        await repository_factory.get_repositories().tourney_pools.fetch_by_name(name)
+    tourney_pool = await get_legacy_repositories().tourney_pools.fetch_by_name(
+        name,
     )
     if tourney_pool is None:
         return "Could not find a pool by that name!"
@@ -2307,7 +2305,7 @@ async def pool_info(ctx: Context) -> str | None:
     ]
 
     for tourney_map in sorted(
-        await repository_factory.get_repositories().tourney_pool_maps.fetch_many(
+        await get_legacy_repositories().tourney_pool_maps.fetch_many(
             pool_id=tourney_pool["id"],
         ),
         key=lambda x: (repr(Mods(x["mods"])), x["slot"]),
@@ -2358,21 +2356,21 @@ async def clan_create(ctx: Context) -> str | None:
         return "Clan name may be 2-16 characters long."
 
     if ctx.player.clan_id:
-        clan = await repository_factory.get_repositories().clans.fetch_one(
+        clan = await get_legacy_repositories().clans.fetch_one(
             id=ctx.player.clan_id,
         )
         if clan:
             clan_display_name = f"[{clan['tag']}] {clan['name']}"
             return f"You're already a member of {clan_display_name}!"
 
-    if await repository_factory.get_repositories().clans.fetch_one(name=name):
+    if await get_legacy_repositories().clans.fetch_one(name=name):
         return "That name has already been claimed by another clan."
 
-    if await repository_factory.get_repositories().clans.fetch_one(tag=tag):
+    if await get_legacy_repositories().clans.fetch_one(tag=tag):
         return "That tag has already been claimed by another clan."
 
     # add clan to sql
-    new_clan = await repository_factory.get_repositories().clans.create(
+    new_clan = await get_legacy_repositories().clans.create(
         name=name,
         tag=tag,
         owner=ctx.player.id,
@@ -2382,7 +2380,7 @@ async def clan_create(ctx: Context) -> str | None:
     ctx.player.clan_id = new_clan["id"]
     ctx.player.clan_priv = ClanPrivileges.Owner
 
-    await repository_factory.get_repositories().users.partial_update(
+    await get_legacy_repositories().users.partial_update(
         ctx.player.id,
         clan_id=new_clan["id"],
         clan_priv=ClanPrivileges.Owner,
@@ -2406,7 +2404,7 @@ async def clan_disband(ctx: Context) -> str | None:
         if ctx.player not in app.state.sessions.players.staff:
             return "Only staff members may disband the clans of others."
 
-        clan = await repository_factory.get_repositories().clans.fetch_one(
+        clan = await get_legacy_repositories().clans.fetch_one(
             tag=" ".join(ctx.args).upper(),
         )
         if not clan:
@@ -2416,23 +2414,23 @@ async def clan_disband(ctx: Context) -> str | None:
             return "You're not a member of a clan!"
 
         # disband the player's clan
-        clan = await repository_factory.get_repositories().clans.fetch_one(
+        clan = await get_legacy_repositories().clans.fetch_one(
             id=ctx.player.clan_id,
         )
         if not clan:
             return "You're not a member of a clan!"
 
-    await repository_factory.get_repositories().clans.delete_one(clan["id"])
+    await get_legacy_repositories().clans.delete_one(clan["id"])
 
     # remove all members from the clan
     clan_member_ids = [
         clan_member["id"]
-        for clan_member in await repository_factory.get_repositories().users.fetch_many(
+        for clan_member in await get_legacy_repositories().users.fetch_many(
             clan_id=clan["id"],
         )
     ]
     for member_id in clan_member_ids:
-        await repository_factory.get_repositories().users.partial_update(
+        await get_legacy_repositories().users.partial_update(
             member_id,
             clan_id=0,
             clan_priv=0,
@@ -2459,7 +2457,7 @@ async def clan_info(ctx: Context) -> str | None:
     if not ctx.args:
         return "Invalid syntax: !clan info <tag>"
 
-    clan = await repository_factory.get_repositories().clans.fetch_one(
+    clan = await get_legacy_repositories().clans.fetch_one(
         tag=" ".join(ctx.args).upper(),
     )
     if not clan:
@@ -2469,7 +2467,7 @@ async def clan_info(ctx: Context) -> str | None:
     msg = [f"{clan_display_name} | Founded {clan['created_at']:%b %d, %Y}."]
 
     # get members privs from sql
-    clan_members = await repository_factory.get_repositories().users.fetch_many(
+    clan_members = await get_legacy_repositories().users.fetch_many(
         clan_id=clan["id"],
     )
     for member in sorted(clan_members, key=lambda m: m["clan_priv"], reverse=True):
@@ -2487,17 +2485,17 @@ async def clan_leave(ctx: Context) -> str | None:
     elif ctx.player.clan_priv == ClanPrivileges.Owner:
         return "You must transfer your clan's ownership before leaving it. Alternatively, you can use !clan disband."
 
-    clan = await repository_factory.get_repositories().clans.fetch_one(
+    clan = await get_legacy_repositories().clans.fetch_one(
         id=ctx.player.clan_id,
     )
     if not clan:
         return "You're not in a clan."
 
-    clan_members = await repository_factory.get_repositories().users.fetch_many(
+    clan_members = await get_legacy_repositories().users.fetch_many(
         clan_id=clan["id"],
     )
 
-    await repository_factory.get_repositories().users.partial_update(
+    await get_legacy_repositories().users.partial_update(
         ctx.player.id,
         clan_id=0,
         clan_priv=0,
@@ -2509,7 +2507,7 @@ async def clan_leave(ctx: Context) -> str | None:
 
     if not clan_members:
         # no members left, disband clan
-        await repository_factory.get_repositories().clans.delete_one(clan["id"])
+        await get_legacy_repositories().clans.delete_one(clan["id"])
 
         # announce clan disbanding
         announce_chan = app.state.sessions.channels.get_by_name("#announce")
@@ -2534,7 +2532,7 @@ async def clan_list(ctx: Context) -> str | None:
     else:
         offset = 0
 
-    all_clans = await repository_factory.get_repositories().clans.fetch_many(
+    all_clans = await get_legacy_repositories().clans.fetch_many(
         page=None,
         page_size=None,
     )

@@ -20,6 +20,9 @@ The project's core ethos is:
   logic surface called by controllers.
 - Use repositories for database access. Services should orchestrate
   repositories, transactions, and domain decisions.
+- Do not use repository/service locators for new code. The legacy repository
+  bridge exists only for command handlers and active-record-style objects that
+  have not yet moved behind services.
 - Prefer explicit dependencies over hidden package behavior. Import from direct
   source modules instead of relying on `__init__.py` re-exports.
 - Avoid dynamic imports as an architecture tool. If an import cycle appears,

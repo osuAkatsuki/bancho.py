@@ -15,7 +15,7 @@ from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
 from app.constants.score_statuses import SubmissionStatus
 from app.objects.beatmap import Beatmap
-from app.repositories import factory as repository_factory
+from app.repositories.legacy import get_legacy_repositories
 from app.services.performance import PerformanceService
 from app.services.performance import ScoreParams
 
@@ -147,7 +147,9 @@ class Score:
     @classmethod
     async def from_sql(cls, score_id: int) -> Score | None:
         """Create a score object from sql using its scoreid."""
-        rec = await repository_factory.get_repositories().scores.fetch_one(score_id)
+        rec = await get_legacy_repositories().scores.fetch_one(
+            score_id,
+        )
 
         if rec is None:
             return None
@@ -321,7 +323,7 @@ class Score:
         assert self.player is not None
         assert self.bmap is not None
 
-        recs = await repository_factory.get_repositories().scores.fetch_many(
+        recs = await get_legacy_repositories().scores.fetch_many(
             user_id=self.player.id,
             map_md5=self.bmap.md5,
             mode=self.mode,

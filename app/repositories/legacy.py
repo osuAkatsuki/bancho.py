@@ -24,8 +24,11 @@ from app.repositories.user_achievements import UserAchievementsRepository
 from app.repositories.users import UsersRepository
 
 
+# Legacy bridge for code that still performs persistence from command handlers
+# and active-record-style objects. New service code should receive repositories
+# explicitly through constructor or FastAPI dependency injection.
 @dataclass(frozen=True)
-class Repositories:
+class LegacyRepositories:
     achievements: AchievementsRepository
     channels: ChannelsRepository
     clans: ClansRepository
@@ -47,10 +50,10 @@ class Repositories:
 
 
 @cache
-def get_repositories() -> Repositories:
+def get_legacy_repositories() -> LegacyRepositories:
     database = app.state.services.database
 
-    return Repositories(
+    return LegacyRepositories(
         achievements=AchievementsRepository(database),
         channels=ChannelsRepository(database),
         clans=ClansRepository(database),
