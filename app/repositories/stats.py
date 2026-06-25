@@ -16,7 +16,10 @@ from sqlalchemy.dialects.mysql import TINYINT
 from app._typing import UNSET
 from app._typing import _UnsetSentinel
 from app.adapters.database import Database
+from app.constants.privileges import Privileges
 from app.repositories import Base
+from app.repositories.clans import ClansTable
+from app.repositories.users import UsersTable
 
 
 class StatsTable(Base):
@@ -89,6 +92,27 @@ class Stat(TypedDict):
     sh_count: int
     s_count: int
     a_count: int
+
+
+class PublicLeaderboardRow(TypedDict):
+    player_id: int
+    name: str
+    country: str
+    tscore: int
+    rscore: int
+    pp: int
+    plays: int
+    playtime: int
+    acc: float
+    max_combo: int
+    xh_count: int
+    x_count: int
+    sh_count: int
+    s_count: int
+    a_count: int
+    clan_id: int | None
+    clan_name: str | None
+    clan_tag: str | None
 
 
 class StatsRepository:
@@ -170,6 +194,64 @@ class StatsRepository:
 
         stats = await self._database.fetch_all(select_stmt)
         return cast(list[Stat], stats)
+
+    async def fetch_public_leaderboard(
+        self,
+        *,
+        sort: str,
+        mode: int,
+        limit: int,
+        offset: int,
+        country: str | None,
+    ) -> list[PublicLeaderboardRow]:
+        sort_columns = {
+            "tscore": StatsTable.tscore,
+            "rscore": StatsTable.rscore,
+            "pp": StatsTable.pp,
+            "acc": StatsTable.acc,
+            "plays": StatsTable.plays,
+            "playtime": StatsTable.playtime,
+        }
+        sort_column = sort_columns[sort]
+
+        select_stmt = (
+            select(
+                UsersTable.id.label("player_id"),
+                UsersTable.name,
+                UsersTable.country,
+                StatsTable.tscore,
+                StatsTable.rscore,
+                StatsTable.pp,
+                StatsTable.plays,
+                StatsTable.playtime,
+                StatsTable.acc,
+                StatsTable.max_combo,
+                StatsTable.xh_count,
+                StatsTable.x_count,
+                StatsTable.sh_count,
+                StatsTable.s_count,
+                StatsTable.a_count,
+                ClansTable.id.label("clan_id"),
+                ClansTable.name.label("clan_name"),
+                ClansTable.tag.label("clan_tag"),
+            )
+            .select_from(StatsTable)
+            .join(UsersTable, UsersTable.id == StatsTable.id)
+            .outerjoin(ClansTable, ClansTable.id == UsersTable.clan_id)
+            .where(
+                StatsTable.mode == mode,
+                UsersTable.priv.bitwise_and(Privileges.UNRESTRICTED.value) != 0,
+                sort_column > 0,
+            )
+            .order_by(sort_column.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        if country is not None:
+            select_stmt = select_stmt.where(UsersTable.country == country)
+
+        rows = await self._database.fetch_all(select_stmt)
+        return cast(list[PublicLeaderboardRow], rows)
 
     async def partial_update(
         self,

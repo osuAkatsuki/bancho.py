@@ -169,6 +169,87 @@ class PersonalBestLeaderboardScoreRow(TypedDict):
     time: int
 
 
+class PublicPlayerScore(TypedDict):
+    id: int
+    map_md5: str
+    score: int
+    pp: float
+    acc: float
+    max_combo: int
+    mods: int
+    n300: int
+    n100: int
+    n50: int
+    nmiss: int
+    ngeki: int
+    nkatu: int
+    grade: str
+    status: int
+    mode: int
+    play_time: datetime
+    time_elapsed: int
+    perfect: int
+
+
+class PublicMostPlayedMap(TypedDict):
+    md5: str
+    id: int
+    set_id: int
+    status: int
+    artist: str
+    title: str
+    version: str
+    creator: str
+    plays: int
+
+
+class PublicMapScore(TypedDict):
+    map_md5: str
+    score: int
+    pp: float
+    acc: float
+    max_combo: int
+    mods: int
+    n300: int
+    n100: int
+    n50: int
+    nmiss: int
+    ngeki: int
+    nkatu: int
+    grade: str
+    status: int
+    mode: int
+    play_time: datetime
+    time_elapsed: int
+    userid: int
+    perfect: int
+    player_name: str
+    player_country: str
+    clan_id: int | None
+    clan_name: str | None
+    clan_tag: str | None
+
+
+class ReplayHeader(TypedDict):
+    username: str
+    map_md5: str
+    artist: str
+    title: str
+    version: str
+    mode: int
+    n300: int
+    n100: int
+    n50: int
+    ngeki: int
+    nkatu: int
+    nmiss: int
+    score: int
+    max_combo: int
+    perfect: int
+    mods: int
+    play_time: datetime
+
+
 class ScoresRepository:
     def __init__(self, database: Database) -> None:
         self._database = database
@@ -440,6 +521,208 @@ class ScoresRepository:
         higher_scores = await self._database.fetch_one(select_stmt)
         assert higher_scores is not None
         return int(higher_scores["count"]) + 1
+
+    async def fetch_public_player_scores(
+        self,
+        *,
+        user_id: int,
+        mode: int,
+        mods: int | None,
+        strong_mods_equality: bool,
+        scope: str,
+        limit: int,
+        include_loved: bool,
+        include_failed: bool,
+    ) -> list[PublicPlayerScore]:
+        select_stmt = (
+            select(
+                ScoresTable.id,
+                ScoresTable.map_md5,
+                ScoresTable.score,
+                ScoresTable.pp,
+                ScoresTable.acc,
+                ScoresTable.max_combo,
+                ScoresTable.mods,
+                ScoresTable.n300,
+                ScoresTable.n100,
+                ScoresTable.n50,
+                ScoresTable.nmiss,
+                ScoresTable.ngeki,
+                ScoresTable.nkatu,
+                ScoresTable.grade,
+                ScoresTable.status,
+                ScoresTable.mode,
+                ScoresTable.play_time,
+                ScoresTable.time_elapsed,
+                ScoresTable.perfect,
+            )
+            .join(MapsTable, ScoresTable.map_md5 == MapsTable.md5)
+            .where(
+                ScoresTable.userid == user_id,
+                ScoresTable.mode == mode,
+            )
+        )
+        if mods is not None:
+            mods_match = ScoresTable.mods.bitwise_and(mods)
+            if strong_mods_equality:
+                select_stmt = select_stmt.where(mods_match == mods)
+            else:
+                select_stmt = select_stmt.where(mods_match != 0)
+
+        if scope == "best":
+            allowed_map_statuses = [
+                RankedStatus.Ranked.value,
+                RankedStatus.Approved.value,
+            ]
+            if include_loved:
+                allowed_map_statuses.append(RankedStatus.Loved.value)
+
+            select_stmt = select_stmt.where(
+                ScoresTable.status == SubmissionStatus.BEST.value,
+                MapsTable.status.in_(allowed_map_statuses),
+            )
+            sort_column = ScoresTable.pp
+        else:
+            if not include_failed:
+                select_stmt = select_stmt.where(
+                    ScoresTable.status != SubmissionStatus.FAILED.value,
+                )
+
+            sort_column = ScoresTable.play_time
+
+        select_stmt = select_stmt.order_by(sort_column.desc()).limit(limit)
+
+        scores = await self._database.fetch_all(select_stmt)
+        return cast(list[PublicPlayerScore], scores)
+
+    async def fetch_public_player_most_played_maps(
+        self,
+        *,
+        user_id: int,
+        mode: int,
+        limit: int,
+    ) -> list[PublicMostPlayedMap]:
+        select_stmt = (
+            select(
+                MapsTable.md5,
+                MapsTable.id,
+                MapsTable.set_id,
+                MapsTable.status,
+                MapsTable.artist,
+                MapsTable.title,
+                MapsTable.version,
+                MapsTable.creator,
+                func.count().label("plays"),
+            )
+            .select_from(ScoresTable)
+            .join(MapsTable, MapsTable.md5 == ScoresTable.map_md5)
+            .where(
+                ScoresTable.userid == user_id,
+                ScoresTable.mode == mode,
+            )
+            .group_by(ScoresTable.map_md5)
+            .order_by(func.count().desc())
+            .limit(limit)
+        )
+
+        maps = await self._database.fetch_all(select_stmt)
+        return cast(list[PublicMostPlayedMap], maps)
+
+    async def fetch_public_map_scores(
+        self,
+        *,
+        map_md5: str,
+        mode: int,
+        mods: int | None,
+        strong_mods_equality: bool,
+        scope: str,
+        limit: int,
+    ) -> list[PublicMapScore]:
+        select_stmt = (
+            select(
+                ScoresTable.map_md5,
+                ScoresTable.score,
+                ScoresTable.pp,
+                ScoresTable.acc,
+                ScoresTable.max_combo,
+                ScoresTable.mods,
+                ScoresTable.n300,
+                ScoresTable.n100,
+                ScoresTable.n50,
+                ScoresTable.nmiss,
+                ScoresTable.ngeki,
+                ScoresTable.nkatu,
+                ScoresTable.grade,
+                ScoresTable.status,
+                ScoresTable.mode,
+                ScoresTable.play_time,
+                ScoresTable.time_elapsed,
+                ScoresTable.userid,
+                ScoresTable.perfect,
+                UsersTable.name.label("player_name"),
+                UsersTable.country.label("player_country"),
+                ClansTable.id.label("clan_id"),
+                ClansTable.name.label("clan_name"),
+                ClansTable.tag.label("clan_tag"),
+            )
+            .select_from(ScoresTable)
+            .join(UsersTable, UsersTable.id == ScoresTable.userid)
+            .outerjoin(ClansTable, ClansTable.id == UsersTable.clan_id)
+            .where(
+                ScoresTable.map_md5 == map_md5,
+                ScoresTable.mode == mode,
+                ScoresTable.status == SubmissionStatus.BEST.value,
+                UsersTable.priv.bitwise_and(Privileges.UNRESTRICTED.value) != 0,
+            )
+        )
+        if mods is not None:
+            mods_match = ScoresTable.mods.bitwise_and(mods)
+            if strong_mods_equality:
+                select_stmt = select_stmt.where(mods_match == mods)
+            else:
+                select_stmt = select_stmt.where(mods_match != 0)
+
+        # Unlike /get_player_scores, we sort by score or pp depending on the
+        # mode played, since we want to replicate leaderboards.
+        if scope == "best":
+            sort_column = ScoresTable.pp if mode >= 4 else ScoresTable.score
+        else:
+            sort_column = ScoresTable.play_time
+
+        select_stmt = select_stmt.order_by(sort_column.desc()).limit(limit)
+
+        scores = await self._database.fetch_all(select_stmt)
+        return cast(list[PublicMapScore], scores)
+
+    async def fetch_replay_header(self, score_id: int) -> ReplayHeader | None:
+        select_stmt = (
+            select(
+                UsersTable.name.label("username"),
+                MapsTable.md5.label("map_md5"),
+                MapsTable.artist,
+                MapsTable.title,
+                MapsTable.version,
+                ScoresTable.mode,
+                ScoresTable.n300,
+                ScoresTable.n100,
+                ScoresTable.n50,
+                ScoresTable.ngeki,
+                ScoresTable.nkatu,
+                ScoresTable.nmiss,
+                ScoresTable.score,
+                ScoresTable.max_combo,
+                ScoresTable.perfect,
+                ScoresTable.mods,
+                ScoresTable.play_time,
+            )
+            .select_from(ScoresTable)
+            .join(UsersTable, UsersTable.id == ScoresTable.userid)
+            .join(MapsTable, MapsTable.md5 == ScoresTable.map_md5)
+            .where(ScoresTable.id == score_id)
+        )
+
+        replay_header = await self._database.fetch_one(select_stmt)
+        return cast(ReplayHeader | None, replay_header)
 
     async def fetch_one(self, id: int) -> Score | None:
         select_stmt = select(*READ_PARAMS).where(ScoresTable.id == id)

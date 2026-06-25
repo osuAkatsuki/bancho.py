@@ -16,6 +16,7 @@ from sqlalchemy.dialects.mysql import TINYINT
 from app._typing import UNSET
 from app._typing import _UnsetSentinel
 from app.adapters.database import Database
+from app.constants.privileges import Privileges
 from app.repositories import Base
 from app.utils import make_safe_name
 
@@ -94,6 +95,11 @@ class User(TypedDict):
     custom_badge_icon: str | None
     userpage_content: str | None
     api_key: str | None
+
+
+class SearchUser(TypedDict):
+    id: int
+    name: str
 
 
 class UsersRepository:
@@ -179,6 +185,24 @@ class UsersRepository:
         rec = await self._database.fetch_one(select_stmt)
         assert rec is not None
         return cast(int, rec["count"])
+
+    async def search_public(self, name: str | None = None) -> list[SearchUser]:
+        select_stmt = (
+            select(UsersTable.id, UsersTable.name)
+            .where(
+                UsersTable.priv.bitwise_and(
+                    Privileges.UNRESTRICTED.value | Privileges.VERIFIED.value,
+                )
+                == (Privileges.UNRESTRICTED.value | Privileges.VERIFIED.value),
+            )
+            .order_by(UsersTable.id.asc())
+        )
+
+        if name is not None:
+            select_stmt = select_stmt.where(UsersTable.name.like(f"%{name}%"))
+
+        users = await self._database.fetch_all(select_stmt)
+        return cast(list[SearchUser], users)
 
     async def fetch_many(
         self,

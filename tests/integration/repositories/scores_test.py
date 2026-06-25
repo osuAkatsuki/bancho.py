@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import app.state.services
+from app.constants.beatmap_statuses import RankedStatus
+from app.constants.score_statuses import SubmissionStatus
+from app.repositories.maps import MapsRepository
 from app.repositories.scores import ScoresRepository
 from app.repositories.users import UsersRepository
 from tests import factories
@@ -354,3 +357,282 @@ async def test_fetch_beatmap_leaderboard_scores_applies_mods_friends_and_country
         requester_score["id"],
         same_country_score["id"],
     ]
+
+
+async def test_fetch_public_player_best_scores_filters_best_ranked_and_loved_maps() -> (
+    None
+):
+    ranked_map = await factories.create_map()
+    loved_map = await factories.create_map()
+    pending_map = await factories.create_map()
+    player = await factories.create_user()
+    maps = MapsRepository(app.state.services.database)
+    scores = ScoresRepository(app.state.services.database)
+
+    await maps.partial_update(
+        id=loved_map["id"],
+        status=RankedStatus.Loved.value,
+    )
+    await maps.partial_update(
+        id=pending_map["id"],
+        status=RankedStatus.Pending.value,
+    )
+
+    ranked_score = await factories.create_score(
+        player_id=player["id"],
+        map_md5=ranked_map["md5"],
+        pp=300.0,
+        status=SubmissionStatus.BEST.value,
+    )
+    loved_score = await factories.create_score(
+        player_id=player["id"],
+        map_md5=loved_map["md5"],
+        pp=400.0,
+        status=SubmissionStatus.BEST.value,
+    )
+    await factories.create_score(
+        player_id=player["id"],
+        map_md5=ranked_map["md5"],
+        pp=500.0,
+        status=SubmissionStatus.SUBMITTED.value,
+    )
+    await factories.create_score(
+        player_id=player["id"],
+        map_md5=pending_map["md5"],
+        pp=600.0,
+        status=SubmissionStatus.BEST.value,
+    )
+
+    rows_without_loved = await scores.fetch_public_player_scores(
+        user_id=player["id"],
+        mode=0,
+        mods=None,
+        strong_mods_equality=True,
+        scope="best",
+        limit=10,
+        include_loved=False,
+        include_failed=True,
+    )
+    rows_with_loved = await scores.fetch_public_player_scores(
+        user_id=player["id"],
+        mode=0,
+        mods=None,
+        strong_mods_equality=True,
+        scope="best",
+        limit=10,
+        include_loved=True,
+        include_failed=True,
+    )
+
+    assert [row["id"] for row in rows_without_loved] == [ranked_score["id"]]
+    assert [row["id"] for row in rows_with_loved] == [
+        loved_score["id"],
+        ranked_score["id"],
+    ]
+
+
+async def test_fetch_public_player_recent_scores_filters_failed_and_mods() -> None:
+    beatmap = await factories.create_map()
+    player = await factories.create_user()
+    scores = ScoresRepository(app.state.services.database)
+
+    hd_score = await factories.create_score(
+        player_id=player["id"],
+        map_md5=beatmap["md5"],
+        mods=64,
+        status=SubmissionStatus.SUBMITTED.value,
+    )
+    hr_score = await factories.create_score(
+        player_id=player["id"],
+        map_md5=beatmap["md5"],
+        mods=16,
+        status=SubmissionStatus.SUBMITTED.value,
+    )
+    hdhr_score = await factories.create_score(
+        player_id=player["id"],
+        map_md5=beatmap["md5"],
+        mods=80,
+        status=SubmissionStatus.SUBMITTED.value,
+    )
+    failed_score = await factories.create_score(
+        player_id=player["id"],
+        map_md5=beatmap["md5"],
+        mods=80,
+        status=SubmissionStatus.FAILED.value,
+    )
+
+    rows_without_failed = await scores.fetch_public_player_scores(
+        user_id=player["id"],
+        mode=0,
+        mods=None,
+        strong_mods_equality=True,
+        scope="recent",
+        limit=10,
+        include_loved=False,
+        include_failed=False,
+    )
+    weak_mod_rows = await scores.fetch_public_player_scores(
+        user_id=player["id"],
+        mode=0,
+        mods=80,
+        strong_mods_equality=False,
+        scope="recent",
+        limit=10,
+        include_loved=False,
+        include_failed=True,
+    )
+    strong_mod_rows = await scores.fetch_public_player_scores(
+        user_id=player["id"],
+        mode=0,
+        mods=80,
+        strong_mods_equality=True,
+        scope="recent",
+        limit=10,
+        include_loved=False,
+        include_failed=True,
+    )
+
+    assert {row["id"] for row in rows_without_failed} == {
+        hd_score["id"],
+        hr_score["id"],
+        hdhr_score["id"],
+    }
+    assert {row["id"] for row in weak_mod_rows} == {
+        hd_score["id"],
+        hr_score["id"],
+        hdhr_score["id"],
+        failed_score["id"],
+    }
+    assert {row["id"] for row in strong_mod_rows} == {
+        hdhr_score["id"],
+        failed_score["id"],
+    }
+
+
+async def test_fetch_public_player_most_played_maps_groups_by_map() -> None:
+    most_played_map = await factories.create_map()
+    other_map = await factories.create_map()
+    player = await factories.create_user()
+    scores = ScoresRepository(app.state.services.database)
+
+    await factories.create_score(
+        player_id=player["id"],
+        map_md5=most_played_map["md5"],
+    )
+    await factories.create_score(
+        player_id=player["id"],
+        map_md5=most_played_map["md5"],
+    )
+    await factories.create_score(
+        player_id=player["id"],
+        map_md5=other_map["md5"],
+    )
+
+    rows = await scores.fetch_public_player_most_played_maps(
+        user_id=player["id"],
+        mode=0,
+        limit=10,
+    )
+
+    assert [(row["md5"], row["plays"]) for row in rows] == [
+        (most_played_map["md5"], 2),
+        (other_map["md5"], 1),
+    ]
+
+
+async def test_fetch_public_map_scores_filters_restricted_and_sorts_by_mode_metric() -> (
+    None
+):
+    beatmap = await factories.create_map()
+    score_player = await factories.create_user()
+    pp_player = await factories.create_user()
+    restricted_player = await factories.create_user()
+    users = UsersRepository(app.state.services.database)
+    scores = ScoresRepository(app.state.services.database)
+    await users.partial_update(id=restricted_player["id"], priv=0)
+
+    await factories.create_score(
+        player_id=score_player["id"],
+        map_md5=beatmap["md5"],
+        score=900_000,
+        pp=100.0,
+        mode=0,
+        status=SubmissionStatus.BEST.value,
+    )
+    await factories.create_score(
+        player_id=pp_player["id"],
+        map_md5=beatmap["md5"],
+        score=500_000,
+        pp=300.0,
+        mode=0,
+        status=SubmissionStatus.BEST.value,
+    )
+    await factories.create_score(
+        player_id=restricted_player["id"],
+        map_md5=beatmap["md5"],
+        score=1_000_000,
+        pp=400.0,
+        mode=0,
+        status=SubmissionStatus.BEST.value,
+    )
+    await factories.create_score(
+        player_id=score_player["id"],
+        map_md5=beatmap["md5"],
+        score=900_000,
+        pp=100.0,
+        mode=4,
+        status=SubmissionStatus.BEST.value,
+    )
+    await factories.create_score(
+        player_id=pp_player["id"],
+        map_md5=beatmap["md5"],
+        score=500_000,
+        pp=300.0,
+        mode=4,
+        status=SubmissionStatus.BEST.value,
+    )
+
+    vanilla_rows = await scores.fetch_public_map_scores(
+        map_md5=beatmap["md5"],
+        mode=0,
+        mods=None,
+        strong_mods_equality=True,
+        scope="best",
+        limit=10,
+    )
+    relax_rows = await scores.fetch_public_map_scores(
+        map_md5=beatmap["md5"],
+        mode=4,
+        mods=None,
+        strong_mods_equality=True,
+        scope="best",
+        limit=10,
+    )
+
+    assert [row["player_name"] for row in vanilla_rows] == [
+        score_player["name"],
+        pp_player["name"],
+    ]
+    assert [row["player_name"] for row in relax_rows] == [
+        pp_player["name"],
+        score_player["name"],
+    ]
+
+
+async def test_fetch_replay_header_returns_score_player_and_map_details() -> None:
+    beatmap = await factories.create_map()
+    player = await factories.create_user()
+    score = await factories.create_score(
+        player_id=player["id"],
+        map_md5=beatmap["md5"],
+    )
+    scores = ScoresRepository(app.state.services.database)
+
+    row = await scores.fetch_replay_header(score["id"])
+
+    assert row is not None
+    assert row["username"] == player["name"]
+    assert row["map_md5"] == beatmap["md5"]
+    assert row["artist"] == beatmap["artist"]
+    assert row["title"] == beatmap["title"]
+    assert row["score"] == score["score"]

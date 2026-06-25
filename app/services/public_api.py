@@ -1,30 +1,33 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from app.adapters.database import Database
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
 from app.objects.beatmap import Beatmap
 from app.repositories.clans import Clan
 from app.repositories.clans import ClansRepository
+from app.repositories.scores import PublicMapScore
+from app.repositories.scores import PublicMostPlayedMap
+from app.repositories.scores import PublicPlayerScore
+from app.repositories.scores import ReplayHeader
 from app.repositories.scores import Score
 from app.repositories.scores import ScoresRepository
+from app.repositories.stats import PublicLeaderboardRow
 from app.repositories.stats import Stat
 from app.repositories.stats import StatsRepository
 from app.repositories.tourney_pool_maps import TourneyPoolMap
 from app.repositories.tourney_pool_maps import TourneyPoolMapsRepository
 from app.repositories.tourney_pools import TourneyPool
 from app.repositories.tourney_pools import TourneyPoolsRepository
+from app.repositories.users import SearchUser
 from app.repositories.users import User
 from app.repositories.users import UsersRepository
 
 
 @dataclass(frozen=True)
 class PublicApiService:
-    database: Database
     users: UsersRepository
     stats: StatsRepository
     clans: ClansRepository
@@ -32,16 +35,8 @@ class PublicApiService:
     tourney_pools: TourneyPoolsRepository
     tourney_pool_maps: TourneyPoolMapsRepository
 
-    async def search_players(self, search: str | None) -> list[dict[str, Any]]:
-        rows = await self.database.fetch_all(
-            "SELECT id, name "
-            "FROM users "
-            "WHERE name LIKE COALESCE(:name, name) "
-            "AND priv & 3 = 3 "
-            "ORDER BY id ASC",
-            {"name": f"%{search}%" if search is not None else None},
-        )
-        return [dict(row) for row in rows]
+    async def search_players(self, search: str | None) -> list[SearchUser]:
+        return await self.users.search_public(name=search)
 
     async def fetch_total_player_count(self) -> int:
         return await self.users.fetch_count()
@@ -74,48 +69,18 @@ class PublicApiService:
         include_loved: bool,
         include_failed: bool,
     ) -> list[dict[str, Any]]:
-        query = [
-            "SELECT t.id, t.map_md5, t.score, t.pp, t.acc, t.max_combo, "
-            "t.mods, t.n300, t.n100, t.n50, t.nmiss, t.ngeki, t.nkatu, t.grade, "
-            "t.status, t.mode, t.play_time, t.time_elapsed, t.perfect "
-            "FROM scores t "
-            "INNER JOIN maps b ON t.map_md5 = b.md5 "
-            "WHERE t.userid = :user_id AND t.mode = :mode",
-        ]
-
-        params: dict[str, object] = {
-            "user_id": player_id,
-            "mode": mode,
-        }
-
-        if mods is not None:
-            if strong_mods_equality:
-                query.append("AND t.mods & :mods = :mods")
-            else:
-                query.append("AND t.mods & :mods != 0")
-
-            params["mods"] = mods
-
-        if scope == "best":
-            allowed_statuses = [2, 3]
-
-            if include_loved:
-                allowed_statuses.append(5)
-
-            query.append("AND t.status = 2 AND b.status IN :statuses")
-            params["statuses"] = allowed_statuses
-            sort = "t.pp"
-        else:
-            if not include_failed:
-                query.append("AND t.status != 0")
-
-            sort = "t.play_time"
-
-        query.append(f"ORDER BY {sort} DESC LIMIT :limit")
-        params["limit"] = limit
-
-        rows = [
-            dict(row) for row in await self.database.fetch_all(" ".join(query), params)
+        rows: list[dict[str, Any]] = [
+            dict(row)
+            for row in await self.scores.fetch_public_player_scores(
+                user_id=player_id,
+                mode=int(mode),
+                mods=int(mods) if mods is not None else None,
+                strong_mods_equality=strong_mods_equality,
+                scope=scope,
+                limit=limit,
+                include_loved=include_loved,
+                include_failed=include_failed,
+            )
         ]
 
         for row in rows:
@@ -130,20 +95,12 @@ class PublicApiService:
         player_id: int,
         mode: GameMode,
         limit: int,
-    ) -> list[dict[str, Any]]:
-        rows = await self.database.fetch_all(
-            "SELECT m.md5, m.id, m.set_id, m.status, "
-            "m.artist, m.title, m.version, m.creator, COUNT(*) plays "
-            "FROM scores s "
-            "INNER JOIN maps m ON m.md5 = s.map_md5 "
-            "WHERE s.userid = :user_id "
-            "AND s.mode = :mode "
-            "GROUP BY s.map_md5 "
-            "ORDER BY plays DESC "
-            "LIMIT :limit",
-            {"user_id": player_id, "mode": mode, "limit": limit},
+    ) -> list[PublicMostPlayedMap]:
+        return await self.scores.fetch_public_player_most_played_maps(
+            user_id=player_id,
+            mode=int(mode),
+            limit=limit,
         )
-        return [dict(row) for row in rows]
 
     async def fetch_map_scores(
         self,
@@ -154,63 +111,21 @@ class PublicApiService:
         strong_mods_equality: bool,
         scope: str,
         limit: int,
-    ) -> list[dict[str, Any]]:
-        query = [
-            "SELECT s.map_md5, s.score, s.pp, s.acc, s.max_combo, s.mods, "
-            "s.n300, s.n100, s.n50, s.nmiss, s.ngeki, s.nkatu, s.grade, s.status, "
-            "s.mode, s.play_time, s.time_elapsed, s.userid, s.perfect, "
-            "u.name player_name, u.country player_country, "
-            "c.id clan_id, c.name clan_name, c.tag clan_tag "
-            "FROM scores s "
-            "INNER JOIN users u ON u.id = s.userid "
-            "LEFT JOIN clans c ON c.id = u.clan_id "
-            "WHERE s.map_md5 = :map_md5 "
-            "AND s.mode = :mode "
-            "AND s.status = 2 "
-            "AND u.priv & 1",
-        ]
-        params: dict[str, object] = {
-            "map_md5": map_md5,
-            "mode": mode,
-        }
-
-        if mods is not None:
-            if strong_mods_equality:
-                query.append("AND mods & :mods = :mods")
-            else:
-                query.append("AND mods & :mods != 0")
-
-            params["mods"] = mods
-
-        # Unlike /get_player_scores, we sort by score or pp depending on the
-        # mode played, since we want to replicate leaderboards.
-        if scope == "best":
-            sort = "pp" if mode >= GameMode.RELAX_OSU else "score"
-        else:
-            sort = "play_time"
-
-        query.append(f"ORDER BY {sort} DESC LIMIT :limit")
-        params["limit"] = limit
-
-        rows = await self.database.fetch_all(" ".join(query), params)
-        return [dict(row) for row in rows]
+    ) -> list[PublicMapScore]:
+        return await self.scores.fetch_public_map_scores(
+            map_md5=map_md5,
+            mode=int(mode),
+            mods=int(mods) if mods is not None else None,
+            strong_mods_equality=strong_mods_equality,
+            scope=scope,
+            limit=limit,
+        )
 
     async def fetch_score(self, score_id: int) -> Score | None:
         return await self.scores.fetch_one(score_id)
 
-    async def fetch_replay_header(self, score_id: int) -> Mapping[str, Any] | None:
-        return await self.database.fetch_one(
-            "SELECT u.name username, m.md5 map_md5, "
-            "m.artist, m.title, m.version, "
-            "s.mode, s.n300, s.n100, s.n50, s.ngeki, "
-            "s.nkatu, s.nmiss, s.score, s.max_combo, "
-            "s.perfect, s.mods, s.play_time "
-            "FROM scores s "
-            "INNER JOIN users u ON u.id = s.userid "
-            "INNER JOIN maps m ON m.md5 = s.map_md5 "
-            "WHERE s.id = :score_id",
-            {"score_id": score_id},
-        )
+    async def fetch_replay_header(self, score_id: int) -> ReplayHeader | None:
+        return await self.scores.fetch_replay_header(score_id)
 
     async def fetch_global_leaderboard(
         self,
@@ -220,27 +135,14 @@ class PublicApiService:
         limit: int,
         offset: int,
         country: str | None,
-    ) -> list[dict[str, Any]]:
-        query_conditions = ["s.mode = :mode", "u.priv & 1", f"s.{sort} > 0"]
-        query_parameters: dict[str, object] = {"mode": mode}
-
-        if country is not None:
-            query_conditions.append("u.country = :country")
-            query_parameters["country"] = country
-
-        rows = await self.database.fetch_all(
-            "SELECT u.id as player_id, u.name, u.country, s.tscore, s.rscore, "
-            "s.pp, s.plays, s.playtime, s.acc, s.max_combo, "
-            "s.xh_count, s.x_count, s.sh_count, s.s_count, s.a_count, "
-            "c.id as clan_id, c.name as clan_name, c.tag as clan_tag "
-            "FROM stats s "
-            "LEFT JOIN users u USING (id) "
-            "LEFT JOIN clans c ON u.clan_id = c.id "
-            f"WHERE {' AND '.join(query_conditions)} "
-            f"ORDER BY s.{sort} DESC LIMIT :offset, :limit",
-            query_parameters | {"offset": offset, "limit": limit},
+    ) -> list[PublicLeaderboardRow]:
+        return await self.stats.fetch_public_leaderboard(
+            sort=sort,
+            mode=int(mode),
+            limit=limit,
+            offset=offset,
+            country=country,
         )
-        return [dict(row) for row in rows]
 
     async def fetch_clan(self, clan_id: int) -> Clan | None:
         return await self.clans.fetch_one(id=clan_id)

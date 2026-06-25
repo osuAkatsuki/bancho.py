@@ -300,7 +300,6 @@ def get_public_api_service(
     ],
 ) -> PublicApiService:
     return PublicApiService(
-        database=app.state.services.database,
         users=users,
         stats=stats,
         clans=clans,
