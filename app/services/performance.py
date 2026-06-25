@@ -63,85 +63,79 @@ class PerformanceService:
         osu_file_path: str,
         scores: Iterable[ScoreParams],
     ) -> list[PerformanceResult]:
-        return _calculate_performances(osu_file_path, scores)
+        """\
+        Calculate performance for multiple scores on a single beatmap.
 
+        Typically most useful for mass-recalculation situations.
 
-def _calculate_performances(
-    osu_file_path: str,
-    scores: Iterable[ScoreParams],
-) -> list[PerformanceResult]:
-    """\
-    Calculate performance for multiple scores on a single beatmap.
+        TODO: Some level of error handling & returning to caller should be
+        implemented here to handle cases where e.g. the beatmap file is invalid
+        or there an issue during calculation.
+        """
+        calc_bmap = Beatmap(path=osu_file_path)
 
-    Typically most useful for mass-recalculation situations.
+        results: list[PerformanceResult] = []
 
-    TODO: Some level of error handling & returning to caller should be
-    implemented here to handle cases where e.g. the beatmap file is invalid
-    or there an issue during calculation.
-    """
-    calc_bmap = Beatmap(path=osu_file_path)
+        for score in scores:
+            if score.acc and (
+                score.n300 or score.n100 or score.n50 or score.ngeki or score.nkatu
+            ):
+                raise ValueError(
+                    "Must not specify accuracy AND 300/100/50/geki/katu. Only one or the other.",
+                )
 
-    results: list[PerformanceResult] = []
+            # rosupp ignores NC and requires DT
+            if score.mods is not None:
+                if score.mods & Mods.NIGHTCORE:
+                    score.mods |= Mods.DOUBLETIME
 
-    for score in scores:
-        if score.acc and (
-            score.n300 or score.n100 or score.n50 or score.ngeki or score.nkatu
-        ):
-            raise ValueError(
-                "Must not specify accuracy AND 300/100/50/geki/katu. Only one or the other.",
+            calculator = Calculator(
+                mode=score.mode,
+                mods=score.mods or 0,
+                combo=score.combo,
+                acc=score.acc,
+                n300=score.n300,
+                n100=score.n100,
+                n50=score.n50,
+                n_geki=score.ngeki,
+                n_katu=score.nkatu,
+                n_misses=score.nmiss,
             )
 
-        # rosupp ignores NC and requires DT
-        if score.mods is not None:
-            if score.mods & Mods.NIGHTCORE:
-                score.mods |= Mods.DOUBLETIME
+            result = calculator.performance(calc_bmap)
 
-        calculator = Calculator(
-            mode=score.mode,
-            mods=score.mods or 0,
-            combo=score.combo,
-            acc=score.acc,
-            n300=score.n300,
-            n100=score.n100,
-            n50=score.n50,
-            n_geki=score.ngeki,
-            n_katu=score.nkatu,
-            n_misses=score.nmiss,
-        )
-        result = calculator.performance(calc_bmap)
+            pp = result.pp
 
-        pp = result.pp
+            if math.isnan(pp) or math.isinf(pp):
+                # TODO: report to logserver
+                pp = 0.0
+            else:
+                pp = round(pp, 3)
 
-        if math.isnan(pp) or math.isinf(pp):
-            # TODO: report to logserver
-            pp = 0.0
-        else:
-            pp = round(pp, 3)
-
-        results.append(
-            {
-                "performance": {
-                    "pp": pp,
-                    "pp_acc": result.pp_acc,
-                    "pp_aim": result.pp_aim,
-                    "pp_speed": result.pp_speed,
-                    "pp_flashlight": result.pp_flashlight,
-                    "effective_miss_count": result.effective_miss_count,
-                    "pp_difficulty": result.pp_difficulty,
+            results.append(
+                {
+                    "performance": {
+                        "pp": pp,
+                        "pp_acc": result.pp_acc,
+                        "pp_aim": result.pp_aim,
+                        "pp_speed": result.pp_speed,
+                        "pp_flashlight": result.pp_flashlight,
+                        "effective_miss_count": result.effective_miss_count,
+                        "pp_difficulty": result.pp_difficulty,
+                    },
+                    "difficulty": {
+                        "stars": result.difficulty.stars,
+                        "aim": result.difficulty.aim,
+                        "speed": result.difficulty.speed,
+                        "flashlight": result.difficulty.flashlight,
+                        "slider_factor": result.difficulty.slider_factor,
+                        "speed_note_count": result.difficulty.speed_note_count,
+                        "stamina": result.difficulty.stamina,
+                        "color": result.difficulty.color,
+                        "rhythm": result.difficulty.rhythm,
+                        "peak": result.difficulty.peak,
+                    },
                 },
-                "difficulty": {
-                    "stars": result.difficulty.stars,
-                    "aim": result.difficulty.aim,
-                    "speed": result.difficulty.speed,
-                    "flashlight": result.difficulty.flashlight,
-                    "slider_factor": result.difficulty.slider_factor,
-                    "speed_note_count": result.difficulty.speed_note_count,
-                    "stamina": result.difficulty.stamina,
-                    "color": result.difficulty.color,
-                    "rhythm": result.difficulty.rhythm,
-                    "peak": result.difficulty.peak,
-                },
-            },
-        )
+            )
 
-    return results
+        return results
