@@ -1762,6 +1762,23 @@ async def test_submit_score_logs_integrity_failure_and_continues(
     assert integrity_failures == 1
 
 
+def test_score_submission_username_removes_supporter_marker_only() -> None:
+    request = score_submission.ScoreSubmissionRequest(
+        score_data=["map-md5", "username  "],
+        password_md5="password-md5",
+        osu_version="20240102",
+        client_hash="client-hash",
+        unique_ids="unique1|unique2",
+        storyboard_md5=None,
+        updated_beatmap_hash="map-md5",
+        score_time=1,
+        fail_time=0,
+        replay_file=_FakeReplayFile(b""),
+    )
+
+    assert score_submission.score_submission_username(request) == "username "
+
+
 def test_parse_unique_id_hashes_md5s_submission_unique_ids() -> None:
     unique_id_hashes = score_submission.parse_unique_id_hashes("unique1|unique2")
 
