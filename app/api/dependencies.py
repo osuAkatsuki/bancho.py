@@ -1,15 +1,24 @@
 from __future__ import annotations
 
+import random
+import secrets
+from pathlib import Path
 from typing import Annotated
 
+import httpx
 from fastapi import Depends
 
+import app.packets
 import app.state.services
 import app.state.sessions
+import app.utils
 from app import settings
 from app import state
 from app.adapters import score_submission as score_submission_adapters
+from app.objects.beatmap import Beatmap
 from app.objects.beatmap import ensure_osu_file_is_available
+from app.objects.player import Player
+from app.objects.score import Score
 from app.repositories.achievements import AchievementsRepository
 from app.repositories.clans import ClansRepository
 from app.repositories.client_hashes import ClientHashesRepository
@@ -33,15 +42,47 @@ from app.services.osu_web import BeatmapInfoService
 from app.services.osu_web import BeatmapRatingService
 from app.services.osu_web import BeatmapSetService
 from app.services.osu_web import CommentsService
+from app.services.osu_web import DirectSearchParams
+from app.services.osu_web import DirectSearchService
 from app.services.osu_web import FavouritesService
+from app.services.osu_web import LastFmService
 from app.services.osu_web import MailReadService
-from app.services.osu_web import OsuLeaderboardSupportService
+from app.services.osu_web import OsuLeaderboardService
+from app.services.osu_web import ReplayService
+from app.services.osu_web import ScreenshotService
 from app.services.performance import PerformanceService
 from app.services.players import PlayersService
 from app.services.public_api import PublicApiService
 from app.services.score_leaderboards import ScoreLeaderboardsService
 from app.services.score_submission import ScoreSubmissionService
 from app.services.scores import ScoresService
+
+SCREENSHOTS_PATH = Path.cwd() / ".data/ss"
+
+
+async def _fetch_mirror_search(
+    url: str,
+    *,
+    params: DirectSearchParams,
+) -> httpx.Response:
+    return await app.state.services.http_client.get(url, params=params)
+
+
+def _increment_metric(metric: str) -> None:
+    if app.state.services.datadog:
+        app.state.services.datadog.increment(metric)  # type: ignore[no-untyped-call]
+
+
+def _send_notification(player: Player, message: str) -> None:
+    player.enqueue(app.packets.notification(message))
+
+
+def _publish_user_stats(player: Player) -> None:
+    app.state.sessions.players.enqueue(app.packets.user_stats(player))
+
+
+def _schedule_replay_view_increment(score: Score) -> None:
+    _ = app.state.loop.create_task(score.increment_replay_views())
 
 
 def get_achievements_repository() -> AchievementsRepository:
@@ -148,8 +189,33 @@ def get_account_registration_service(
         password_cache=state.cache.bcrypt,
         ip_resolver=app.state.services.ip_resolver,
         fetch_geoloc=app.state.services.fetch_geoloc,
+        increment_metric=_increment_metric,
+        ingame_registration_disallowed=settings.DISALLOW_INGAME_REGISTRATION,
         disallowed_names=settings.DISALLOWED_NAMES,
         disallowed_passwords=settings.DISALLOWED_PASSWORDS,
+    )
+
+
+def get_screenshot_service() -> ScreenshotService:
+    return ScreenshotService(
+        screenshots_path=SCREENSHOTS_PATH,
+        token_urlsafe=secrets.token_urlsafe,
+        log_strange_occurrence=app.state.services.log_strange_occurrence,
+    )
+
+
+def get_lastfm_service() -> LastFmService:
+    return LastFmService(
+        restriction_admin=app.state.sessions.bot,
+        restriction_roll=random.randrange,
+        send_notification=_send_notification,
+    )
+
+
+def get_direct_search_service() -> DirectSearchService:
+    return DirectSearchService(
+        mirror_search_endpoint=settings.MIRROR_SEARCH_ENDPOINT,
+        fetch_mirror_search=_fetch_mirror_search,
     )
 
 
@@ -196,15 +262,11 @@ def get_mail_read_service(
     )
 
 
-def get_osu_leaderboard_support_service(
-    clans: Annotated[ClansRepository, Depends(get_clans_repository)],
-    maps: Annotated[MapsRepository, Depends(get_maps_repository)],
-    ratings: Annotated[RatingsRepository, Depends(get_ratings_repository)],
-) -> OsuLeaderboardSupportService:
-    return OsuLeaderboardSupportService(
-        clans=clans,
-        maps=maps,
-        ratings=ratings,
+def get_replay_service() -> ReplayService:
+    return ReplayService(
+        replays_path=score_submission_adapters.REPLAYS_PATH,
+        fetch_score=Score.from_sql,
+        schedule_replay_view_increment=_schedule_replay_view_increment,
     )
 
 
@@ -252,6 +314,31 @@ def get_score_leaderboards_service(
     scores: Annotated[ScoresRepository, Depends(get_scores_repository)],
 ) -> ScoreLeaderboardsService:
     return ScoreLeaderboardsService(scores=scores)
+
+
+def get_osu_leaderboard_service(
+    score_leaderboards: Annotated[
+        ScoreLeaderboardsService,
+        Depends(get_score_leaderboards_service),
+    ],
+    clans: Annotated[ClansRepository, Depends(get_clans_repository)],
+    maps: Annotated[MapsRepository, Depends(get_maps_repository)],
+    ratings: Annotated[RatingsRepository, Depends(get_ratings_repository)],
+) -> OsuLeaderboardService:
+    return OsuLeaderboardService(
+        score_leaderboards=score_leaderboards,
+        clans=clans,
+        maps=maps,
+        ratings=ratings,
+        beatmap_fetcher=Beatmap.from_md5,
+        unsubmitted_cache=app.state.cache.unsubmitted,
+        needs_update_cache=app.state.cache.needs_update,
+        beatmapset_cache=app.state.cache.beatmapset,
+        publish_user_stats=_publish_user_stats,
+        increment_metric=_increment_metric,
+        log_strange_occurrence=app.state.services.log_strange_occurrence,
+        get_appropriate_stacktrace=app.utils.get_appropriate_stacktrace,
+    )
 
 
 def get_score_submission_service(

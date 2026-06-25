@@ -15,6 +15,7 @@ from app.objects.player import ModeData
 from app.objects.score import Grade
 from app.objects.score import Score
 from app.repositories.achievements import Achievement
+from app.services import osu_web
 from app.services import score_submission
 
 
@@ -273,3 +274,58 @@ def test_build_score_submission_error_response_maps_domain_errors_to_osu_protoco
     error = score_submission.ScoreSubmissionError(code=error_code)
 
     assert osu.build_score_submission_error_response(error) == expected_response
+
+
+def test_format_scores_response_formats_personal_best_and_leaderboard_rows() -> None:
+    response = osu.format_scores_response(
+        osu_web.OsuLeaderboardResult(
+            code=osu_web.OsuLeaderboardResultCode.FOUND,
+            ranked_status=RankedStatus.Ranked,
+            beatmap_id=321,
+            beatmap_set_id=654,
+            beatmap_name="Artist - Title [Hard]",
+            beatmap_rating=9.5,
+            score_rows=[
+                {
+                    "id": 10,
+                    "leaderboard_value": 987.6,
+                    "max_combo": 321,
+                    "n50": 1,
+                    "n100": 2,
+                    "n300": 300,
+                    "nmiss": 0,
+                    "nkatu": 4,
+                    "ngeki": 5,
+                    "perfect": 1,
+                    "mods": Mods.HIDDEN.value,
+                    "time": 1_704_110_400,
+                    "userid": 7,
+                    "name": "leaderboard-user",
+                },
+            ],
+            personal_best_score_row={
+                "id": 11,
+                "leaderboard_value": 543.2,
+                "max_combo": 123,
+                "n50": 1,
+                "n100": 2,
+                "n300": 300,
+                "nmiss": 0,
+                "nkatu": 4,
+                "ngeki": 5,
+                "perfect": 1,
+                "mods": Mods.HIDDEN.value,
+                "time": 1_704_110_400,
+                "rank": 4,
+            },
+            personal_best_user_id=6,
+            personal_best_display_name="[AK] cmyui",
+        ),
+    )
+
+    assert response == (
+        b"2|false|321|654|1|0|\n"
+        b"0\nArtist - Title [Hard]\n9.5\n"
+        b"11|[AK] cmyui|543|123|1|2|300|0|4|5|1|8|6|4|1704110400|1\n"
+        b"10|leaderboard-user|988|321|1|2|300|0|4|5|1|8|7|1|1704110400|1"
+    )
