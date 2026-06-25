@@ -34,6 +34,8 @@ services:
       - test-redis-data:/data
     networks:
       - test-network
+    environment:
+      - REDIS_PASS=${REDIS_PASS}
     command:
       - sh
       - -c
