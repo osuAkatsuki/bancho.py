@@ -1,15 +1,21 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable
-from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import NotRequired
 from typing import Protocol
 from typing import TypedDict
 
 from app.constants.beatmap_statuses import RankedStatus
 
-DirectSearchParams = Mapping[str, str | int | float | bool | None]
+
+class DirectSearchParams(TypedDict):
+    amount: int
+    offset: int
+    query: NotRequired[str]
+    mode: NotRequired[int]
+    status: NotRequired[int]
 
 
 class DirectSearchBeatmapPayload(TypedDict):
@@ -96,7 +102,7 @@ class DirectSearchService:
         mode: int,
         page_num: int,
     ) -> DirectSearchResult:
-        params: dict[str, str | int | float | bool | None] = {
+        params: DirectSearchParams = {
             "amount": 100,
             "offset": page_num * 100,
         }

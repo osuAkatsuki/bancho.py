@@ -66,7 +66,18 @@ async def _fetch_mirror_search(
     *,
     params: DirectSearchParams,
 ) -> httpx.Response:
-    return await app.state.services.http_client.get(url, params=params)
+    http_params: dict[str, str | int | float | bool | None] = {
+        "amount": params["amount"],
+        "offset": params["offset"],
+    }
+    if "query" in params:
+        http_params["query"] = params["query"]
+    if "mode" in params:
+        http_params["mode"] = params["mode"]
+    if "status" in params:
+        http_params["status"] = params["status"]
+
+    return await app.state.services.http_client.get(url, params=http_params)
 
 
 def _increment_metric(metric: str) -> None:
