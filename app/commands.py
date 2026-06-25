@@ -34,7 +34,6 @@ from pytimeparse.timeparse import timeparse
 
 import app.logging
 import app.packets
-import app.services.performance
 import app.settings
 import app.state
 import app.utils
@@ -59,6 +58,7 @@ from app.objects.match import StartingTimers
 from app.objects.player import Player
 from app.repositories import factory as repository_factory
 from app.repositories.map_requests import MapRequest
+from app.services.performance import PerformanceService
 from app.services.performance import ScoreParams
 
 if TYPE_CHECKING:
@@ -517,7 +517,7 @@ async def _with(ctx: Context) -> str | None:
         score_args.acc = acc
         msg_fields.append(f"{acc:.2f}%")
 
-    result = app.services.performance.calculate_performances(
+    result = PerformanceService().calculate_performances(
         osu_file_path=str(BEATMAPS_PATH / f"{bmap.id}.osu"),
         scores=[score_args],  # calculate one score
     )

@@ -8,7 +8,6 @@ from enum import unique
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import app.services.performance
 import app.state
 import app.utils
 from app.constants.clientflags import ClientFlags
@@ -17,6 +16,7 @@ from app.constants.mods import Mods
 from app.constants.score_statuses import SubmissionStatus
 from app.objects.beatmap import Beatmap
 from app.repositories import factory as repository_factory
+from app.services.performance import PerformanceService
 from app.services.performance import ScoreParams
 
 if TYPE_CHECKING:
@@ -309,7 +309,7 @@ class Score:
             nmiss=self.nmiss,
         )
 
-        result = app.services.performance.calculate_performances(
+        result = PerformanceService().calculate_performances(
             osu_file_path=str(BEATMAPS_PATH / f"{beatmap_id}.osu"),
             scores=[score_args],
         )

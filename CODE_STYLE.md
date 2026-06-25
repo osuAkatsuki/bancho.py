@@ -15,6 +15,9 @@ The project's core ethos is:
   request data, handle protocol-specific responses, and delegate app logic.
 - Put business logic in services. A controller should not decide how
   score submission, stats updates, achievements, or leaderboard behavior works.
+- Expose service behavior through service classes. Module-level functions in
+  service modules should be private implementation helpers, not the public app
+  logic surface called by controllers.
 - Use repositories for database access. Services should orchestrate
   repositories, transactions, and domain decisions.
 - Prefer explicit dependencies over hidden package behavior. Import from direct

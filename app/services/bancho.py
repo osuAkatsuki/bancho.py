@@ -109,6 +109,8 @@ class BanchoLoginService:
     async def fetch_unread_mail(self, player_id: int) -> list[MailWithUsernames]:
         return await self.mail.fetch_all_mail_to_user(user_id=player_id, read=False)
 
-
-def has_restricted_hardware_match(matches: list[ClientHashWithPlayer]) -> bool:
-    return not all([match["priv"] & Privileges.UNRESTRICTED for match in matches])
+    def has_restricted_hardware_match(
+        self,
+        matches: list[ClientHashWithPlayer],
+    ) -> bool:
+        return not all([match["priv"] & Privileges.UNRESTRICTED for match in matches])

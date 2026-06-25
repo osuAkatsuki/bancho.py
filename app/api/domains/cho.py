@@ -25,7 +25,6 @@ from fastapi.requests import Request
 from fastapi.responses import HTMLResponse
 
 import app.packets
-import app.services.performance
 import app.settings
 import app.state
 import app.utils
@@ -65,7 +64,7 @@ from app.packets import ClientPackets
 from app.packets import LoginFailureReason
 from app.repositories import factory as repository_factory
 from app.services.bancho import BanchoLoginService
-from app.services.bancho import has_restricted_hardware_match
+from app.services.performance import PerformanceService
 from app.services.performance import ScoreParams
 from app.state import services
 
@@ -769,7 +768,7 @@ async def handle_osu_login_request(
             # time connecting in-game and submitting their hwid set.
             # we will not allow any banned matches; if there are any,
             # then ask the user to contact staff and resolve manually.
-            if has_restricted_hardware_match(hw_matches):
+            if bancho_login_service.has_restricted_hardware_match(hw_matches):
                 return {
                     "osu_token": "contact-staff",
                     "response_body": (
@@ -1268,7 +1267,7 @@ class SendPrivateMessage(BasePacket):
                                 for acc in app.settings.PP_CACHED_ACCURACIES
                             ]
 
-                            results = app.services.performance.calculate_performances(
+                            results = PerformanceService().calculate_performances(
                                 osu_file_path=str(BEATMAPS_PATH / f"{bmap.id}.osu"),
                                 scores=scores,
                             )

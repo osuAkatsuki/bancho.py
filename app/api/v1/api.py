@@ -19,7 +19,6 @@ from fastapi.security import HTTPAuthorizationCredentials as HTTPCredentials
 from fastapi.security import HTTPBearer
 
 import app.packets
-import app.services.performance
 import app.state
 from app.api import dependencies as api_dependencies
 from app.constants import regexes
@@ -28,6 +27,7 @@ from app.constants.mods import Mods
 from app.objects.beatmap import Beatmap
 from app.objects.beatmap import ensure_osu_file_is_available
 from app.repositories.users import User
+from app.services.performance import PerformanceService
 from app.services.performance import ScoreParams
 from app.services.public_api import PublicApiService
 
@@ -66,6 +66,11 @@ DATETIME_OFFSET = 0x89F7FF5F7B58000
 @router.get("/calculate_pp")
 async def api_calculate_pp(
     token: HTTPCredentials | None = Depends(http_bearer_scheme),
+    *,
+    performance_service: Annotated[
+        PerformanceService,
+        Depends(api_dependencies.get_performance_service),
+    ],
     beatmap_id: int = Query(None, alias="id", min=0, max=2_147_483_647),
     nkatu: int = Query(None, max=2_147_483_647),
     ngeki: int = Query(None, max=2_147_483_647),
@@ -123,7 +128,7 @@ async def api_calculate_pp(
             ),
         )
 
-    results = app.services.performance.calculate_performances(
+    results = performance_service.calculate_performances(
         str(BEATMAPS_PATH / f"{beatmap.id}.osu"),
         scores,
     )

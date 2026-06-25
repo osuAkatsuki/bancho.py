@@ -36,6 +36,7 @@ from app.services.osu_web import CommentsService
 from app.services.osu_web import FavouritesService
 from app.services.osu_web import MailReadService
 from app.services.osu_web import OsuLeaderboardSupportService
+from app.services.performance import PerformanceService
 from app.services.players import PlayersService
 from app.services.public_api import PublicApiService
 from app.services.score_leaderboards import ScoreLeaderboardsService
@@ -216,6 +217,10 @@ def get_players_service(
         stats=stats,
         online_players=app.state.sessions.players,
     )
+
+
+def get_performance_service() -> PerformanceService:
+    return PerformanceService()
 
 
 def get_public_api_service(

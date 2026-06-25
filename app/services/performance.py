@@ -57,7 +57,16 @@ class PerformanceResult(TypedDict):
     difficulty: DifficultyRating
 
 
-def calculate_performances(
+class PerformanceService:
+    def calculate_performances(
+        self,
+        osu_file_path: str,
+        scores: Iterable[ScoreParams],
+    ) -> list[PerformanceResult]:
+        return _calculate_performances(osu_file_path, scores)
+
+
+def _calculate_performances(
     osu_file_path: str,
     scores: Iterable[ScoreParams],
 ) -> list[PerformanceResult]:
