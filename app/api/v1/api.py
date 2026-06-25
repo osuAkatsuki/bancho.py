@@ -27,9 +27,12 @@ from app.constants.mods import Mods
 from app.objects.beatmap import Beatmap
 from app.objects.beatmap import ensure_osu_file_is_available
 from app.repositories.users import User
+from app.services.clans import ClansService
 from app.services.performance import PerformanceService
 from app.services.performance import ScoreParams
-from app.services.public_api import PublicApiService
+from app.services.players import PlayersService
+from app.services.scores import ScoresService
+from app.services.tourney_pools import TourneyPoolsService
 
 AVATARS_PATH = SystemPath.cwd() / ".data/avatars"
 BEATMAPS_PATH = SystemPath.cwd() / ".data/osu"
@@ -154,13 +157,13 @@ async def api_calculate_pp(
 async def api_search_players(
     *,
     search: str | None = Query(None, alias="q", min=2, max=32),
-    public_api_service: Annotated[
-        PublicApiService,
-        Depends(api_dependencies.get_public_api_service),
+    players_service: Annotated[
+        PlayersService,
+        Depends(api_dependencies.get_players_service),
     ],
 ) -> Response:
     """Search for users on the server by name."""
-    rows = await public_api_service.search_players(search)
+    rows = await players_service.search_public_players(search)
 
     return ORJSONResponse(
         {
@@ -173,9 +176,9 @@ async def api_search_players(
 
 @router.get("/get_player_count")
 async def api_get_player_count(
-    public_api_service: Annotated[
-        PublicApiService,
-        Depends(api_dependencies.get_public_api_service),
+    players_service: Annotated[
+        PlayersService,
+        Depends(api_dependencies.get_players_service),
     ],
 ) -> Response:
     """Get the current amount of online players."""
@@ -184,8 +187,8 @@ async def api_get_player_count(
             "status": "success",
             "counts": {
                 # -1 for the bot, who is always online
-                "online": len(app.state.sessions.players.unrestricted) - 1,
-                "total": await public_api_service.fetch_total_player_count(),
+                "online": players_service.fetch_online_player_count(),
+                "total": await players_service.fetch_total_player_count(),
             },
         },
     )
@@ -197,9 +200,9 @@ async def api_get_player_info(
     *,
     user_id: int | None = Query(None, alias="id", ge=3, le=2_147_483_647),
     username: str | None = Query(None, alias="name", pattern=regexes.USERNAME.pattern),
-    public_api_service: Annotated[
-        PublicApiService,
-        Depends(api_dependencies.get_public_api_service),
+    players_service: Annotated[
+        PlayersService,
+        Depends(api_dependencies.get_players_service),
     ],
 ) -> Response:
     """Return information about a given player."""
@@ -209,7 +212,7 @@ async def api_get_player_info(
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
-    user_info = await public_api_service.fetch_player(
+    user_info = await players_service.fetch_player_by_id_or_name(
         user_id=user_id,
         username=username,
     )
@@ -234,7 +237,7 @@ async def api_get_player_info(
         api_data["stats"] = {}
 
         # get all stats
-        all_stats = await public_api_service.fetch_player_stats(resolved_user_id)
+        all_stats = await players_service.fetch_all_player_stats(resolved_user_id)
 
         for mode_stats in all_stats:
             rank = cast(
@@ -285,9 +288,9 @@ async def api_get_player_status(
     *,
     user_id: int | None = Query(None, alias="id", ge=3, le=2_147_483_647),
     username: str | None = Query(None, alias="name", pattern=regexes.USERNAME.pattern),
-    public_api_service: Annotated[
-        PublicApiService,
-        Depends(api_dependencies.get_public_api_service),
+    players_service: Annotated[
+        PlayersService,
+        Depends(api_dependencies.get_players_service),
     ],
 ) -> Response:
     """Return a players current status, if they are online."""
@@ -297,20 +300,21 @@ async def api_get_player_status(
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
-    if username:
-        player = app.state.sessions.players.get(name=username)
-    elif user_id:
-        player = app.state.sessions.players.get(id=user_id)
-    else:
+    if username is None and user_id is None:
         return ORJSONResponse(
             {"status": "Must provide either id OR name!"},
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
+    player = players_service.fetch_online_player(
+        user_id=user_id,
+        username=username,
+    )
+
     if not player:
         # no such player online, return their last seen time if they exist in sql
 
-        row = await public_api_service.fetch_player(
+        row = await players_service.fetch_player_by_id_or_name(
             user_id=user_id,
             username=username,
         )
@@ -365,9 +369,17 @@ async def api_get_player_scores(
     limit: int = Query(25, ge=1, le=100),
     include_loved: bool = False,
     include_failed: bool = True,
-    public_api_service: Annotated[
-        PublicApiService,
-        Depends(api_dependencies.get_public_api_service),
+    players_service: Annotated[
+        PlayersService,
+        Depends(api_dependencies.get_players_service),
+    ],
+    scores_service: Annotated[
+        ScoresService,
+        Depends(api_dependencies.get_scores_service),
+    ],
+    clans_service: Annotated[
+        ClansService,
+        Depends(api_dependencies.get_clans_service),
     ],
 ) -> Response:
     """Return a list of a given user's recent/best scores."""
@@ -388,15 +400,16 @@ async def api_get_player_scores(
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
-    if username:
-        player = await app.state.sessions.players.from_cache_or_sql(name=username)
-    elif user_id:
-        player = await app.state.sessions.players.from_cache_or_sql(id=user_id)
-    else:
+    if username is None and user_id is None:
         return ORJSONResponse(
             {"status": "Must provide either id OR name!"},
             status_code=status.HTTP_400_BAD_REQUEST,
         )
+
+    player = await players_service.fetch_player_session(
+        user_id=user_id,
+        username=username,
+    )
 
     if not player:
         return ORJSONResponse(
@@ -423,7 +436,7 @@ async def api_get_player_scores(
     else:
         mods = None
 
-    rows = await public_api_service.fetch_player_scores(
+    rows = await scores_service.fetch_player_scores(
         player_id=player.id,
         mode=mode,
         mods=mods,
@@ -436,7 +449,7 @@ async def api_get_player_scores(
 
     clan = None
     if player.clan_id:
-        clan = await public_api_service.fetch_clan(player.clan_id)
+        clan = await clans_service.fetch_clan(player.clan_id)
 
     player_info = {
         "id": player.id,
@@ -468,9 +481,13 @@ async def api_get_player_most_played(
     username: str | None = Query(None, alias="name", pattern=regexes.USERNAME.pattern),
     mode_arg: int = Query(0, alias="mode", ge=0, le=11),
     limit: int = Query(25, ge=1, le=100),
-    public_api_service: Annotated[
-        PublicApiService,
-        Depends(api_dependencies.get_public_api_service),
+    players_service: Annotated[
+        PlayersService,
+        Depends(api_dependencies.get_players_service),
+    ],
+    scores_service: Annotated[
+        ScoresService,
+        Depends(api_dependencies.get_scores_service),
     ],
 ) -> Response:
     """Return the most played beatmaps of a given player."""
@@ -486,15 +503,16 @@ async def api_get_player_most_played(
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
-    if user_id is not None:
-        player = await app.state.sessions.players.from_cache_or_sql(id=user_id)
-    elif username is not None:
-        player = await app.state.sessions.players.from_cache_or_sql(name=username)
-    else:
+    if user_id is None and username is None:
         return ORJSONResponse(
             {"status": "Must provide either id or name."},
             status_code=status.HTTP_400_BAD_REQUEST,
         )
+
+    player = await players_service.fetch_player_session(
+        user_id=user_id,
+        username=username,
+    )
 
     if not player:
         return ORJSONResponse(
@@ -506,7 +524,7 @@ async def api_get_player_most_played(
 
     mode = GameMode(mode_arg)
 
-    rows = await public_api_service.fetch_player_most_played(
+    rows = await scores_service.fetch_player_most_played(
         player_id=player.id,
         mode=mode,
         limit=limit,
@@ -559,9 +577,9 @@ async def api_get_map_scores(
     mods_arg: str | None = Query(None, alias="mods"),
     mode_arg: int = Query(0, alias="mode", ge=0, le=11),
     limit: int = Query(50, ge=1, le=100),
-    public_api_service: Annotated[
-        PublicApiService,
-        Depends(api_dependencies.get_public_api_service),
+    scores_service: Annotated[
+        ScoresService,
+        Depends(api_dependencies.get_scores_service),
     ],
 ) -> Response:
     """Return the top n scores on a given beatmap."""
@@ -611,7 +629,7 @@ async def api_get_map_scores(
     else:
         mods = None
 
-    rows = await public_api_service.fetch_map_scores(
+    rows = await scores_service.fetch_map_scores(
         map_md5=bmap.md5,
         mode=mode,
         mods=mods,
@@ -632,13 +650,13 @@ async def api_get_map_scores(
 async def api_get_score_info(
     *,
     score_id: int = Query(..., alias="id", ge=0, le=9_223_372_036_854_775_807),
-    public_api_service: Annotated[
-        PublicApiService,
-        Depends(api_dependencies.get_public_api_service),
+    scores_service: Annotated[
+        ScoresService,
+        Depends(api_dependencies.get_scores_service),
     ],
 ) -> Response:
     """Return information about a given score."""
-    score = await public_api_service.fetch_score(score_id)
+    score = await scores_service.fetch_score(score_id)
 
     if score is None:
         return ORJSONResponse(
@@ -654,9 +672,9 @@ async def api_get_replay(
     *,
     score_id: int = Query(..., alias="id", ge=0, le=9_223_372_036_854_775_807),
     include_headers: bool = True,
-    public_api_service: Annotated[
-        PublicApiService,
-        Depends(api_dependencies.get_public_api_service),
+    scores_service: Annotated[
+        ScoresService,
+        Depends(api_dependencies.get_scores_service),
     ],
 ) -> Response:
     """\
@@ -685,7 +703,7 @@ async def api_get_replay(
         )
     # add replay headers from sql
     # TODO: osu_version & life graph in scores tables?
-    row = await public_api_service.fetch_replay_header(score_id)
+    row = await scores_service.fetch_replay_header(score_id)
     if not row:
         # score not found in sql
         return ORJSONResponse(
@@ -815,9 +833,9 @@ async def api_get_global_leaderboard(
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, min=0, max=2_147_483_647),
     country: str | None = Query(None, min_length=2, max_length=2),
-    public_api_service: Annotated[
-        PublicApiService,
-        Depends(api_dependencies.get_public_api_service),
+    players_service: Annotated[
+        PlayersService,
+        Depends(api_dependencies.get_players_service),
     ],
 ) -> Response:
     if mode_arg in (
@@ -833,7 +851,7 @@ async def api_get_global_leaderboard(
 
     mode = GameMode(mode_arg)
 
-    rows = await public_api_service.fetch_global_leaderboard(
+    rows = await players_service.fetch_global_leaderboard(
         sort=sort,
         mode=mode,
         limit=limit,
@@ -850,22 +868,29 @@ async def api_get_global_leaderboard(
 async def api_get_clan(
     *,
     clan_id: int = Query(..., alias="id", ge=1, le=2_147_483_647),
-    public_api_service: Annotated[
-        PublicApiService,
-        Depends(api_dependencies.get_public_api_service),
+    clans_service: Annotated[
+        ClansService,
+        Depends(api_dependencies.get_clans_service),
+    ],
+    players_service: Annotated[
+        PlayersService,
+        Depends(api_dependencies.get_players_service),
     ],
 ) -> Response:
     """Return information of a given clan."""
-    clan = await public_api_service.fetch_clan(clan_id)
+    clan = await clans_service.fetch_clan(clan_id)
     if not clan:
         return ORJSONResponse(
             {"status": "Clan not found."},
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
-    clan_members = await public_api_service.fetch_clan_members(clan["id"])
+    clan_members = await clans_service.fetch_clan_members(clan["id"])
 
-    owner = await app.state.sessions.players.from_cache_or_sql(id=clan["owner"])
+    owner = await players_service.fetch_player_session(
+        user_id=clan["owner"],
+        username=None,
+    )
     assert owner is not None
 
     return ORJSONResponse(
@@ -896,14 +921,22 @@ async def api_get_clan(
 async def api_get_pool(
     *,
     pool_id: int = Query(..., alias="id", ge=1, le=2_147_483_647),
-    public_api_service: Annotated[
-        PublicApiService,
-        Depends(api_dependencies.get_public_api_service),
+    tourney_pools_service: Annotated[
+        TourneyPoolsService,
+        Depends(api_dependencies.get_tourney_pools_service),
+    ],
+    players_service: Annotated[
+        PlayersService,
+        Depends(api_dependencies.get_players_service),
+    ],
+    clans_service: Annotated[
+        ClansService,
+        Depends(api_dependencies.get_clans_service),
     ],
 ) -> Response:
     """Return information of a given mappool."""
 
-    tourney_pool = await public_api_service.fetch_tourney_pool(pool_id)
+    tourney_pool = await tourney_pools_service.fetch_tourney_pool(pool_id)
     if tourney_pool is None:
         return ORJSONResponse(
             {"status": "Pool not found."},
@@ -911,12 +944,15 @@ async def api_get_pool(
         )
 
     tourney_pool_maps: dict[tuple[int, int], Beatmap] = {}
-    for pool_map in await public_api_service.fetch_tourney_pool_maps(pool_id):
+    for pool_map in await tourney_pools_service.fetch_tourney_pool_maps(pool_id):
         bmap = await Beatmap.from_bid(pool_map["map_id"])
         if bmap is not None:
             tourney_pool_maps[(pool_map["mods"], pool_map["slot"])] = bmap
 
-    pool_creator = app.state.sessions.players.get(id=tourney_pool["created_by"])
+    pool_creator = players_service.fetch_online_player(
+        user_id=tourney_pool["created_by"],
+        username=None,
+    )
 
     if pool_creator is None:
         return ORJSONResponse(
@@ -925,14 +961,14 @@ async def api_get_pool(
         )
 
     pool_creator_clan = (
-        await public_api_service.fetch_clan(pool_creator.clan_id)
+        await clans_service.fetch_clan(pool_creator.clan_id)
         if pool_creator.clan_id is not None
         else None
     )
     pool_creator_clan_members: list[User] = []
     if pool_creator_clan is not None:
         assert pool_creator.clan_id is not None
-        pool_creator_clan_members = await public_api_service.fetch_clan_members(
+        pool_creator_clan_members = await clans_service.fetch_clan_members(
             pool_creator.clan_id,
         )
 

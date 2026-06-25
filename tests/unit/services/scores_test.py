@@ -1,0 +1,268 @@
+from __future__ import annotations
+
+from datetime import datetime
+from types import SimpleNamespace
+
+import app.services.scores as scores
+from app.constants.gamemodes import GameMode
+from app.constants.mods import Mods
+
+
+class _FakeScoresRepository:
+    def __init__(self) -> None:
+        self.player_score_calls: list[dict[str, object | None]] = []
+        self.map_score_calls: list[dict[str, object | None]] = []
+
+    async def fetch_count(
+        self,
+        map_md5: str | None = None,
+        mods: int | None = None,
+        status: int | None = None,
+        mode: int | None = None,
+        user_id: int | None = None,
+    ) -> int:
+        return 0
+
+    async def fetch_many(
+        self,
+        map_md5: str | None = None,
+        mods: int | None = None,
+        status: int | None = None,
+        mode: int | None = None,
+        user_id: int | None = None,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> list[dict[str, object]]:
+        return []
+
+    async def fetch_one(self, id: int) -> dict[str, object] | None:
+        return {"id": id}
+
+    async def fetch_public_player_scores(
+        self,
+        *,
+        user_id: int,
+        mode: int,
+        mods: int | None,
+        strong_mods_equality: bool,
+        scope: str,
+        limit: int,
+        include_loved: bool,
+        include_failed: bool,
+    ) -> list[dict[str, object]]:
+        self.player_score_calls.append(
+            {
+                "user_id": user_id,
+                "mode": mode,
+                "mods": mods,
+                "strong_mods_equality": strong_mods_equality,
+                "scope": scope,
+                "limit": limit,
+                "include_loved": include_loved,
+                "include_failed": include_failed,
+            },
+        )
+        return [
+            {
+                "id": 1,
+                "map_md5": "known-map",
+                "score": 1_000_000,
+                "pp": 123.45,
+                "acc": 98.76,
+                "max_combo": 321,
+                "mods": Mods.HIDDEN.value,
+                "n300": 300,
+                "n100": 5,
+                "n50": 1,
+                "nmiss": 0,
+                "ngeki": 0,
+                "nkatu": 0,
+                "grade": "A",
+                "status": 2,
+                "mode": 4,
+                "play_time": datetime(2024, 1, 1),
+                "time_elapsed": 60_000,
+                "perfect": 1,
+            },
+            {
+                "id": 2,
+                "map_md5": "missing-map",
+                "score": 500_000,
+                "pp": 50.0,
+                "acc": 90.0,
+                "max_combo": 123,
+                "mods": 0,
+                "n300": 250,
+                "n100": 25,
+                "n50": 5,
+                "nmiss": 2,
+                "ngeki": 0,
+                "nkatu": 0,
+                "grade": "B",
+                "status": 2,
+                "mode": 4,
+                "play_time": datetime(2024, 1, 2),
+                "time_elapsed": 60_000,
+                "perfect": 0,
+            },
+        ]
+
+    async def fetch_public_map_scores(
+        self,
+        *,
+        map_md5: str,
+        mode: int,
+        mods: int | None,
+        strong_mods_equality: bool,
+        scope: str,
+        limit: int,
+    ) -> list[dict[str, object]]:
+        self.map_score_calls.append(
+            {
+                "map_md5": map_md5,
+                "mode": mode,
+                "mods": mods,
+                "strong_mods_equality": strong_mods_equality,
+                "scope": scope,
+                "limit": limit,
+            },
+        )
+        return [{"map_md5": map_md5, "score": 123}]
+
+    async def fetch_public_player_most_played_maps(
+        self,
+        *,
+        user_id: int,
+        mode: int,
+        limit: int,
+    ) -> list[dict[str, object]]:
+        return [{"id": 1, "plays": limit, "user_id": user_id, "mode": mode}]
+
+    async def fetch_replay_header(self, score_id: int) -> dict[str, object] | None:
+        return {"score_id": score_id}
+
+
+class _FakeBeatmapFetcher:
+    def __init__(self) -> None:
+        self.md5s: list[str] = []
+
+    async def __call__(
+        self,
+        md5: str,
+        set_id: int = -1,
+    ) -> object | None:
+        self.md5s.append(md5)
+        if md5 == "known-map":
+            return SimpleNamespace(as_dict={"md5": md5, "id": 1})
+
+        return None
+
+
+def _service() -> (
+    tuple[scores.ScoresService, _FakeScoresRepository, _FakeBeatmapFetcher]
+):
+    scores_repo = _FakeScoresRepository()
+    beatmap_fetcher = _FakeBeatmapFetcher()
+    return (
+        scores.ScoresService(scores=scores_repo, fetch_beatmap=beatmap_fetcher),
+        scores_repo,
+        beatmap_fetcher,
+    )
+
+
+async def test_scores_service_attaches_beatmaps_to_player_scores() -> None:
+    service, scores_repo, beatmap_fetcher = _service()
+
+    rows = await service.fetch_player_scores(
+        player_id=3,
+        mode=GameMode.RELAX_OSU,
+        mods=Mods.HIDDEN,
+        strong_mods_equality=True,
+        scope="best",
+        limit=50,
+        include_loved=True,
+        include_failed=False,
+    )
+
+    assert rows == [
+        {
+            "id": 1,
+            "score": 1_000_000,
+            "pp": 123.45,
+            "acc": 98.76,
+            "max_combo": 321,
+            "mods": Mods.HIDDEN.value,
+            "n300": 300,
+            "n100": 5,
+            "n50": 1,
+            "nmiss": 0,
+            "ngeki": 0,
+            "nkatu": 0,
+            "grade": "A",
+            "status": 2,
+            "mode": 4,
+            "play_time": datetime(2024, 1, 1),
+            "time_elapsed": 60_000,
+            "perfect": 1,
+            "beatmap": {"md5": "known-map", "id": 1},
+        },
+        {
+            "id": 2,
+            "score": 500_000,
+            "pp": 50.0,
+            "acc": 90.0,
+            "max_combo": 123,
+            "mods": 0,
+            "n300": 250,
+            "n100": 25,
+            "n50": 5,
+            "nmiss": 2,
+            "ngeki": 0,
+            "nkatu": 0,
+            "grade": "B",
+            "status": 2,
+            "mode": 4,
+            "play_time": datetime(2024, 1, 2),
+            "time_elapsed": 60_000,
+            "perfect": 0,
+            "beatmap": None,
+        },
+    ]
+    assert scores_repo.player_score_calls == [
+        {
+            "user_id": 3,
+            "mode": 4,
+            "mods": Mods.HIDDEN.value,
+            "strong_mods_equality": True,
+            "scope": "best",
+            "limit": 50,
+            "include_loved": True,
+            "include_failed": False,
+        },
+    ]
+    assert beatmap_fetcher.md5s == ["known-map", "missing-map"]
+
+
+async def test_scores_service_fetches_public_map_scores() -> None:
+    service, scores_repo, _ = _service()
+
+    rows = await service.fetch_map_scores(
+        map_md5="map-md5",
+        mode=GameMode.VANILLA_OSU,
+        mods=None,
+        strong_mods_equality=False,
+        scope="recent",
+        limit=25,
+    )
+
+    assert rows == [{"map_md5": "map-md5", "score": 123}]
+    assert scores_repo.map_score_calls == [
+        {
+            "map_md5": "map-md5",
+            "mode": 0,
+            "mods": None,
+            "strong_mods_equality": False,
+            "scope": "recent",
+            "limit": 25,
+        },
+    ]

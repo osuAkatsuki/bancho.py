@@ -50,12 +50,12 @@ from app.services.maps import BeatmapSetService
 from app.services.maps import MapsService
 from app.services.performance import PerformanceService
 from app.services.players import PlayersService
-from app.services.public_api import PublicApiService
 from app.services.replays import ReplayService
 from app.services.score_leaderboards import ScoreLeaderboardsService
 from app.services.score_submission import ScoreSubmissionService
 from app.services.scores import ScoresService
 from app.services.screenshots import ScreenshotService
+from app.services.tourney_pools import TourneyPoolsService
 
 SCREENSHOTS_PATH = Path.cwd() / ".data/ss"
 REPLAYS_PATH = Path.cwd() / ".data/osr"
@@ -164,8 +164,9 @@ def get_users_repository() -> UsersRepository:
 
 def get_clans_service(
     clans: Annotated[ClansRepository, Depends(get_clans_repository)],
+    users: Annotated[UsersRepository, Depends(get_users_repository)],
 ) -> ClansService:
-    return ClansService(clans=clans)
+    return ClansService(clans=clans, users=users)
 
 
 def get_bancho_authentication_service(
@@ -316,11 +317,7 @@ def get_performance_service() -> PerformanceService:
     return PerformanceService()
 
 
-def get_public_api_service(
-    users: Annotated[UsersRepository, Depends(get_users_repository)],
-    stats: Annotated[StatsRepository, Depends(get_stats_repository)],
-    clans: Annotated[ClansRepository, Depends(get_clans_repository)],
-    scores: Annotated[ScoresRepository, Depends(get_scores_repository)],
+def get_tourney_pools_service(
     tourney_pools: Annotated[
         TourneyPoolsRepository,
         Depends(get_tourney_pools_repository),
@@ -329,12 +326,8 @@ def get_public_api_service(
         TourneyPoolMapsRepository,
         Depends(get_tourney_pool_maps_repository),
     ],
-) -> PublicApiService:
-    return PublicApiService(
-        users=users,
-        stats=stats,
-        clans=clans,
-        scores=scores,
+) -> TourneyPoolsService:
+    return TourneyPoolsService(
         tourney_pools=tourney_pools,
         tourney_pool_maps=tourney_pool_maps,
     )
@@ -413,4 +406,4 @@ def get_score_submission_service(
 def get_scores_service(
     scores: Annotated[ScoresRepository, Depends(get_scores_repository)],
 ) -> ScoresService:
-    return ScoresService(scores=scores)
+    return ScoresService(scores=scores, fetch_beatmap=Beatmap.from_md5)
