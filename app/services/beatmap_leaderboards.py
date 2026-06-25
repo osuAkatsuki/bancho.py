@@ -94,11 +94,11 @@ class BeatmapLeaderboardService:
         # unsubmitted/needs update to reduce osu!api spam
         if request.map_md5 in self.unsubmitted_cache:
             return BeatmapLeaderboardResult(
-                code=BeatmapLeaderboardResultCode.NOT_SUBMITTED
+                code=BeatmapLeaderboardResultCode.NOT_SUBMITTED,
             )
         if request.map_md5 in self.needs_update_cache:
             return BeatmapLeaderboardResult(
-                code=BeatmapLeaderboardResultCode.NEEDS_UPDATE
+                code=BeatmapLeaderboardResultCode.NEEDS_UPDATE,
             )
 
         mode, mods = self._resolve_score_query_mode_and_mods(
@@ -216,7 +216,7 @@ class BeatmapLeaderboardService:
             # set not cached, it doesn't exist
             self.unsubmitted_cache.add(request.map_md5)
             return BeatmapLeaderboardResult(
-                code=BeatmapLeaderboardResultCode.NOT_SUBMITTED
+                code=BeatmapLeaderboardResultCode.NOT_SUBMITTED,
             )
 
         map_filename = unquote_plus(request.map_filename)  # TODO: is unquote needed?
@@ -237,7 +237,7 @@ class BeatmapLeaderboardService:
             # map can be updated.
             self.needs_update_cache.add(request.map_md5)
             return BeatmapLeaderboardResult(
-                code=BeatmapLeaderboardResultCode.NEEDS_UPDATE
+                code=BeatmapLeaderboardResultCode.NEEDS_UPDATE,
             )
 
         # map is unsubmitted.
