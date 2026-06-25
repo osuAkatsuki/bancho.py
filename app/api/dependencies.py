@@ -14,7 +14,6 @@ import app.state.sessions
 import app.utils
 from app import settings
 from app import state
-from app.adapters import score_submission as score_submission_adapters
 from app.objects.beatmap import Beatmap
 from app.objects.beatmap import ensure_osu_file_is_available
 from app.objects.player import Player
@@ -48,6 +47,7 @@ from app.services.maps import BeatmapInfoService
 from app.services.maps import BeatmapRatingService
 from app.services.maps import BeatmapSetService
 from app.services.maps import MapsService
+from app.services.osu_client_authentication import OsuClientAuthenticationService
 from app.services.performance import PerformanceService
 from app.services.players import PlayersService
 from app.services.public_api import PublicApiService
@@ -58,6 +58,7 @@ from app.services.scores import ScoresService
 from app.services.screenshots import ScreenshotService
 
 SCREENSHOTS_PATH = Path.cwd() / ".data/ss"
+REPLAYS_PATH = Path.cwd() / ".data/osr"
 
 
 async def _fetch_mirror_search(
@@ -79,6 +80,11 @@ def _send_notification(player: Player, message: str) -> None:
 
 def _publish_user_stats(player: Player) -> None:
     app.state.sessions.players.enqueue(app.packets.user_stats(player))
+
+
+async def _record_strange_occurrence_stacktrace() -> None:
+    stacktrace = app.utils.get_appropriate_stacktrace()
+    await app.state.services.log_strange_occurrence(stacktrace)
 
 
 def _schedule_replay_view_increment(score: Score) -> None:
@@ -168,6 +174,13 @@ def get_bancho_login_service(
         ingame_logins=ingame_logins,
         client_hashes=client_hashes,
         mail=mail,
+        password_cache=state.cache.bcrypt,
+    )
+
+
+def get_osu_client_authentication_service() -> OsuClientAuthenticationService:
+    return OsuClientAuthenticationService(
+        online_players=app.state.sessions.players,
         password_cache=state.cache.bcrypt,
     )
 
@@ -264,7 +277,7 @@ def get_mail_read_service(
 
 def get_replay_service() -> ReplayService:
     return ReplayService(
-        replays_path=score_submission_adapters.REPLAYS_PATH,
+        replays_path=REPLAYS_PATH,
         fetch_score=Score.from_sql,
         schedule_replay_view_increment=_schedule_replay_view_increment,
     )
@@ -341,6 +354,10 @@ def get_beatmap_leaderboard_service(
 
 
 def get_score_submission_service(
+    osu_client_authentication: Annotated[
+        OsuClientAuthenticationService,
+        Depends(get_osu_client_authentication_service),
+    ],
     scores: Annotated[ScoresRepository, Depends(get_scores_repository)],
     stats: Annotated[StatsRepository, Depends(get_stats_repository)],
     maps: Annotated[MapsRepository, Depends(get_maps_repository)],
@@ -354,10 +371,10 @@ def get_score_submission_service(
     ],
 ) -> ScoreSubmissionService:
     return ScoreSubmissionService(
-        replays_path=score_submission_adapters.REPLAYS_PATH,
+        replays_path=REPLAYS_PATH,
         restriction_admin=app.state.sessions.bot,
-        fetch_beatmap=score_submission_adapters.fetch_score_submission_beatmap,
-        authenticate_player=score_submission_adapters.authenticate_score_submitter,
+        fetch_beatmap=Beatmap.from_md5,
+        osu_client_authentication=osu_client_authentication,
         score_submission_locks=app.state.score_submission_locks,
         database=app.state.services.database,
         scores=scores,
@@ -366,16 +383,12 @@ def get_score_submission_service(
         achievements=achievements,
         user_achievements=user_achievements,
         ensure_osu_file_is_available=ensure_osu_file_is_available,
-        publish_user_stats=score_submission_adapters.publish_score_submitter_stats,
-        send_personal_best_notification=(
-            score_submission_adapters.send_personal_best_notification
-        ),
+        publish_user_stats=_publish_user_stats,
+        send_personal_best_notification=_send_notification,
         announce_channel=app.state.sessions.channels.get_by_name("#announce"),
         domain=settings.DOMAIN,
-        increment_metric=score_submission_adapters.increment_score_submission_metric,
-        record_submission_integrity_failure=(
-            score_submission_adapters.record_score_submission_integrity_failure
-        ),
+        increment_metric=_increment_metric,
+        record_submission_integrity_failure=_record_strange_occurrence_stacktrace,
     )
 
 

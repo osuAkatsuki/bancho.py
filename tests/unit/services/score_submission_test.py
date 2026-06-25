@@ -736,7 +736,12 @@ class _FakePlayerAuthenticator:
         self.player = player
         self.calls: list[tuple[str, str]] = []
 
-    async def __call__(self, username: str, password_md5: str) -> _FakePlayer | None:
+    async def authenticate_online_player(
+        self,
+        *,
+        username: str,
+        password_md5: str,
+    ) -> _FakePlayer | None:
         self.calls.append((username, password_md5))
         if self.player is None:
             return None
@@ -961,7 +966,7 @@ def _score_submission_service(
     replays_path: Path = Path("/tmp"),
     restriction_admin: object | None = None,
     fetch_beatmap: object | None = None,
-    authenticate_player: object | None = None,
+    osu_client_authentication: object | None = None,
     score_submission_locks: object | None = None,
     database: object | None = None,
     scores: object | None = None,
@@ -981,7 +986,8 @@ def _score_submission_service(
         replays_path=replays_path,
         restriction_admin=restriction_admin or _FakePlayer(stats=_mode_data()),
         fetch_beatmap=fetch_beatmap or _FakeBeatmapFetcher(None),
-        authenticate_player=authenticate_player or _FakePlayerAuthenticator(None),
+        osu_client_authentication=osu_client_authentication
+        or _FakePlayerAuthenticator(None),
         score_submission_locks=score_submission_locks
         or _FakeScoreSubmissionLocks(_FakeScoreSubmissionLock()),
         database=database or _FakeDatabaseTransactions(),
@@ -1431,7 +1437,7 @@ async def test_submit_score_orchestrates_submission_side_effects(
         replays_path=tmp_path,
         restriction_admin=player,
         fetch_beatmap=beatmap_fetcher,
-        authenticate_player=player_authenticator,
+        osu_client_authentication=player_authenticator,
         score_submission_locks=locks,
         database=database,
         scores=scores,
@@ -1509,7 +1515,7 @@ async def test_submit_score_rejects_duplicate_inside_submission_lock(tmp_path) -
         replays_path=tmp_path,
         restriction_admin=player,
         fetch_beatmap=_FakeBeatmapFetcher(score.bmap),
-        authenticate_player=_FakePlayerAuthenticator(player),
+        osu_client_authentication=_FakePlayerAuthenticator(player),
         score_submission_locks=locks,
         database=_FakeDatabaseTransactions(),
         scores=scores,
@@ -1573,7 +1579,7 @@ async def test_submit_score_maps_duplicate_insert_to_duplicate_submission(
         replays_path=tmp_path,
         restriction_admin=player,
         fetch_beatmap=_FakeBeatmapFetcher(score.bmap),
-        authenticate_player=_FakePlayerAuthenticator(player),
+        osu_client_authentication=_FakePlayerAuthenticator(player),
         score_submission_locks=locks,
         database=database,
         scores=scores,
@@ -1621,7 +1627,7 @@ async def test_submit_score_returns_error_when_beatmap_is_missing(tmp_path) -> N
         replays_path=tmp_path,
         restriction_admin=player,
         fetch_beatmap=beatmap_fetcher,
-        authenticate_player=player_authenticator,
+        osu_client_authentication=player_authenticator,
         score_submission_locks=_FakeScoreSubmissionLocks(_FakeScoreSubmissionLock()),
         database=_FakeDatabaseTransactions(),
         scores=_FakeScoresRepository(),
@@ -1665,7 +1671,7 @@ async def test_submit_score_returns_error_when_player_authentication_fails(
         replays_path=tmp_path,
         restriction_admin=player,
         fetch_beatmap=_FakeBeatmapFetcher(score.bmap),
-        authenticate_player=player_authenticator,
+        osu_client_authentication=player_authenticator,
         score_submission_locks=_FakeScoreSubmissionLocks(_FakeScoreSubmissionLock()),
         database=_FakeDatabaseTransactions(),
         scores=_FakeScoresRepository(),
@@ -1735,7 +1741,7 @@ async def test_submit_score_logs_integrity_failure_and_continues(
         replays_path=tmp_path,
         restriction_admin=player,
         fetch_beatmap=_FakeBeatmapFetcher(score.bmap),
-        authenticate_player=_FakePlayerAuthenticator(player),
+        osu_client_authentication=_FakePlayerAuthenticator(player),
         score_submission_locks=_FakeScoreSubmissionLocks(_FakeScoreSubmissionLock()),
         database=_FakeDatabaseTransactions(),
         scores=_FakeScoresRepository(),

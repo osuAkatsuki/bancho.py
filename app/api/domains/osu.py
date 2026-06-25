@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Awaitable
-from collections.abc import Callable
 from collections.abc import Sequence
-from functools import cache
 from pathlib import Path as SystemPath
 from typing import Annotated
 from typing import Any
@@ -15,7 +12,6 @@ from urllib.parse import unquote
 from fastapi import status
 from fastapi.datastructures import FormData
 from fastapi.datastructures import UploadFile
-from fastapi.exceptions import HTTPException
 from fastapi.param_functions import Depends
 from fastapi.param_functions import File
 from fastapi.param_functions import Form
@@ -62,6 +58,7 @@ from app.services.maps import BeatmapInfoService
 from app.services.maps import BeatmapRatingResultCode
 from app.services.maps import BeatmapRatingService
 from app.services.maps import BeatmapSetService
+from app.services.osu_client_authentication import OsuClientAuthenticationService
 from app.services.replays import ReplayResultCode
 from app.services.replays import ReplayService
 from app.services.score_submission import ScoreSubmissionError
@@ -81,33 +78,6 @@ router = APIRouter(
 )
 
 
-@cache
-def authenticate_player_session(
-    param_function: Callable[..., Any],
-    username_alias: str = "u",
-    pw_md5_alias: str = "p",
-    err: Any | None = None,
-) -> Callable[[str, str], Awaitable[Player]]:
-    async def wrapper(
-        username: str = param_function(..., alias=username_alias),
-        pw_md5: str = param_function(..., alias=pw_md5_alias),
-    ) -> Player:
-        player = await app.state.sessions.players.from_login(
-            name=unquote(username),
-            pw_md5=pw_md5,
-        )
-        if player:
-            return player
-
-        # player login incorrect
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=err,
-        )
-
-    return wrapper
-
-
 """ /web/ handlers """
 
 # Unhandled endpoints:
@@ -122,7 +92,12 @@ def authenticate_player_session(
 @router.post("/web/osu-screenshot.php")
 async def osuScreenshot(
     *,
-    player: Player = Depends(authenticate_player_session(Form, "u", "p")),
+    osu_client_authentication: Annotated[
+        OsuClientAuthenticationService,
+        Depends(api_dependencies.get_osu_client_authentication_service),
+    ],
+    username: str = Form(..., alias="u"),
+    password_md5: str = Form(..., alias="p"),
     endpoint_version: int = Form(..., alias="v"),
     screenshot_file: UploadFile = File(..., alias="ss"),
     screenshot_service: Annotated[
@@ -130,6 +105,13 @@ async def osuScreenshot(
         Depends(api_dependencies.get_screenshot_service),
     ],
 ) -> Response:
+    player = await osu_client_authentication.authenticate_online_player(
+        username=unquote(username),
+        password_md5=password_md5,
+    )
+    if player is None:
+        return Response(status_code=status.HTTP_401_UNAUTHORIZED)
+
     result = await screenshot_service.upload_screenshot(
         player=player,
         endpoint_version=endpoint_version,
@@ -152,8 +134,21 @@ async def osuScreenshot(
 
 @router.get("/web/osu-getfriends.php")
 async def osuGetFriends(
-    player: Player = Depends(authenticate_player_session(Query, "u", "h")),
+    *,
+    osu_client_authentication: Annotated[
+        OsuClientAuthenticationService,
+        Depends(api_dependencies.get_osu_client_authentication_service),
+    ],
+    username: str = Query(..., alias="u"),
+    password_md5: str = Query(..., alias="h"),
 ) -> Response:
+    player = await osu_client_authentication.authenticate_online_player(
+        username=unquote(username),
+        password_md5=password_md5,
+    )
+    if player is None:
+        return Response(status_code=status.HTTP_401_UNAUTHORIZED)
+
     return Response("\n".join(map(str, player.friends)).encode())
 
 
@@ -171,12 +166,24 @@ def bancho_to_osuapi_status(bancho_status: int) -> int:
 async def osuGetBeatmapInfo(
     form_data: models.OsuBeatmapRequestForm,
     *,
-    player: Player = Depends(authenticate_player_session(Query, "u", "h")),
+    osu_client_authentication: Annotated[
+        OsuClientAuthenticationService,
+        Depends(api_dependencies.get_osu_client_authentication_service),
+    ],
+    username: str = Query(..., alias="u"),
+    password_md5: str = Query(..., alias="h"),
     beatmap_info_service: Annotated[
         BeatmapInfoService,
         Depends(api_dependencies.get_beatmap_info_service),
     ],
 ) -> Response:
+    player = await osu_client_authentication.authenticate_online_player(
+        username=unquote(username),
+        password_md5=password_md5,
+    )
+    if player is None:
+        return Response(status_code=status.HTTP_401_UNAUTHORIZED)
+
     num_requests = len(form_data.Filenames) + len(form_data.Ids)
     log(f"{player} requested info for {num_requests} maps.", Ansi.LCYAN)
 
@@ -209,12 +216,24 @@ async def osuGetBeatmapInfo(
 @router.get("/web/osu-getfavourites.php")
 async def osuGetFavourites(
     *,
-    player: Player = Depends(authenticate_player_session(Query, "u", "h")),
+    osu_client_authentication: Annotated[
+        OsuClientAuthenticationService,
+        Depends(api_dependencies.get_osu_client_authentication_service),
+    ],
+    username: str = Query(..., alias="u"),
+    password_md5: str = Query(..., alias="h"),
     favourites_service: Annotated[
         FavouritesService,
         Depends(api_dependencies.get_favourites_service),
     ],
 ) -> Response:
+    player = await osu_client_authentication.authenticate_online_player(
+        username=unquote(username),
+        password_md5=password_md5,
+    )
+    if player is None:
+        return Response(status_code=status.HTTP_401_UNAUTHORIZED)
+
     favourite_set_ids = await favourites_service.fetch_favourite_set_ids(player.id)
     return Response(
         "\n".join([str(map_set_id) for map_set_id in favourite_set_ids]).encode(),
@@ -224,13 +243,25 @@ async def osuGetFavourites(
 @router.get("/web/osu-addfavourite.php")
 async def osuAddFavourite(
     *,
-    player: Player = Depends(authenticate_player_session(Query, "u", "h")),
+    osu_client_authentication: Annotated[
+        OsuClientAuthenticationService,
+        Depends(api_dependencies.get_osu_client_authentication_service),
+    ],
+    username: str = Query(..., alias="u"),
+    password_md5: str = Query(..., alias="h"),
     map_set_id: int = Query(..., alias="a"),
     favourites_service: Annotated[
         FavouritesService,
         Depends(api_dependencies.get_favourites_service),
     ],
 ) -> Response:
+    player = await osu_client_authentication.authenticate_online_player(
+        username=unquote(username),
+        password_md5=password_md5,
+    )
+    if player is None:
+        return Response(status_code=status.HTTP_401_UNAUTHORIZED)
+
     result = await favourites_service.add_favourite(
         player_id=player.id,
         map_set_id=map_set_id,
@@ -253,12 +284,24 @@ async def lastFM(
         ),
         alias="b",
     ),
-    player: Player = Depends(authenticate_player_session(Query, "us", "ha")),
+    osu_client_authentication: Annotated[
+        OsuClientAuthenticationService,
+        Depends(api_dependencies.get_osu_client_authentication_service),
+    ],
+    username: str = Query(..., alias="us"),
+    password_md5: str = Query(..., alias="ha"),
     client_integrity_service: Annotated[
         ClientIntegrityService,
         Depends(api_dependencies.get_client_integrity_service),
     ],
 ) -> Response:
+    player = await osu_client_authentication.authenticate_online_player(
+        username=unquote(username),
+        password_md5=password_md5,
+    )
+    if player is None:
+        return Response(status_code=status.HTTP_401_UNAUTHORIZED)
+
     result = await client_integrity_service.handle_lastfm_flags(
         player=player,
         beatmap_id_or_hidden_flag=beatmap_id_or_hidden_flag,
@@ -320,7 +363,12 @@ def format_direct_search_response(result: DirectSearchResult) -> bytes:
 @router.get("/web/osu-search.php")
 async def osuSearchHandler(
     *,
-    player: Player = Depends(authenticate_player_session(Query, "u", "h")),
+    osu_client_authentication: Annotated[
+        OsuClientAuthenticationService,
+        Depends(api_dependencies.get_osu_client_authentication_service),
+    ],
+    username: str = Query(..., alias="u"),
+    password_md5: str = Query(..., alias="h"),
     ranked_status: int = Query(..., alias="r", ge=0, le=8),
     query: str = Query(..., alias="q"),
     mode: int = Query(..., alias="m", ge=-1, le=3),  # -1 for all
@@ -330,6 +378,15 @@ async def osuSearchHandler(
         Depends(api_dependencies.get_direct_search_service),
     ],
 ) -> Response:
+    if (
+        await osu_client_authentication.authenticate_online_player(
+            username=unquote(username),
+            password_md5=password_md5,
+        )
+        is None
+    ):
+        return Response(status_code=status.HTTP_401_UNAUTHORIZED)
+
     result = await direct_search_service.search(
         ranked_status=ranked_status,
         query=query,
@@ -346,7 +403,12 @@ async def osuSearchHandler(
 @router.get("/web/osu-search-set.php")
 async def osuSearchSetHandler(
     *,
-    player: Player = Depends(authenticate_player_session(Query, "u", "h")),
+    osu_client_authentication: Annotated[
+        OsuClientAuthenticationService,
+        Depends(api_dependencies.get_osu_client_authentication_service),
+    ],
+    username: str = Query(..., alias="u"),
+    password_md5: str = Query(..., alias="h"),
     map_set_id: int | None = Query(None, alias="s"),
     map_id: int | None = Query(None, alias="b"),
     checksum: str | None = Query(None, alias="c"),
@@ -355,6 +417,15 @@ async def osuSearchSetHandler(
         Depends(api_dependencies.get_beatmap_set_service),
     ],
 ) -> Response:
+    if (
+        await osu_client_authentication.authenticate_online_player(
+            username=unquote(username),
+            password_md5=password_md5,
+        )
+        is None
+    ):
+        return Response(status_code=status.HTTP_401_UNAUTHORIZED)
+
     # Since we only need set-specific data, we can basically
     # just do same query with either bid or bsid.
 
@@ -620,7 +691,12 @@ async def osuSubmitModularSelector(
 @router.get("/web/osu-getreplay.php")
 async def getReplay(
     *,
-    player: Player = Depends(authenticate_player_session(Query, "u", "h")),
+    osu_client_authentication: Annotated[
+        OsuClientAuthenticationService,
+        Depends(api_dependencies.get_osu_client_authentication_service),
+    ],
+    username: str = Query(..., alias="u"),
+    password_md5: str = Query(..., alias="h"),
     mode: int = Query(..., alias="m", ge=0, le=3),
     score_id: int = Query(..., alias="c", min=0, max=9_223_372_036_854_775_807),
     replay_service: Annotated[
@@ -628,6 +704,13 @@ async def getReplay(
         Depends(api_dependencies.get_replay_service),
     ],
 ) -> Response:
+    player = await osu_client_authentication.authenticate_online_player(
+        username=unquote(username),
+        password_md5=password_md5,
+    )
+    if player is None:
+        return Response(status_code=status.HTTP_401_UNAUTHORIZED)
+
     replay = await replay_service.fetch_replay_file(
         viewer_id=player.id,
         score_id=score_id,
@@ -642,9 +725,12 @@ async def getReplay(
 @router.get("/web/osu-rate.php")
 async def osuRate(
     *,
-    player: Player = Depends(
-        authenticate_player_session(Query, "u", "p", err=b"auth fail"),
-    ),
+    osu_client_authentication: Annotated[
+        OsuClientAuthenticationService,
+        Depends(api_dependencies.get_osu_client_authentication_service),
+    ],
+    username: str = Query(..., alias="u"),
+    password_md5: str = Query(..., alias="p"),
     map_md5: str = Query(..., alias="c", min_length=32, max_length=32),
     rating: int | None = Query(None, alias="v", ge=1, le=10),
     beatmap_rating_service: Annotated[
@@ -652,6 +738,13 @@ async def osuRate(
         Depends(api_dependencies.get_beatmap_rating_service),
     ],
 ) -> Response:
+    player = await osu_client_authentication.authenticate_online_player(
+        username=unquote(username),
+        password_md5=password_md5,
+    )
+    if player is None:
+        return Response(b"auth fail", status_code=status.HTTP_401_UNAUTHORIZED)
+
     rating_result = await beatmap_rating_service.rate_or_check(
         player_id=player.id,
         map_md5=map_md5,
@@ -732,7 +825,12 @@ def format_scores_response(leaderboard: BeatmapLeaderboardResult) -> bytes:
 @router.get("/web/osu-osz2-getscores.php")
 async def getScores(
     *,
-    player: Player = Depends(authenticate_player_session(Query, "us", "ha")),
+    osu_client_authentication: Annotated[
+        OsuClientAuthenticationService,
+        Depends(api_dependencies.get_osu_client_authentication_service),
+    ],
+    username: str = Query(..., alias="us"),
+    password_md5: str = Query(..., alias="ha"),
     requesting_from_editor_song_select: bool = Query(..., alias="s"),
     leaderboard_version: int = Query(..., alias="vv"),
     leaderboard_type: int = Query(..., alias="v", ge=0, le=4),
@@ -748,6 +846,13 @@ async def getScores(
         Depends(api_dependencies.get_beatmap_leaderboard_service),
     ],
 ) -> Response:
+    player = await osu_client_authentication.authenticate_online_player(
+        username=unquote(username),
+        password_md5=password_md5,
+    )
+    if player is None:
+        return Response(status_code=status.HTTP_401_UNAUTHORIZED)
+
     leaderboard = await beatmap_leaderboard_service.fetch_leaderboard(
         player=player,
         request=BeatmapLeaderboardRequest(
@@ -776,7 +881,12 @@ async def getScores(
 @router.post("/web/osu-comment.php")
 async def osuComment(
     *,
-    player: Player = Depends(authenticate_player_session(Form, "u", "p")),
+    osu_client_authentication: Annotated[
+        OsuClientAuthenticationService,
+        Depends(api_dependencies.get_osu_client_authentication_service),
+    ],
+    username: str = Form(..., alias="u"),
+    password_md5: str = Form(..., alias="p"),
     map_id: int = Form(..., alias="b"),
     map_set_id: int = Form(..., alias="s"),
     score_id: int = Form(..., alias="r", ge=0, le=9_223_372_036_854_775_807),
@@ -792,6 +902,13 @@ async def osuComment(
         Depends(api_dependencies.get_comments_service),
     ],
 ) -> Response:
+    player = await osu_client_authentication.authenticate_online_player(
+        username=unquote(username),
+        password_md5=password_md5,
+    )
+    if player is None:
+        return Response(status_code=status.HTTP_401_UNAUTHORIZED)
+
     if action == "get":
         # client is requesting all comments
         comments = await comments_service.fetch_relevant_to_replay_for_player(
@@ -847,13 +964,25 @@ async def osuComment(
 @router.get("/web/osu-markasread.php")
 async def osuMarkAsRead(
     *,
-    player: Player = Depends(authenticate_player_session(Query, "u", "h")),
+    osu_client_authentication: Annotated[
+        OsuClientAuthenticationService,
+        Depends(api_dependencies.get_osu_client_authentication_service),
+    ],
+    username: str = Query(..., alias="u"),
+    password_md5: str = Query(..., alias="h"),
     channel: str = Query(..., min_length=0, max_length=32),
     mail_read_service: Annotated[
         MailReadService,
         Depends(api_dependencies.get_mail_read_service),
     ],
 ) -> Response:
+    player = await osu_client_authentication.authenticate_online_player(
+        username=unquote(username),
+        password_md5=password_md5,
+    )
+    if player is None:
+        return Response(status_code=status.HTTP_401_UNAUTHORIZED)
+
     await mail_read_service.mark_channel_as_read(
         player=player,
         channel=channel,
@@ -871,7 +1000,7 @@ async def osuSeasonal() -> Response:
 async def banchoConnect(
     # NOTE: this is disabled as this endpoint can be called
     #       before a player has been granted a session
-    # player: Player = Depends(authenticate_player_session(Query, "u", "h")),
+    # TODO: authenticate this endpoint when the client reliably has a session.
     osu_ver: str = Query(..., alias="v"),
     active_endpoint: str | None = Query(None, alias="fail"),
     net_framework_vers: str | None = Query(None, alias="fx"),  # delimited by |

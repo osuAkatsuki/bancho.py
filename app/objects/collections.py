@@ -236,29 +236,6 @@ class Players(list[Player]):
 
         return None
 
-    async def from_login(
-        self,
-        name: str,
-        pw_md5: str,
-        sql: bool = False,
-    ) -> Player | None:
-        """Return a player with a given name & pw_md5, from cache or sql."""
-        player = self.get(name=name)
-        if not player:
-            if not sql:
-                return None
-
-            player = await self.get_sql(name=name)
-            if not player:
-                return None
-
-        assert player.pw_bcrypt is not None
-
-        if app.state.cache.bcrypt[player.pw_bcrypt] == pw_md5.encode():
-            return player
-
-        return None
-
     def append(self, player: Player) -> None:
         """Append `player` to the list."""
         if player in self:

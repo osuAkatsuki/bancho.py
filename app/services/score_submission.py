@@ -93,8 +93,9 @@ class BeatmapFetcher(Protocol):
 
 
 class PlayerAuthenticator(Protocol):
-    def __call__(
+    def authenticate_online_player(
         self,
+        *,
         username: str,
         password_md5: str,
     ) -> Awaitable[Player | None]: ...
@@ -764,7 +765,7 @@ class ScoreSubmissionService:
     replays_path: Path
     restriction_admin: Player
     fetch_beatmap: BeatmapFetcher
-    authenticate_player: PlayerAuthenticator
+    osu_client_authentication: PlayerAuthenticator
     score_submission_locks: ScoreSubmissionLocks
     database: Database
     scores: ScoresRepository
@@ -904,7 +905,10 @@ class ScoreSubmissionService:
             )
 
         username = score_submission_username(request)
-        player = await self.authenticate_player(username, request.password_md5)
+        player = await self.osu_client_authentication.authenticate_online_player(
+            username=username,
+            password_md5=request.password_md5,
+        )
         if player is None:
             return ScoreSubmissionError(
                 code=ScoreSubmissionErrorCode.PLAYER_NOT_FOUND,
