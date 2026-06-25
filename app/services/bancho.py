@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
+from typing import Protocol
 
 import bcrypt
 
 from app.constants.privileges import Privileges
+from app.objects.player import Player
 from app.repositories.client_hashes import ClientHashesRepository
 from app.repositories.client_hashes import ClientHashWithPlayer
 from app.repositories.ingame_logins import IngameLoginsRepository
@@ -15,15 +17,22 @@ from app.repositories.users import User
 from app.repositories.users import UsersRepository
 
 
+class OnlinePlayers(Protocol):
+    def get(
+        self,
+        token: str | None = None,
+        id: int | None = None,
+        name: str | None = None,
+    ) -> Player | None: ...
+
+
 @dataclass(frozen=True)
-class BanchoLoginService:
+class BanchoAuthenticationService:
     users: UsersRepository
-    ingame_logins: IngameLoginsRepository
-    client_hashes: ClientHashesRepository
-    mail: MailRepository
+    online_players: OnlinePlayers
     password_cache: dict[bytes, bytes]
 
-    async def authenticate(
+    async def authenticate_login_credentials(
         self,
         username: str,
         untrusted_password: bytes,
@@ -48,6 +57,40 @@ class BanchoLoginService:
             self.password_cache[trusted_hashword] = untrusted_password
 
         return user_info
+
+    async def authenticate_online_player(
+        self,
+        *,
+        username: str,
+        password_md5: str,
+    ) -> Player | None:
+        player = self.online_players.get(name=username)
+        if player is None or player.pw_bcrypt is None:
+            return None
+
+        if self.password_cache.get(player.pw_bcrypt) != password_md5.encode():
+            return None
+
+        return player
+
+
+@dataclass(frozen=True)
+class BanchoLoginService:
+    authentication: BanchoAuthenticationService
+    users: UsersRepository
+    ingame_logins: IngameLoginsRepository
+    client_hashes: ClientHashesRepository
+    mail: MailRepository
+
+    async def authenticate(
+        self,
+        username: str,
+        untrusted_password: bytes,
+    ) -> User | None:
+        return await self.authentication.authenticate_login_credentials(
+            username,
+            untrusted_password,
+        )
 
     async def record_login(
         self,

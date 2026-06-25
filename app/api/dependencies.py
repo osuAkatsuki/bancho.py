@@ -34,6 +34,7 @@ from app.repositories.tourney_pools import TourneyPoolsRepository
 from app.repositories.user_achievements import UserAchievementsRepository
 from app.repositories.users import UsersRepository
 from app.services.accounts import AccountRegistrationService
+from app.services.bancho import BanchoAuthenticationService
 from app.services.bancho import BanchoLoginService
 from app.services.beatmap_leaderboards import BeatmapLeaderboardService
 from app.services.clans import ClansService
@@ -47,7 +48,6 @@ from app.services.maps import BeatmapInfoService
 from app.services.maps import BeatmapRatingService
 from app.services.maps import BeatmapSetService
 from app.services.maps import MapsService
-from app.services.osu_client_authentication import OsuClientAuthenticationService
 from app.services.performance import PerformanceService
 from app.services.players import PlayersService
 from app.services.public_api import PublicApiService
@@ -157,7 +157,21 @@ def get_clans_service(
     return ClansService(clans=clans)
 
 
+def get_bancho_authentication_service(
+    users: Annotated[UsersRepository, Depends(get_users_repository)],
+) -> BanchoAuthenticationService:
+    return BanchoAuthenticationService(
+        users=users,
+        online_players=app.state.sessions.players,
+        password_cache=state.cache.bcrypt,
+    )
+
+
 def get_bancho_login_service(
+    authentication: Annotated[
+        BanchoAuthenticationService,
+        Depends(get_bancho_authentication_service),
+    ],
     users: Annotated[UsersRepository, Depends(get_users_repository)],
     ingame_logins: Annotated[
         IngameLoginsRepository,
@@ -170,18 +184,11 @@ def get_bancho_login_service(
     mail: Annotated[MailRepository, Depends(get_mail_repository)],
 ) -> BanchoLoginService:
     return BanchoLoginService(
+        authentication=authentication,
         users=users,
         ingame_logins=ingame_logins,
         client_hashes=client_hashes,
         mail=mail,
-        password_cache=state.cache.bcrypt,
-    )
-
-
-def get_osu_client_authentication_service() -> OsuClientAuthenticationService:
-    return OsuClientAuthenticationService(
-        online_players=app.state.sessions.players,
-        password_cache=state.cache.bcrypt,
     )
 
 
@@ -354,9 +361,9 @@ def get_beatmap_leaderboard_service(
 
 
 def get_score_submission_service(
-    osu_client_authentication: Annotated[
-        OsuClientAuthenticationService,
-        Depends(get_osu_client_authentication_service),
+    bancho_authentication: Annotated[
+        BanchoAuthenticationService,
+        Depends(get_bancho_authentication_service),
     ],
     scores: Annotated[ScoresRepository, Depends(get_scores_repository)],
     stats: Annotated[StatsRepository, Depends(get_stats_repository)],
@@ -374,7 +381,7 @@ def get_score_submission_service(
         replays_path=REPLAYS_PATH,
         restriction_admin=app.state.sessions.bot,
         fetch_beatmap=Beatmap.from_md5,
-        osu_client_authentication=osu_client_authentication,
+        bancho_authentication=bancho_authentication,
         score_submission_locks=app.state.score_submission_locks,
         database=app.state.services.database,
         scores=scores,

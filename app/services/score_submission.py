@@ -765,7 +765,7 @@ class ScoreSubmissionService:
     replays_path: Path
     restriction_admin: Player
     fetch_beatmap: BeatmapFetcher
-    osu_client_authentication: PlayerAuthenticator
+    bancho_authentication: PlayerAuthenticator
     score_submission_locks: ScoreSubmissionLocks
     database: Database
     scores: ScoresRepository
@@ -905,7 +905,7 @@ class ScoreSubmissionService:
             )
 
         username = score_submission_username(request)
-        player = await self.osu_client_authentication.authenticate_online_player(
+        player = await self.bancho_authentication.authenticate_online_player(
             username=username,
             password_md5=request.password_md5,
         )

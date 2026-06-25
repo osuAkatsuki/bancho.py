@@ -41,6 +41,7 @@ from app.objects.score import Score
 from app.repositories.achievements import Achievement
 from app.services.accounts import AccountRegistrationResultCode
 from app.services.accounts import AccountRegistrationService
+from app.services.bancho import BanchoAuthenticationService
 from app.services.beatmap_leaderboards import BeatmapLeaderboardRequest
 from app.services.beatmap_leaderboards import BeatmapLeaderboardResult
 from app.services.beatmap_leaderboards import BeatmapLeaderboardResultCode
@@ -58,7 +59,6 @@ from app.services.maps import BeatmapInfoService
 from app.services.maps import BeatmapRatingResultCode
 from app.services.maps import BeatmapRatingService
 from app.services.maps import BeatmapSetService
-from app.services.osu_client_authentication import OsuClientAuthenticationService
 from app.services.replays import ReplayResultCode
 from app.services.replays import ReplayService
 from app.services.score_submission import ScoreSubmissionError
@@ -92,9 +92,9 @@ router = APIRouter(
 @router.post("/web/osu-screenshot.php")
 async def osuScreenshot(
     *,
-    osu_client_authentication: Annotated[
-        OsuClientAuthenticationService,
-        Depends(api_dependencies.get_osu_client_authentication_service),
+    bancho_authentication: Annotated[
+        BanchoAuthenticationService,
+        Depends(api_dependencies.get_bancho_authentication_service),
     ],
     username: str = Form(..., alias="u"),
     password_md5: str = Form(..., alias="p"),
@@ -105,7 +105,7 @@ async def osuScreenshot(
         Depends(api_dependencies.get_screenshot_service),
     ],
 ) -> Response:
-    player = await osu_client_authentication.authenticate_online_player(
+    player = await bancho_authentication.authenticate_online_player(
         username=unquote(username),
         password_md5=password_md5,
     )
@@ -135,14 +135,14 @@ async def osuScreenshot(
 @router.get("/web/osu-getfriends.php")
 async def osuGetFriends(
     *,
-    osu_client_authentication: Annotated[
-        OsuClientAuthenticationService,
-        Depends(api_dependencies.get_osu_client_authentication_service),
+    bancho_authentication: Annotated[
+        BanchoAuthenticationService,
+        Depends(api_dependencies.get_bancho_authentication_service),
     ],
     username: str = Query(..., alias="u"),
     password_md5: str = Query(..., alias="h"),
 ) -> Response:
-    player = await osu_client_authentication.authenticate_online_player(
+    player = await bancho_authentication.authenticate_online_player(
         username=unquote(username),
         password_md5=password_md5,
     )
@@ -166,9 +166,9 @@ def bancho_to_osuapi_status(bancho_status: int) -> int:
 async def osuGetBeatmapInfo(
     form_data: models.OsuBeatmapRequestForm,
     *,
-    osu_client_authentication: Annotated[
-        OsuClientAuthenticationService,
-        Depends(api_dependencies.get_osu_client_authentication_service),
+    bancho_authentication: Annotated[
+        BanchoAuthenticationService,
+        Depends(api_dependencies.get_bancho_authentication_service),
     ],
     username: str = Query(..., alias="u"),
     password_md5: str = Query(..., alias="h"),
@@ -177,7 +177,7 @@ async def osuGetBeatmapInfo(
         Depends(api_dependencies.get_beatmap_info_service),
     ],
 ) -> Response:
-    player = await osu_client_authentication.authenticate_online_player(
+    player = await bancho_authentication.authenticate_online_player(
         username=unquote(username),
         password_md5=password_md5,
     )
@@ -216,9 +216,9 @@ async def osuGetBeatmapInfo(
 @router.get("/web/osu-getfavourites.php")
 async def osuGetFavourites(
     *,
-    osu_client_authentication: Annotated[
-        OsuClientAuthenticationService,
-        Depends(api_dependencies.get_osu_client_authentication_service),
+    bancho_authentication: Annotated[
+        BanchoAuthenticationService,
+        Depends(api_dependencies.get_bancho_authentication_service),
     ],
     username: str = Query(..., alias="u"),
     password_md5: str = Query(..., alias="h"),
@@ -227,7 +227,7 @@ async def osuGetFavourites(
         Depends(api_dependencies.get_favourites_service),
     ],
 ) -> Response:
-    player = await osu_client_authentication.authenticate_online_player(
+    player = await bancho_authentication.authenticate_online_player(
         username=unquote(username),
         password_md5=password_md5,
     )
@@ -243,9 +243,9 @@ async def osuGetFavourites(
 @router.get("/web/osu-addfavourite.php")
 async def osuAddFavourite(
     *,
-    osu_client_authentication: Annotated[
-        OsuClientAuthenticationService,
-        Depends(api_dependencies.get_osu_client_authentication_service),
+    bancho_authentication: Annotated[
+        BanchoAuthenticationService,
+        Depends(api_dependencies.get_bancho_authentication_service),
     ],
     username: str = Query(..., alias="u"),
     password_md5: str = Query(..., alias="h"),
@@ -255,7 +255,7 @@ async def osuAddFavourite(
         Depends(api_dependencies.get_favourites_service),
     ],
 ) -> Response:
-    player = await osu_client_authentication.authenticate_online_player(
+    player = await bancho_authentication.authenticate_online_player(
         username=unquote(username),
         password_md5=password_md5,
     )
@@ -284,9 +284,9 @@ async def lastFM(
         ),
         alias="b",
     ),
-    osu_client_authentication: Annotated[
-        OsuClientAuthenticationService,
-        Depends(api_dependencies.get_osu_client_authentication_service),
+    bancho_authentication: Annotated[
+        BanchoAuthenticationService,
+        Depends(api_dependencies.get_bancho_authentication_service),
     ],
     username: str = Query(..., alias="us"),
     password_md5: str = Query(..., alias="ha"),
@@ -295,7 +295,7 @@ async def lastFM(
         Depends(api_dependencies.get_client_integrity_service),
     ],
 ) -> Response:
-    player = await osu_client_authentication.authenticate_online_player(
+    player = await bancho_authentication.authenticate_online_player(
         username=unquote(username),
         password_md5=password_md5,
     )
@@ -363,9 +363,9 @@ def format_direct_search_response(result: DirectSearchResult) -> bytes:
 @router.get("/web/osu-search.php")
 async def osuSearchHandler(
     *,
-    osu_client_authentication: Annotated[
-        OsuClientAuthenticationService,
-        Depends(api_dependencies.get_osu_client_authentication_service),
+    bancho_authentication: Annotated[
+        BanchoAuthenticationService,
+        Depends(api_dependencies.get_bancho_authentication_service),
     ],
     username: str = Query(..., alias="u"),
     password_md5: str = Query(..., alias="h"),
@@ -379,7 +379,7 @@ async def osuSearchHandler(
     ],
 ) -> Response:
     if (
-        await osu_client_authentication.authenticate_online_player(
+        await bancho_authentication.authenticate_online_player(
             username=unquote(username),
             password_md5=password_md5,
         )
@@ -403,9 +403,9 @@ async def osuSearchHandler(
 @router.get("/web/osu-search-set.php")
 async def osuSearchSetHandler(
     *,
-    osu_client_authentication: Annotated[
-        OsuClientAuthenticationService,
-        Depends(api_dependencies.get_osu_client_authentication_service),
+    bancho_authentication: Annotated[
+        BanchoAuthenticationService,
+        Depends(api_dependencies.get_bancho_authentication_service),
     ],
     username: str = Query(..., alias="u"),
     password_md5: str = Query(..., alias="h"),
@@ -418,7 +418,7 @@ async def osuSearchSetHandler(
     ],
 ) -> Response:
     if (
-        await osu_client_authentication.authenticate_online_player(
+        await bancho_authentication.authenticate_online_player(
             username=unquote(username),
             password_md5=password_md5,
         )
@@ -691,9 +691,9 @@ async def osuSubmitModularSelector(
 @router.get("/web/osu-getreplay.php")
 async def getReplay(
     *,
-    osu_client_authentication: Annotated[
-        OsuClientAuthenticationService,
-        Depends(api_dependencies.get_osu_client_authentication_service),
+    bancho_authentication: Annotated[
+        BanchoAuthenticationService,
+        Depends(api_dependencies.get_bancho_authentication_service),
     ],
     username: str = Query(..., alias="u"),
     password_md5: str = Query(..., alias="h"),
@@ -704,7 +704,7 @@ async def getReplay(
         Depends(api_dependencies.get_replay_service),
     ],
 ) -> Response:
-    player = await osu_client_authentication.authenticate_online_player(
+    player = await bancho_authentication.authenticate_online_player(
         username=unquote(username),
         password_md5=password_md5,
     )
@@ -725,9 +725,9 @@ async def getReplay(
 @router.get("/web/osu-rate.php")
 async def osuRate(
     *,
-    osu_client_authentication: Annotated[
-        OsuClientAuthenticationService,
-        Depends(api_dependencies.get_osu_client_authentication_service),
+    bancho_authentication: Annotated[
+        BanchoAuthenticationService,
+        Depends(api_dependencies.get_bancho_authentication_service),
     ],
     username: str = Query(..., alias="u"),
     password_md5: str = Query(..., alias="p"),
@@ -738,7 +738,7 @@ async def osuRate(
         Depends(api_dependencies.get_beatmap_rating_service),
     ],
 ) -> Response:
-    player = await osu_client_authentication.authenticate_online_player(
+    player = await bancho_authentication.authenticate_online_player(
         username=unquote(username),
         password_md5=password_md5,
     )
@@ -825,9 +825,9 @@ def format_scores_response(leaderboard: BeatmapLeaderboardResult) -> bytes:
 @router.get("/web/osu-osz2-getscores.php")
 async def getScores(
     *,
-    osu_client_authentication: Annotated[
-        OsuClientAuthenticationService,
-        Depends(api_dependencies.get_osu_client_authentication_service),
+    bancho_authentication: Annotated[
+        BanchoAuthenticationService,
+        Depends(api_dependencies.get_bancho_authentication_service),
     ],
     username: str = Query(..., alias="us"),
     password_md5: str = Query(..., alias="ha"),
@@ -846,7 +846,7 @@ async def getScores(
         Depends(api_dependencies.get_beatmap_leaderboard_service),
     ],
 ) -> Response:
-    player = await osu_client_authentication.authenticate_online_player(
+    player = await bancho_authentication.authenticate_online_player(
         username=unquote(username),
         password_md5=password_md5,
     )
@@ -881,9 +881,9 @@ async def getScores(
 @router.post("/web/osu-comment.php")
 async def osuComment(
     *,
-    osu_client_authentication: Annotated[
-        OsuClientAuthenticationService,
-        Depends(api_dependencies.get_osu_client_authentication_service),
+    bancho_authentication: Annotated[
+        BanchoAuthenticationService,
+        Depends(api_dependencies.get_bancho_authentication_service),
     ],
     username: str = Form(..., alias="u"),
     password_md5: str = Form(..., alias="p"),
@@ -902,7 +902,7 @@ async def osuComment(
         Depends(api_dependencies.get_comments_service),
     ],
 ) -> Response:
-    player = await osu_client_authentication.authenticate_online_player(
+    player = await bancho_authentication.authenticate_online_player(
         username=unquote(username),
         password_md5=password_md5,
     )
@@ -964,9 +964,9 @@ async def osuComment(
 @router.get("/web/osu-markasread.php")
 async def osuMarkAsRead(
     *,
-    osu_client_authentication: Annotated[
-        OsuClientAuthenticationService,
-        Depends(api_dependencies.get_osu_client_authentication_service),
+    bancho_authentication: Annotated[
+        BanchoAuthenticationService,
+        Depends(api_dependencies.get_bancho_authentication_service),
     ],
     username: str = Query(..., alias="u"),
     password_md5: str = Query(..., alias="h"),
@@ -976,7 +976,7 @@ async def osuMarkAsRead(
         Depends(api_dependencies.get_mail_read_service),
     ],
 ) -> Response:
-    player = await osu_client_authentication.authenticate_online_player(
+    player = await bancho_authentication.authenticate_online_player(
         username=unquote(username),
         password_md5=password_md5,
     )
