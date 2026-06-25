@@ -13,9 +13,9 @@ The project's core ethos is:
 
 - Keep controllers thin. HTTP and bancho protocol controllers should parse
   request data, handle protocol-specific responses, and delegate app logic.
-- Put business logic in usecases or services. A controller should not decide how
+- Put business logic in services. A controller should not decide how
   score submission, stats updates, achievements, or leaderboard behavior works.
-- Use repositories for database access. Services/usecases should orchestrate
+- Use repositories for database access. Services should orchestrate
   repositories, transactions, and domain decisions.
 - Prefer explicit dependencies over hidden package behavior. Import from direct
   source modules instead of relying on `__init__.py` re-exports.
@@ -42,7 +42,7 @@ The project's core ethos is:
 - Keep sentinel values explicit, such as `Unset`, instead of relying on vague
   `None` semantics when `None` is meaningful.
 
-## Services And Usecases
+## Services
 
 - Prefer domain verbs that make sense to an osu! developer:
   `submit_score`, `save_replay_file`, `announce_first_place`,
@@ -50,9 +50,9 @@ The project's core ethos is:
 - Avoid vague function names such as `finalize_*`, `prepare_*`, or
   `update_*_state` when the function actually performs several unrelated
   decisions or side effects.
-- Keep orchestration readable. A high-level usecase should show the main domain
+- Keep orchestration readable. A high-level service should show the main domain
   steps in order instead of hiding important branches behind broad helper names.
-- Put transactions at the service/usecase layer when a workflow needs
+- Put transactions at the service layer when a workflow needs
   all-or-nothing semantics.
 - Keep protocol response formatting in the controller when it is specific to
   HTTP, bancho, or osu! client response formats.

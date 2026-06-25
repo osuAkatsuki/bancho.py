@@ -10,8 +10,10 @@ import respx
 from fastapi import status
 from httpx import AsyncClient
 
+import app.state.services
 from app import encryption
-from app.usecases import dependencies as usecase_dependencies
+from app.repositories.scores import ScoresRepository
+from app.repositories.users import UsersRepository
 from testing.sample_data import sample_beatmap_data
 
 
@@ -47,7 +49,7 @@ async def test_score_submission(
         },
     )
     assert response.status_code == status.HTTP_200_OK
-    user = await usecase_dependencies.get_repositories().users.fetch_one(name=username)
+    user = await UsersRepository(app.state.services.database).fetch_one(name=username)
     assert user is not None
 
     osu_version = "20230814"
@@ -240,7 +242,7 @@ async def test_score_submission(
 
     # ASSERT
     assert response.status_code == status.HTTP_200_OK
-    submitted_scores = await usecase_dependencies.get_repositories().scores.fetch_many(
+    submitted_scores = await ScoresRepository(app.state.services.database).fetch_many(
         user_id=user["id"],
     )
     assert len(submitted_scores) == 1

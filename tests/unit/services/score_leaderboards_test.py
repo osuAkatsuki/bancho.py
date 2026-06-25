@@ -8,7 +8,7 @@ from app.constants.mods import Mods
 from app.constants.scoring_metrics import ScoringMetric
 from app.repositories.scores import BeatmapLeaderboardScoreRow
 from app.repositories.scores import PersonalBestLeaderboardScoreRow
-from app.usecases import score_leaderboards
+from app.services import score_leaderboards
 
 
 class _LeaderboardFetch(TypedDict):

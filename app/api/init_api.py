@@ -31,8 +31,6 @@ from app.api import middlewares
 from app.logging import Ansi
 from app.logging import log
 from app.objects import collections
-from app.objects.beatmap import ensure_osu_file_is_available
-from app.usecases import dependencies as usecase_dependencies
 
 
 class BanchoAPI(FastAPI):
@@ -86,8 +84,6 @@ async def lifespan(asgi_app: BanchoAPI) -> AsyncIterator[None]:
 
     await app.state.services.database.connect()
     await app.state.services.redis.initialize()  # type: ignore[unused-awaitable]
-    usecase_dependencies.get_repositories()
-    usecase_dependencies.get_score_leaderboards_service()
 
     if app.state.services.datadog is not None:
         app.state.services.datadog.start(  # type: ignore[no-untyped-call]
@@ -101,22 +97,6 @@ async def lifespan(asgi_app: BanchoAPI) -> AsyncIterator[None]:
     await app.state.services.run_sql_migrations()
 
     await collections.initialize_ram_caches()
-    usecase_dependencies.configure_score_submission_service(
-        usecase_dependencies.ScoreSubmissionServiceConfig(
-            replays_path=domains.osu.REPLAYS_PATH,
-            restriction_admin=app.state.sessions.bot,
-            fetch_beatmap=domains.osu.fetch_score_submission_beatmap,
-            authenticate_player=domains.osu.authenticate_score_submitter,
-            ensure_osu_file_is_available=ensure_osu_file_is_available,
-            publish_user_stats=domains.osu.publish_score_submitter_stats,
-            send_personal_best_notification=domains.osu.send_personal_best_notification,
-            announce_channel=app.state.sessions.channels.get_by_name("#announce"),
-            domain=app.settings.DOMAIN,
-            increment_metric=domains.osu.increment_score_submission_metric,
-            record_submission_integrity_failure=domains.osu.record_score_submission_integrity_failure,
-        ),
-    )
-    usecase_dependencies.get_score_submission_service()
 
     await app.bg_loops.initialize_housekeeping_tasks()
 

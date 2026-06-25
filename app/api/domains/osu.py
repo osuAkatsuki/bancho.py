@@ -2,22 +2,19 @@
 
 from __future__ import annotations
 
-import hashlib
 import random
 import secrets
-from collections import defaultdict
 from collections.abc import Awaitable
 from collections.abc import Callable
-from collections.abc import Mapping
 from collections.abc import Sequence
 from functools import cache
 from pathlib import Path as SystemPath
+from typing import Annotated
 from typing import Any
 from typing import Literal
 from urllib.parse import unquote
 from urllib.parse import unquote_plus
 
-import bcrypt
 from fastapi import status
 from fastapi.datastructures import FormData
 from fastapi.datastructures import UploadFile
@@ -41,29 +38,39 @@ import app.settings
 import app.state
 import app.utils
 from app import encryption
-from app.constants import regexes
+from app.adapters.score_submission import REPLAYS_PATH
+from app.api import dependencies as api_dependencies
 from app.constants.beatmap_statuses import RankedStatus
 from app.constants.clientflags import LastFMFlags
 from app.constants.gamemodes import GameMode
 from app.constants.leaderboard_types import LeaderboardType
 from app.constants.mods import Mods
 from app.constants.privileges import Privileges
-from app.constants.score_statuses import SubmissionStatus
 from app.logging import Ansi
 from app.logging import log
 from app.objects import models
 from app.objects.beatmap import Beatmap
-from app.objects.beatmap import ensure_osu_file_is_available
 from app.objects.player import ModeData
 from app.objects.player import Player
 from app.objects.score import Score
 from app.repositories.achievements import Achievement
-from app.repositories.comments import TargetType
-from app.usecases import dependencies as usecase_dependencies
-from app.usecases import score_submission as score_submission_usecases
+from app.services.osu_web import AccountRegistrationService
+from app.services.osu_web import AddFavouriteResult
+from app.services.osu_web import BeatmapInfoService
+from app.services.osu_web import BeatmapRatingResultCode
+from app.services.osu_web import BeatmapRatingService
+from app.services.osu_web import BeatmapSetService
+from app.services.osu_web import CommentsService
+from app.services.osu_web import FavouritesService
+from app.services.osu_web import MailReadService
+from app.services.osu_web import OsuLeaderboardSupportService
+from app.services.score_leaderboards import ScoreLeaderboardsService
+from app.services.score_submission import ScoreSubmissionError
+from app.services.score_submission import ScoreSubmissionErrorCode
+from app.services.score_submission import ScoreSubmissionRequest
+from app.services.score_submission import ScoreSubmissionService
 
 BEATMAPS_PATH = SystemPath.cwd() / ".data/osu"
-REPLAYS_PATH = SystemPath.cwd() / ".data/osr"
 SCREENSHOTS_PATH = SystemPath.cwd() / ".data/ss"
 
 
@@ -173,45 +180,31 @@ def bancho_to_osuapi_status(bancho_status: int) -> int:
 @router.post("/web/osu-getbeatmapinfo.php")
 async def osuGetBeatmapInfo(
     form_data: models.OsuBeatmapRequestForm,
+    *,
     player: Player = Depends(authenticate_player_session(Query, "u", "h")),
+    beatmap_info_service: Annotated[
+        BeatmapInfoService,
+        Depends(api_dependencies.get_beatmap_info_service),
+    ],
 ) -> Response:
     num_requests = len(form_data.Filenames) + len(form_data.Ids)
     log(f"{player} requested info for {num_requests} maps.", Ansi.LCYAN)
 
     response_lines: list[str] = []
 
-    for idx, map_filename in enumerate(form_data.Filenames):
-        # try getting the map from sql
-
-        beatmap = await usecase_dependencies.get_repositories().maps.fetch_one(
-            filename=map_filename,
-        )
-
-        if not beatmap:
-            continue
-
-        # try to get the user's grades on the map
-        # NOTE: osu! only allows us to send back one per gamemode,
-        #       so we've decided to send back *vanilla* grades.
-        #       (in theory we could make this user-customizable)
-        grades = ["N", "N", "N", "N"]
-
-        for score in await usecase_dependencies.get_repositories().scores.fetch_many(
-            map_md5=beatmap["md5"],
-            user_id=player.id,
-            mode=player.status.mode.as_vanilla,
-            status=SubmissionStatus.BEST,
-        ):
-            grades[score["mode"]] = score["grade"]
-
+    for beatmap_info in await beatmap_info_service.fetch_beatmap_info(
+        filenames=form_data.Filenames,
+        player_id=player.id,
+        vanilla_mode=player.status.mode.as_vanilla,
+    ):
         response_lines.append(
             "{i}|{id}|{set_id}|{md5}|{status}|{grades}".format(
-                i=idx,
-                id=beatmap["id"],
-                set_id=beatmap["set_id"],
-                md5=beatmap["md5"],
-                status=bancho_to_osuapi_status(beatmap["status"]),
-                grades="|".join(grades),
+                i=beatmap_info.index,
+                id=beatmap_info.id,
+                set_id=beatmap_info.set_id,
+                md5=beatmap_info.md5,
+                status=bancho_to_osuapi_status(beatmap_info.status),
+                grades="|".join(beatmap_info.grades),
             ),
         )
 
@@ -225,34 +218,35 @@ async def osuGetBeatmapInfo(
 
 @router.get("/web/osu-getfavourites.php")
 async def osuGetFavourites(
+    *,
     player: Player = Depends(authenticate_player_session(Query, "u", "h")),
+    favourites_service: Annotated[
+        FavouritesService,
+        Depends(api_dependencies.get_favourites_service),
+    ],
 ) -> Response:
-    favourites = await usecase_dependencies.get_repositories().favourites.fetch_all(
-        userid=player.id,
-    )
-
+    favourite_set_ids = await favourites_service.fetch_favourite_set_ids(player.id)
     return Response(
-        "\n".join([str(favourite["setid"]) for favourite in favourites]).encode(),
+        "\n".join([str(map_set_id) for map_set_id in favourite_set_ids]).encode(),
     )
 
 
 @router.get("/web/osu-addfavourite.php")
 async def osuAddFavourite(
+    *,
     player: Player = Depends(authenticate_player_session(Query, "u", "h")),
     map_set_id: int = Query(..., alias="a"),
+    favourites_service: Annotated[
+        FavouritesService,
+        Depends(api_dependencies.get_favourites_service),
+    ],
 ) -> Response:
-    # check if they already have this favourited.
-    if await usecase_dependencies.get_repositories().favourites.fetch_one(
-        player.id,
-        map_set_id,
-    ):
-        return Response(b"You've already favourited this beatmap!")
-
-    # add favourite
-    await usecase_dependencies.get_repositories().favourites.create(
-        userid=player.id,
-        setid=map_set_id,
+    result = await favourites_service.add_favourite(
+        player_id=player.id,
+        map_set_id=map_set_id,
     )
+    if result is AddFavouriteResult.ALREADY_FAVOURITED:
+        return Response(b"You've already favourited this beatmap!")
 
     return Response(b"Added favourite!")
 
@@ -446,32 +440,29 @@ async def osuSearchHandler(
 # TODO: video support (needs db change)
 @router.get("/web/osu-search-set.php")
 async def osuSearchSetHandler(
+    *,
     player: Player = Depends(authenticate_player_session(Query, "u", "h")),
     map_set_id: int | None = Query(None, alias="s"),
     map_id: int | None = Query(None, alias="b"),
     checksum: str | None = Query(None, alias="c"),
+    beatmap_set_service: Annotated[
+        BeatmapSetService,
+        Depends(api_dependencies.get_beatmap_set_service),
+    ],
 ) -> Response:
     # Since we only need set-specific data, we can basically
     # just do same query with either bid or bsid.
 
-    v: int | str
     if map_set_id is not None:
         # this is just a normal request
-        k, v = ("set_id", map_set_id)
+        bmapset = await beatmap_set_service.fetch_set_info(set_id=map_set_id)
     elif map_id is not None:
-        k, v = ("id", map_id)
+        bmapset = await beatmap_set_service.fetch_set_info(map_id=map_id)
     elif checksum is not None:
-        k, v = ("md5", checksum)
+        bmapset = await beatmap_set_service.fetch_set_info(md5=checksum)
     else:
         return Response(b"")  # invalid args
 
-    # Get all set data.
-    bmapset = await app.state.services.database.fetch_one(
-        "SELECT DISTINCT set_id, artist, "
-        "title, status, creator, last_update "
-        f"FROM maps WHERE {k} = :v",
-        {"v": v},
-    )
     if bmapset is None:
         # TODO: get from osu!
         return Response(b"")
@@ -629,61 +620,27 @@ def build_score_submission_response(
 
 
 def build_score_submission_error_response(
-    error: score_submission_usecases.ScoreSubmissionError,
+    error: ScoreSubmissionError,
 ) -> bytes:
-    if (
-        error.code
-        is score_submission_usecases.ScoreSubmissionErrorCode.BEATMAP_NOT_FOUND
-    ):
+    if error.code is ScoreSubmissionErrorCode.BEATMAP_NOT_FOUND:
         return b"error: beatmap"
-    if (
-        error.code
-        is score_submission_usecases.ScoreSubmissionErrorCode.PLAYER_NOT_FOUND
-    ):
+    if error.code is ScoreSubmissionErrorCode.PLAYER_NOT_FOUND:
         # Player is not online, return nothing so that their
         # client will retry submission when they log in.
         return b""
-    if (
-        error.code
-        is score_submission_usecases.ScoreSubmissionErrorCode.DUPLICATE_SUBMISSION
-    ):
+    if error.code is ScoreSubmissionErrorCode.DUPLICATE_SUBMISSION:
         return b"error: no"
 
     raise ValueError(f"Unexpected score submission error: {error.code!r}")
 
 
-async def fetch_score_submission_beatmap(md5: str) -> Beatmap | None:
-    return await Beatmap.from_md5(md5)
-
-
-async def authenticate_score_submitter(
-    username: str,
-    password_md5: str,
-) -> Player | None:
-    return await app.state.sessions.players.from_login(username, password_md5)
-
-
-async def record_score_submission_integrity_failure() -> None:
-    stacktrace = app.utils.get_appropriate_stacktrace()
-    await app.state.services.log_strange_occurrence(stacktrace)
-
-
-def increment_score_submission_metric(metric: str) -> None:
-    if app.state.services.datadog:
-        app.state.services.datadog.increment(metric)  # type: ignore[no-untyped-call]
-
-
-def send_personal_best_notification(player: Player, message: str) -> None:
-    player.enqueue(app.packets.notification(message))
-
-
-def publish_score_submitter_stats(player: Player) -> None:
-    app.state.sessions.players.enqueue(app.packets.user_stats(player))
-
-
 @router.post("/web/osu-submit-modular-selector.php")
 async def osuSubmitModularSelector(
     request: Request,
+    score_submission_service: Annotated[
+        ScoreSubmissionService,
+        Depends(api_dependencies.get_score_submission_service),
+    ],
     # TODO: should token be allowed
     # through but ac'd if not found?
     # TODO: validate token format
@@ -727,23 +684,21 @@ async def osuSubmitModularSelector(
         osu_version,
     )
 
-    submitted_score = (
-        await usecase_dependencies.get_score_submission_service().submit_score(
-            score_submission_usecases.ScoreSubmissionRequest(
-                score_data=score_data,
-                password_md5=pw_md5,
-                osu_version=osu_version,
-                client_hash=client_hash_decoded,
-                unique_ids=unique_ids,
-                storyboard_md5=storyboard_md5,
-                updated_beatmap_hash=updated_beatmap_hash,
-                score_time=score_time,
-                fail_time=fail_time,
-                replay_file=replay_file,
-            ),
-        )
+    submitted_score = await score_submission_service.submit_score(
+        ScoreSubmissionRequest(
+            score_data=score_data,
+            password_md5=pw_md5,
+            osu_version=osu_version,
+            client_hash=client_hash_decoded,
+            unique_ids=unique_ids,
+            storyboard_md5=storyboard_md5,
+            updated_beatmap_hash=updated_beatmap_hash,
+            score_time=score_time,
+            fail_time=fail_time,
+            replay_file=replay_file,
+        ),
     )
-    if isinstance(submitted_score, score_submission_usecases.ScoreSubmissionError):
+    if isinstance(submitted_score, ScoreSubmissionError):
         return Response(build_score_submission_error_response(submitted_score))
 
     response = build_score_submission_response(
@@ -780,48 +735,32 @@ async def getReplay(
 
 @router.get("/web/osu-rate.php")
 async def osuRate(
+    *,
     player: Player = Depends(
         authenticate_player_session(Query, "u", "p", err=b"auth fail"),
     ),
     map_md5: str = Query(..., alias="c", min_length=32, max_length=32),
     rating: int | None = Query(None, alias="v", ge=1, le=10),
+    beatmap_rating_service: Annotated[
+        BeatmapRatingService,
+        Depends(api_dependencies.get_beatmap_rating_service),
+    ],
 ) -> Response:
-    if rating is None:
-        # check if we have the map in our cache;
-        # if not, the map probably doesn't exist.
-        if map_md5 not in app.state.cache.beatmap:
-            return Response(b"no exist")
-
-        cached = app.state.cache.beatmap[map_md5]
-
-        # only allow rating on maps with a leaderboard.
-        if cached.status < RankedStatus.Ranked:
-            return Response(b"not ranked")
-
-        # osu! client is checking whether we can rate the map or not.
-        # the client hasn't rated the map, so simply
-        # tell them that they can submit a rating.
-        if not await usecase_dependencies.get_repositories().ratings.fetch_one(
-            map_md5=map_md5,
-            userid=player.id,
-        ):
-            return Response(b"ok")
-    else:
-        # the client is submitting a rating for the map.
-        await usecase_dependencies.get_repositories().ratings.create(
-            userid=player.id,
-            map_md5=map_md5,
-            rating=rating,
-        )
-
-    map_ratings = await usecase_dependencies.get_repositories().ratings.fetch_many(
+    rating_result = await beatmap_rating_service.rate_or_check(
+        player_id=player.id,
         map_md5=map_md5,
+        rating=rating,
     )
-    ratings = [row["rating"] for row in map_ratings]
+    if rating_result.code is BeatmapRatingResultCode.NO_EXIST:
+        return Response(b"no exist")
+    if rating_result.code is BeatmapRatingResultCode.NOT_RANKED:
+        return Response(b"not ranked")
+    if rating_result.code is BeatmapRatingResultCode.CAN_RATE:
+        return Response(b"ok")
 
     # send back the average rating
-    avg = sum(ratings) / len(ratings)
-    return Response(f"alreadyvoted\n{avg}".encode())
+    assert rating_result.average_rating is not None
+    return Response(f"alreadyvoted\n{rating_result.average_rating}".encode())
 
 
 SCORE_LISTING_FMTSTR = (
@@ -833,6 +772,7 @@ SCORE_LISTING_FMTSTR = (
 
 @router.get("/web/osu-osz2-getscores.php")
 async def getScores(
+    *,
     player: Player = Depends(authenticate_player_session(Query, "us", "ha")),
     requesting_from_editor_song_select: bool = Query(..., alias="s"),
     leaderboard_version: int = Query(..., alias="vv"),
@@ -844,6 +784,14 @@ async def getScores(
     mods_arg: int = Query(..., alias="mods", ge=0, le=2_147_483_647),
     map_package_hash: str = Query(..., alias="h"),  # TODO: further validation
     aqn_files_found: bool = Query(..., alias="a"),
+    score_leaderboards_service: Annotated[
+        ScoreLeaderboardsService,
+        Depends(api_dependencies.get_score_leaderboards_service),
+    ],
+    leaderboard_support_service: Annotated[
+        OsuLeaderboardSupportService,
+        Depends(api_dependencies.get_osu_leaderboard_support_service),
+    ],
 ) -> Response:
     if aqn_files_found:
         stacktrace = app.utils.get_appropriate_stacktrace()
@@ -910,11 +858,8 @@ async def getScores(
             # we can't find it on the osu!api by md5,
             # and we don't have the set id, so we must
             # look it up in sql from the filename.
-            map_exists = (
-                await usecase_dependencies.get_repositories().maps.fetch_one(
-                    filename=map_filename,
-                )
-                is not None
+            map_exists = await leaderboard_support_service.map_exists_by_filename(
+                map_filename,
             )
 
         if map_exists:
@@ -941,8 +886,7 @@ async def getScores(
     # fetch scores & personal best
     # TODO: create a leaderboard cache
     if not requesting_from_editor_song_select:
-        score_leaderboards = usecase_dependencies.get_score_leaderboards_service()
-        leaderboard_scores = await score_leaderboards.fetch_leaderboard_scores(
+        leaderboard_scores = await score_leaderboards_service.fetch_leaderboard_scores(
             leaderboard_type=leaderboard_type,
             map_md5=bmap.md5,
             mode=mode,
@@ -957,13 +901,9 @@ async def getScores(
         personal_best_score_row = None
 
     # fetch beatmap rating
-    map_ratings = await usecase_dependencies.get_repositories().ratings.fetch_many(
-        map_md5=bmap.md5,
-        page=None,
-        page_size=None,
+    map_avg_rating = await leaderboard_support_service.fetch_map_rating_average(
+        bmap.md5,
     )
-    ratings = [row["rating"] for row in map_ratings]
-    map_avg_rating = sum(ratings) / len(ratings) if ratings else 0.0
 
     ## construct response for osu! client
 
@@ -981,16 +921,14 @@ async def getScores(
         return Response("\n".join(response_lines).encode())
 
     if personal_best_score_row is not None:
-        user_clan = (
-            await usecase_dependencies.get_repositories().clans.fetch_one(
-                id=player.clan_id,
-            )
+        user_clan_tag = (
+            await leaderboard_support_service.fetch_clan_tag(player.clan_id)
             if player.clan_id is not None
             else None
         )
         display_name = (
-            f"[{user_clan['tag']}] {player.name}"
-            if user_clan is not None
+            f"[{user_clan_tag}] {player.name}"
+            if user_clan_tag is not None
             else player.name
         )
         response_lines.append(
@@ -1022,6 +960,7 @@ async def getScores(
 
 @router.post("/web/osu-comment.php")
 async def osuComment(
+    *,
     player: Player = Depends(authenticate_player_session(Form, "u", "p")),
     map_id: int = Form(..., alias="b"),
     map_set_id: int = Form(..., alias="s"),
@@ -1033,10 +972,14 @@ async def osuComment(
     colour: str | None = Form(None, alias="f", min_length=6, max_length=6),
     start_time: int | None = Form(None, alias="starttime"),
     comment: str | None = Form(None, min_length=1, max_length=80),
+    comments_service: Annotated[
+        CommentsService,
+        Depends(api_dependencies.get_comments_service),
+    ],
 ) -> Response:
     if action == "get":
         # client is requesting all comments
-        comments = await usecase_dependencies.get_repositories().comments.fetch_all_relevant_to_replay(
+        comments = await comments_service.fetch_relevant_to_replay(
             score_id=score_id,
             map_set_id=map_set_id,
             map_id=map_id,
@@ -1072,14 +1015,6 @@ async def osuComment(
         assert start_time is not None
         assert comment is not None
 
-        # get the corresponding id from the request
-        if target == "song":
-            target_id = map_set_id
-        elif target == "map":
-            target_id = map_id
-        else:  # target == "replay"
-            target_id = score_id
-
         if colour and not player.priv & Privileges.DONATOR:
             # only supporters can use colours.
             colour = None
@@ -1089,12 +1024,13 @@ async def osuComment(
                 "supporter status. Submitting comment without a colour.",
             )
 
-        # insert into sql
-        await usecase_dependencies.get_repositories().comments.create(
-            target_id=target_id,
-            target_type=TargetType(target),
-            userid=player.id,
-            time=start_time,
+        await comments_service.create_comment(
+            target=target,
+            map_set_id=map_set_id,
+            map_id=map_id,
+            score_id=score_id,
+            player_id=player.id,
+            start_time=start_time,
             comment=comment,
             colour=colour,
         )
@@ -1106,8 +1042,13 @@ async def osuComment(
 
 @router.get("/web/osu-markasread.php")
 async def osuMarkAsRead(
+    *,
     player: Player = Depends(authenticate_player_session(Query, "u", "h")),
     channel: str = Query(..., min_length=0, max_length=32),
+    mail_read_service: Annotated[
+        MailReadService,
+        Depends(api_dependencies.get_mail_read_service),
+    ],
 ) -> Response:
     target_name = unquote(channel)  # TODO: unquote needed?
     if not target_name:
@@ -1117,13 +1058,10 @@ async def osuMarkAsRead(
         )
         return Response(b"")  # no channel specified
 
-    target = await app.state.sessions.players.from_cache_or_sql(name=target_name)
-    if target:
-        # mark any unread mail from this user as read.
-        await usecase_dependencies.get_repositories().mail.mark_conversation_as_read(
-            to_id=player.id,
-            from_id=target.id,
-        )
+    await mail_read_service.mark_conversation_with_player_as_read(
+        player_id=player.id,
+        target_name=target_name,
+    )
 
     return Response(b"")
 
@@ -1262,6 +1200,10 @@ INGAME_REGISTRATION_DISALLOWED_ERROR = {
 @router.post("/users")
 async def register_account(
     request: Request,
+    account_registration_service: Annotated[
+        AccountRegistrationService,
+        Depends(api_dependencies.get_account_registration_service),
+    ],
     username: str = Form(..., alias="user[username]"),
     email: str = Form(..., alias="user[user_email]"),
     pw_plaintext: str = Form(..., alias="user[password]"),
@@ -1284,54 +1226,16 @@ async def register_account(
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
-    # ensure all args passed
-    # are safe for registration.
-    errors: Mapping[str, list[str]] = defaultdict(list)
-
-    # Usernames must:
-    # - be within 2-15 characters in length
-    # - not contain both ' ' and '_', one is fine
-    # - not be in the config's `disallowed_names` list
-    # - not already be taken by another player
-    if not regexes.USERNAME.match(username):
-        errors["username"].append("Must be 2-15 characters in length.")
-
-    if "_" in username and " " in username:
-        errors["username"].append('May contain "_" and " ", but not both.')
-
-    if username in app.settings.DISALLOWED_NAMES:
-        errors["username"].append("Disallowed username; pick another.")
-
-    if "username" not in errors:
-        if await usecase_dependencies.get_repositories().users.fetch_one(name=username):
-            errors["username"].append("Username already taken by another player.")
-
-    # Emails must:
-    # - match the regex `^[^@\s]{1,200}@[^@\s\.]{1,30}\.[^@\.\s]{1,24}$`
-    # - not already be taken by another player
-    if not regexes.EMAIL.match(email):
-        errors["user_email"].append("Invalid email syntax.")
-    else:
-        if await usecase_dependencies.get_repositories().users.fetch_one(email=email):
-            errors["user_email"].append("Email already taken by another player.")
-
-    # Passwords must:
-    # - be within 8-32 characters in length
-    # - have more than 3 unique characters
-    # - not be in the config's `disallowed_passwords` list
-    if not 8 <= len(pw_plaintext) <= 32:
-        errors["password"].append("Must be 8-32 characters in length.")
-
-    if len(set(pw_plaintext)) <= 3:
-        errors["password"].append("Must have more than 3 unique characters.")
-
-    if pw_plaintext.lower() in app.settings.DISALLOWED_PASSWORDS:
-        errors["password"].append("That password was deemed too simple.")
+    errors = await account_registration_service.validate_registration(
+        username=username,
+        email=email,
+        password=pw_plaintext,
+    )
 
     if errors:
         # we have errors to send back, send them back delimited by newlines.
-        errors = {k: ["\n".join(v)] for k, v in errors.items()}
-        errors_full = {"form_error": {"user": errors}}
+        formatted_errors = {k: ["\n".join(v)] for k, v in errors.items()}
+        errors_full = {"form_error": {"user": formatted_errors}}
         return ORJSONResponse(
             content=errors_full,
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1340,29 +1244,13 @@ async def register_account(
     if check == 0:
         # the client isn't just checking values,
         # they want to register the account now.
-        # make the md5 & bcrypt the md5 for sql.
-        pw_md5 = hashlib.md5(pw_plaintext.encode()).hexdigest().encode()
-        pw_bcrypt = bcrypt.hashpw(pw_md5, bcrypt.gensalt())
-        app.state.cache.bcrypt[pw_bcrypt] = pw_md5  # cache result for login
-
-        ip = app.state.services.ip_resolver.get_ip(request.headers)
-
-        geoloc = await app.state.services.fetch_geoloc(ip, request.headers)
-        country = geoloc["country"]["acronym"] if geoloc is not None else "XX"
-
-        async with app.state.services.database.transaction():
-            # add to `users` table.
-            player = await usecase_dependencies.get_repositories().users.create(
-                name=username,
-                email=email,
-                pw_bcrypt=pw_bcrypt,
-                country=country,
-            )
-
-            # add to `stats` table.
-            await usecase_dependencies.get_repositories().stats.create_all_modes(
-                player_id=player["id"],
-            )
+        registered_account = await account_registration_service.create_account(
+            username=username,
+            email=email,
+            password=pw_plaintext,
+            request_headers=request.headers,
+        )
+        player = registered_account.player
 
         if app.state.services.datadog:
             app.state.services.datadog.increment("bancho.registrations")  # type: ignore[no-untyped-call]

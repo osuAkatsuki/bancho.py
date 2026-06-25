@@ -127,6 +127,15 @@ class Map(TypedDict):
     diff: float
 
 
+class MapSetInfo(TypedDict):
+    set_id: int
+    artist: str
+    title: str
+    status: int
+    creator: str
+    last_update: datetime
+
+
 class MapsRepository:
     def __init__(self, database: Database) -> None:
         self._database = database
@@ -210,6 +219,40 @@ class MapsRepository:
 
         map = await self._database.fetch_one(select_stmt)
         return cast(Map | None, map)
+
+    async def fetch_set_info(
+        self,
+        *,
+        set_id: int | None = None,
+        map_id: int | None = None,
+        md5: str | None = None,
+    ) -> MapSetInfo | None:
+        """Fetch beatmap set metadata by set id, map id, or map checksum."""
+        if set_id is None and map_id is None and md5 is None:
+            raise ValueError("Must provide at least one parameter.")
+
+        select_stmt = (
+            select(
+                MapsTable.set_id,
+                MapsTable.artist,
+                MapsTable.title,
+                MapsTable.status,
+                MapsTable.creator,
+                MapsTable.last_update,
+            )
+            .distinct()
+            .select_from(MapsTable)
+        )
+
+        if set_id is not None:
+            select_stmt = select_stmt.where(MapsTable.set_id == set_id)
+        if map_id is not None:
+            select_stmt = select_stmt.where(MapsTable.id == map_id)
+        if md5 is not None:
+            select_stmt = select_stmt.where(MapsTable.md5 == md5)
+
+        bmapset = await self._database.fetch_one(select_stmt)
+        return cast(MapSetInfo | None, bmapset)
 
     async def fetch_count(
         self,

@@ -30,7 +30,7 @@ from app.repositories.scores import DuplicateScoreError
 from app.repositories.scores import FirstPlaceScore
 from app.repositories.scores import ScorePerformanceRow
 from app.repositories.user_achievements import UserAchievement
-from app.usecases import score_submission
+from app.services import score_submission
 
 
 class _FirstPlaceScoreFetch(TypedDict):

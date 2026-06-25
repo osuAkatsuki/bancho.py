@@ -34,7 +34,7 @@ from app.objects.match import Slot
 from app.objects.match import SlotStatus
 from app.objects.score import Grade
 from app.objects.score import Score
-from app.usecases import dependencies as usecase_dependencies
+from app.repositories import factory as repository_factory
 from app.utils import escape_enum
 from app.utils import make_safe_name
 from app.utils import pymysql_encode
@@ -409,7 +409,7 @@ class Player:
         if "bancho_priv" in vars(self):
             del self.bancho_priv  # wipe cached_property
 
-        await usecase_dependencies.get_repositories().users.partial_update(
+        await repository_factory.get_repositories().users.partial_update(
             id=self.id,
             priv=self.priv,
         )
@@ -421,7 +421,7 @@ class Player:
         if "bancho_priv" in vars(self):
             del self.bancho_priv  # wipe cached_property
 
-        await usecase_dependencies.get_repositories().users.partial_update(
+        await repository_factory.get_repositories().users.partial_update(
             id=self.id,
             priv=self.priv,
         )
@@ -438,7 +438,7 @@ class Player:
         if "bancho_priv" in vars(self):
             del self.bancho_priv  # wipe cached_property
 
-        await usecase_dependencies.get_repositories().users.partial_update(
+        await repository_factory.get_repositories().users.partial_update(
             id=self.id,
             priv=self.priv,
         )
@@ -452,7 +452,7 @@ class Player:
         """Restrict `self` for `reason`, and log to sql."""
         await self.remove_privs(Privileges.UNRESTRICTED)
 
-        await usecase_dependencies.get_repositories().logs.create(
+        await repository_factory.get_repositories().logs.create(
             _from=admin.id,
             to=self.id,
             action="restrict",
@@ -486,7 +486,7 @@ class Player:
         """Restrict `self` for `reason`, and log to sql."""
         await self.add_privs(Privileges.UNRESTRICTED)
 
-        await usecase_dependencies.get_repositories().logs.create(
+        await repository_factory.get_repositories().logs.create(
             _from=admin.id,
             to=self.id,
             action="unrestrict",
@@ -524,12 +524,12 @@ class Player:
         """Silence `self` for `duration` seconds, and log to sql."""
         self.silence_end = int(time.time() + duration)
 
-        await usecase_dependencies.get_repositories().users.partial_update(
+        await repository_factory.get_repositories().users.partial_update(
             id=self.id,
             silence_end=self.silence_end,
         )
 
-        await usecase_dependencies.get_repositories().logs.create(
+        await repository_factory.get_repositories().logs.create(
             _from=admin.id,
             to=self.id,
             action="silence",
@@ -552,12 +552,12 @@ class Player:
         """Unsilence `self`, and log to sql."""
         self.silence_end = int(time.time())
 
-        await usecase_dependencies.get_repositories().users.partial_update(
+        await repository_factory.get_repositories().users.partial_update(
             id=self.id,
             silence_end=self.silence_end,
         )
 
-        await usecase_dependencies.get_repositories().logs.create(
+        await repository_factory.get_repositories().logs.create(
             _from=admin.id,
             to=self.id,
             action="unsilence",
@@ -947,7 +947,7 @@ class Player:
 
     async def stats_from_sql_full(self) -> None:
         """Retrieve `self`'s stats (all modes) from sql."""
-        for row in await usecase_dependencies.get_repositories().stats.fetch_many(
+        for row in await repository_factory.get_repositories().stats.fetch_many(
             player_id=self.id,
         ):
             game_mode = GameMode(row["mode"])
@@ -972,7 +972,7 @@ class Player:
 
     def update_latest_activity_soon(self) -> None:
         """Update the player's latest activity in the database."""
-        task = usecase_dependencies.get_repositories().users.partial_update(
+        task = repository_factory.get_repositories().users.partial_update(
             id=self.id,
             latest_activity=int(time.time()),
         )

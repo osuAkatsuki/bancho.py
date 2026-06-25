@@ -15,7 +15,7 @@ from app.objects.player import ModeData
 from app.objects.score import Grade
 from app.objects.score import Score
 from app.repositories.achievements import Achievement
-from app.usecases import score_submission
+from app.services import score_submission
 
 
 def _score() -> Score:

@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import struct
 from pathlib import Path as SystemPath
+from typing import Annotated
 from typing import Literal
 from typing import cast
 
@@ -18,17 +19,17 @@ from fastapi.security import HTTPAuthorizationCredentials as HTTPCredentials
 from fastapi.security import HTTPBearer
 
 import app.packets
+import app.services.performance
 import app.state
-import app.usecases.performance
+from app.api import dependencies as api_dependencies
 from app.constants import regexes
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
 from app.objects.beatmap import Beatmap
 from app.objects.beatmap import ensure_osu_file_is_available
-from app.repositories.clans import Clan
 from app.repositories.users import User
-from app.usecases import dependencies as usecase_dependencies
-from app.usecases.performance import ScoreParams
+from app.services.performance import ScoreParams
+from app.services.public_api import PublicApiService
 
 AVATARS_PATH = SystemPath.cwd() / ".data/avatars"
 BEATMAPS_PATH = SystemPath.cwd() / ".data/osu"
@@ -122,7 +123,7 @@ async def api_calculate_pp(
             ),
         )
 
-    results = app.usecases.performance.calculate_performances(
+    results = app.services.performance.calculate_performances(
         str(BEATMAPS_PATH / f"{beatmap.id}.osu"),
         scores,
     )
@@ -146,29 +147,32 @@ async def api_calculate_pp(
 
 @router.get("/search_players")
 async def api_search_players(
+    *,
     search: str | None = Query(None, alias="q", min=2, max=32),
+    public_api_service: Annotated[
+        PublicApiService,
+        Depends(api_dependencies.get_public_api_service),
+    ],
 ) -> Response:
     """Search for users on the server by name."""
-    rows = await app.state.services.database.fetch_all(
-        "SELECT id, name "
-        "FROM users "
-        "WHERE name LIKE COALESCE(:name, name) "
-        "AND priv & 3 = 3 "
-        "ORDER BY id ASC",
-        {"name": f"%{search}%" if search is not None else None},
-    )
+    rows = await public_api_service.search_players(search)
 
     return ORJSONResponse(
         {
             "status": "success",
             "results": len(rows),
-            "result": [dict(row) for row in rows],
+            "result": rows,
         },
     )
 
 
 @router.get("/get_player_count")
-async def api_get_player_count() -> Response:
+async def api_get_player_count(
+    public_api_service: Annotated[
+        PublicApiService,
+        Depends(api_dependencies.get_public_api_service),
+    ],
+) -> Response:
     """Get the current amount of online players."""
     return ORJSONResponse(
         {
@@ -176,7 +180,7 @@ async def api_get_player_count() -> Response:
             "counts": {
                 # -1 for the bot, who is always online
                 "online": len(app.state.sessions.players.unrestricted) - 1,
-                "total": await usecase_dependencies.get_repositories().users.fetch_count(),
+                "total": await public_api_service.fetch_total_player_count(),
             },
         },
     )
@@ -185,6 +189,10 @@ async def api_get_player_count() -> Response:
 @router.get("/get_player_info")
 async def api_get_player_info(
     scope: Literal["stats", "info", "all"],
+    public_api_service: Annotated[
+        PublicApiService,
+        Depends(api_dependencies.get_public_api_service),
+    ],
     user_id: int | None = Query(None, alias="id", ge=3, le=2_147_483_647),
     username: str | None = Query(None, alias="name", pattern=regexes.USERNAME.pattern),
 ) -> Response:
@@ -195,15 +203,10 @@ async def api_get_player_info(
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
-    # get user info from username or user id
-    if username:
-        user_info = await usecase_dependencies.get_repositories().users.fetch_one(
-            name=username,
-        )
-    else:  # if user_id
-        user_info = await usecase_dependencies.get_repositories().users.fetch_one(
-            id=user_id,
-        )
+    user_info = await public_api_service.fetch_player(
+        user_id=user_id,
+        username=username,
+    )
 
     if user_info is None:
         return ORJSONResponse(
@@ -225,9 +228,7 @@ async def api_get_player_info(
         api_data["stats"] = {}
 
         # get all stats
-        all_stats = await usecase_dependencies.get_repositories().stats.fetch_many(
-            player_id=resolved_user_id,
-        )
+        all_stats = await public_api_service.fetch_player_stats(resolved_user_id)
 
         for mode_stats in all_stats:
             rank = cast(
@@ -275,8 +276,13 @@ async def api_get_player_info(
 
 @router.get("/get_player_status")
 async def api_get_player_status(
+    *,
     user_id: int | None = Query(None, alias="id", ge=3, le=2_147_483_647),
     username: str | None = Query(None, alias="name", pattern=regexes.USERNAME.pattern),
+    public_api_service: Annotated[
+        PublicApiService,
+        Depends(api_dependencies.get_public_api_service),
+    ],
 ) -> Response:
     """Return a players current status, if they are online."""
     if username and user_id:
@@ -298,14 +304,10 @@ async def api_get_player_status(
     if not player:
         # no such player online, return their last seen time if they exist in sql
 
-        if username:
-            row = await usecase_dependencies.get_repositories().users.fetch_one(
-                name=username,
-            )
-        else:  # if userid
-            row = await usecase_dependencies.get_repositories().users.fetch_one(
-                id=user_id,
-            )
+        row = await public_api_service.fetch_player(
+            user_id=user_id,
+            username=username,
+        )
 
         if not row:
             return ORJSONResponse(
@@ -349,6 +351,10 @@ async def api_get_player_status(
 @router.get("/get_player_scores")
 async def api_get_player_scores(
     scope: Literal["recent", "best"],
+    public_api_service: Annotated[
+        PublicApiService,
+        Depends(api_dependencies.get_public_api_service),
+    ],
     user_id: int | None = Query(None, alias="id", ge=3, le=2_147_483_647),
     username: str | None = Query(None, alias="name", pattern=regexes.USERNAME.pattern),
     mods_arg: str | None = Query(None, alias="mods"),
@@ -410,63 +416,20 @@ async def api_get_player_scores(
     else:
         mods = None
 
-    # build sql query & fetch info
+    rows = await public_api_service.fetch_player_scores(
+        player_id=player.id,
+        mode=mode,
+        mods=mods,
+        strong_mods_equality=strong_equality,
+        scope=scope,
+        limit=limit,
+        include_loved=include_loved,
+        include_failed=include_failed,
+    )
 
-    query = [
-        "SELECT t.id, t.map_md5, t.score, t.pp, t.acc, t.max_combo, "
-        "t.mods, t.n300, t.n100, t.n50, t.nmiss, t.ngeki, t.nkatu, t.grade, "
-        "t.status, t.mode, t.play_time, t.time_elapsed, t.perfect "
-        "FROM scores t "
-        "INNER JOIN maps b ON t.map_md5 = b.md5 "
-        "WHERE t.userid = :user_id AND t.mode = :mode",
-    ]
-
-    params: dict[str, object] = {
-        "user_id": player.id,
-        "mode": mode,
-    }
-
-    if mods is not None:
-        if strong_equality:
-            query.append("AND t.mods & :mods = :mods")
-        else:
-            query.append("AND t.mods & :mods != 0")
-
-        params["mods"] = mods
-
-    if scope == "best":
-        allowed_statuses = [2, 3]
-
-        if include_loved:
-            allowed_statuses.append(5)
-
-        query.append("AND t.status = 2 AND b.status IN :statuses")
-        params["statuses"] = allowed_statuses
-        sort = "t.pp"
-    else:
-        if not include_failed:
-            query.append("AND t.status != 0")
-
-        sort = "t.play_time"
-
-    query.append(f"ORDER BY {sort} DESC LIMIT :limit")
-    params["limit"] = limit
-
-    rows = [
-        dict(row)
-        for row in await app.state.services.database.fetch_all(" ".join(query), params)
-    ]
-
-    # fetch & return info from sql
-    for row in rows:
-        bmap = await Beatmap.from_md5(row.pop("map_md5"))
-        row["beatmap"] = bmap.as_dict if bmap else None
-
-    clan: Clan | None = None
+    clan = None
     if player.clan_id:
-        clan = await usecase_dependencies.get_repositories().clans.fetch_one(
-            id=player.clan_id,
-        )
+        clan = await public_api_service.fetch_clan(player.clan_id)
 
     player_info = {
         "id": player.id,
@@ -493,10 +456,15 @@ async def api_get_player_scores(
 
 @router.get("/get_player_most_played")
 async def api_get_player_most_played(
+    *,
     user_id: int | None = Query(None, alias="id", ge=3, le=2_147_483_647),
     username: str | None = Query(None, alias="name", pattern=regexes.USERNAME.pattern),
     mode_arg: int = Query(0, alias="mode", ge=0, le=11),
     limit: int = Query(25, ge=1, le=100),
+    public_api_service: Annotated[
+        PublicApiService,
+        Depends(api_dependencies.get_public_api_service),
+    ],
 ) -> Response:
     """Return the most played beatmaps of a given player."""
     # NOTE: this will almost certainly not scale well, lol.
@@ -531,24 +499,16 @@ async def api_get_player_most_played(
 
     mode = GameMode(mode_arg)
 
-    # fetch & return info from sql
-    rows = await app.state.services.database.fetch_all(
-        "SELECT m.md5, m.id, m.set_id, m.status, "
-        "m.artist, m.title, m.version, m.creator, COUNT(*) plays "
-        "FROM scores s "
-        "INNER JOIN maps m ON m.md5 = s.map_md5 "
-        "WHERE s.userid = :user_id "
-        "AND s.mode = :mode "
-        "GROUP BY s.map_md5 "
-        "ORDER BY plays DESC "
-        "LIMIT :limit",
-        {"user_id": player.id, "mode": mode, "limit": limit},
+    rows = await public_api_service.fetch_player_most_played(
+        player_id=player.id,
+        mode=mode,
+        limit=limit,
     )
 
     return ORJSONResponse(
         {
             "status": "success",
-            "maps": [dict(row) for row in rows],
+            "maps": rows,
         },
     )
 
@@ -586,6 +546,10 @@ async def api_get_map_info(
 @router.get("/get_map_scores")
 async def api_get_map_scores(
     scope: Literal["recent", "best"],
+    public_api_service: Annotated[
+        PublicApiService,
+        Depends(api_dependencies.get_public_api_service),
+    ],
     map_id: int | None = Query(None, alias="id", ge=0, le=2_147_483_647),
     map_md5: str | None = Query(None, alias="md5", min_length=32, max_length=32),
     mods_arg: str | None = Query(None, alias="mods"),
@@ -639,59 +603,34 @@ async def api_get_map_scores(
     else:
         mods = None
 
-    query = [
-        "SELECT s.map_md5, s.score, s.pp, s.acc, s.max_combo, s.mods, "
-        "s.n300, s.n100, s.n50, s.nmiss, s.ngeki, s.nkatu, s.grade, s.status, "
-        "s.mode, s.play_time, s.time_elapsed, s.userid, s.perfect, "
-        "u.name player_name, u.country player_country, "
-        "c.id clan_id, c.name clan_name, c.tag clan_tag "
-        "FROM scores s "
-        "INNER JOIN users u ON u.id = s.userid "
-        "LEFT JOIN clans c ON c.id = u.clan_id "
-        "WHERE s.map_md5 = :map_md5 "
-        "AND s.mode = :mode "
-        "AND s.status = 2 "
-        "AND u.priv & 1",
-    ]
-    params: dict[str, object] = {
-        "map_md5": bmap.md5,
-        "mode": mode,
-    }
-
-    if mods is not None:
-        if strong_equality:
-            query.append("AND mods & :mods = :mods")
-        else:
-            query.append("AND mods & :mods != 0")
-
-        params["mods"] = mods
-
-    # unlike /get_player_scores, we'll sort by score/pp depending
-    # on the mode played, since we want to replicated leaderboards.
-    if scope == "best":
-        sort = "pp" if mode >= GameMode.RELAX_OSU else "score"
-    else:  # recent
-        sort = "play_time"
-
-    query.append(f"ORDER BY {sort} DESC LIMIT :limit")
-    params["limit"] = limit
-
-    rows = await app.state.services.database.fetch_all(" ".join(query), params)
+    rows = await public_api_service.fetch_map_scores(
+        map_md5=bmap.md5,
+        mode=mode,
+        mods=mods,
+        strong_mods_equality=strong_equality,
+        scope=scope,
+        limit=limit,
+    )
 
     return ORJSONResponse(
         {
             "status": "success",
-            "scores": [dict(row) for row in rows],
+            "scores": rows,
         },
     )
 
 
 @router.get("/get_score_info")
 async def api_get_score_info(
+    *,
     score_id: int = Query(..., alias="id", ge=0, le=9_223_372_036_854_775_807),
+    public_api_service: Annotated[
+        PublicApiService,
+        Depends(api_dependencies.get_public_api_service),
+    ],
 ) -> Response:
     """Return information about a given score."""
-    score = await usecase_dependencies.get_repositories().scores.fetch_one(score_id)
+    score = await public_api_service.fetch_score(score_id)
 
     if score is None:
         return ORJSONResponse(
@@ -704,8 +643,13 @@ async def api_get_score_info(
 
 @router.get("/get_replay")
 async def api_get_replay(
+    *,
     score_id: int = Query(..., alias="id", ge=0, le=9_223_372_036_854_775_807),
     include_headers: bool = True,
+    public_api_service: Annotated[
+        PublicApiService,
+        Depends(api_dependencies.get_public_api_service),
+    ],
 ) -> Response:
     """\
     Return a given replay (including headers).
@@ -733,18 +677,7 @@ async def api_get_replay(
         )
     # add replay headers from sql
     # TODO: osu_version & life graph in scores tables?
-    row = await app.state.services.database.fetch_one(
-        "SELECT u.name username, m.md5 map_md5, "
-        "m.artist, m.title, m.version, "
-        "s.mode, s.n300, s.n100, s.n50, s.ngeki, "
-        "s.nkatu, s.nmiss, s.score, s.max_combo, "
-        "s.perfect, s.mods, s.play_time "
-        "FROM scores s "
-        "INNER JOIN users u ON u.id = s.userid "
-        "INNER JOIN maps m ON m.md5 = s.map_md5 "
-        "WHERE s.id = :score_id",
-        {"score_id": score_id},
-    )
+    row = await public_api_service.fetch_replay_header(score_id)
     if not row:
         # score not found in sql
         return ORJSONResponse(
@@ -868,11 +801,16 @@ async def api_get_match(
 
 @router.get("/get_leaderboard")
 async def api_get_global_leaderboard(
+    *,
     sort: Literal["tscore", "rscore", "pp", "acc", "plays", "playtime"] = "pp",
     mode_arg: int = Query(0, alias="mode", ge=0, le=11),
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, min=0, max=2_147_483_647),
     country: str | None = Query(None, min_length=2, max_length=2),
+    public_api_service: Annotated[
+        PublicApiService,
+        Depends(api_dependencies.get_public_api_service),
+    ],
 ) -> Response:
     if mode_arg in (
         GameMode.RELAX_MANIA,
@@ -887,46 +825,37 @@ async def api_get_global_leaderboard(
 
     mode = GameMode(mode_arg)
 
-    query_conditions = ["s.mode = :mode", "u.priv & 1", f"s.{sort} > 0"]
-    query_parameters: dict[str, object] = {"mode": mode}
-
-    if country is not None:
-        query_conditions.append("u.country = :country")
-        query_parameters["country"] = country
-
-    rows = await app.state.services.database.fetch_all(
-        "SELECT u.id as player_id, u.name, u.country, s.tscore, s.rscore, "
-        "s.pp, s.plays, s.playtime, s.acc, s.max_combo, "
-        "s.xh_count, s.x_count, s.sh_count, s.s_count, s.a_count, "
-        "c.id as clan_id, c.name as clan_name, c.tag as clan_tag "
-        "FROM stats s "
-        "LEFT JOIN users u USING (id) "
-        "LEFT JOIN clans c ON u.clan_id = c.id "
-        f"WHERE {' AND '.join(query_conditions)} "
-        f"ORDER BY s.{sort} DESC LIMIT :offset, :limit",
-        query_parameters | {"offset": offset, "limit": limit},
+    rows = await public_api_service.fetch_global_leaderboard(
+        sort=sort,
+        mode=mode,
+        limit=limit,
+        offset=offset,
+        country=country,
     )
 
     return ORJSONResponse(
-        {"status": "success", "leaderboard": [dict(row) for row in rows]},
+        {"status": "success", "leaderboard": rows},
     )
 
 
 @router.get("/get_clan")
 async def api_get_clan(
+    *,
     clan_id: int = Query(..., alias="id", ge=1, le=2_147_483_647),
+    public_api_service: Annotated[
+        PublicApiService,
+        Depends(api_dependencies.get_public_api_service),
+    ],
 ) -> Response:
     """Return information of a given clan."""
-    clan = await usecase_dependencies.get_repositories().clans.fetch_one(id=clan_id)
+    clan = await public_api_service.fetch_clan(clan_id)
     if not clan:
         return ORJSONResponse(
             {"status": "Clan not found."},
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
-    clan_members = await usecase_dependencies.get_repositories().users.fetch_many(
-        clan_id=clan["id"],
-    )
+    clan_members = await public_api_service.fetch_clan_members(clan["id"])
 
     owner = await app.state.sessions.players.from_cache_or_sql(id=clan["owner"])
     assert owner is not None
@@ -957,15 +886,16 @@ async def api_get_clan(
 
 @router.get("/get_mappool")
 async def api_get_pool(
+    *,
     pool_id: int = Query(..., alias="id", ge=1, le=2_147_483_647),
+    public_api_service: Annotated[
+        PublicApiService,
+        Depends(api_dependencies.get_public_api_service),
+    ],
 ) -> Response:
     """Return information of a given mappool."""
 
-    tourney_pool = (
-        await usecase_dependencies.get_repositories().tourney_pools.fetch_by_id(
-            id=pool_id,
-        )
-    )
+    tourney_pool = await public_api_service.fetch_tourney_pool(pool_id)
     if tourney_pool is None:
         return ORJSONResponse(
             {"status": "Pool not found."},
@@ -973,11 +903,7 @@ async def api_get_pool(
         )
 
     tourney_pool_maps: dict[tuple[int, int], Beatmap] = {}
-    for (
-        pool_map
-    ) in await usecase_dependencies.get_repositories().tourney_pool_maps.fetch_many(
-        pool_id=pool_id,
-    ):
+    for pool_map in await public_api_service.fetch_tourney_pool_maps(pool_id):
         bmap = await Beatmap.from_bid(pool_map["map_id"])
         if bmap is not None:
             tourney_pool_maps[(pool_map["mods"], pool_map["slot"])] = bmap
@@ -991,18 +917,15 @@ async def api_get_pool(
         )
 
     pool_creator_clan = (
-        await usecase_dependencies.get_repositories().clans.fetch_one(
-            id=pool_creator.clan_id,
-        )
+        await public_api_service.fetch_clan(pool_creator.clan_id)
         if pool_creator.clan_id is not None
         else None
     )
     pool_creator_clan_members: list[User] = []
     if pool_creator_clan is not None:
-        pool_creator_clan_members = (
-            await usecase_dependencies.get_repositories().users.fetch_many(
-                clan_id=pool_creator.clan_id,
-            )
+        assert pool_creator.clan_id is not None
+        pool_creator_clan_members = await public_api_service.fetch_clan_members(
+            pool_creator.clan_id,
         )
 
     return ORJSONResponse(
