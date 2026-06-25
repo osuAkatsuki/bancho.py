@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from typing import TypedDict
-from typing import cast
+from dataclasses import dataclass
 
 from sqlalchemy import Column
 from sqlalchemy import Index
@@ -16,6 +15,7 @@ from sqlalchemy.dialects.mysql import TINYINT
 from app._typing import UNSET
 from app._typing import _UnsetSentinel
 from app.adapters.database import Database
+from app.adapters.database import MySQLRow
 from app.constants.privileges import Privileges
 from app.repositories import Base
 from app.utils import make_safe_name
@@ -76,12 +76,14 @@ READ_PARAMS = (
 )
 
 
-class User(TypedDict):
+@dataclass(frozen=True, slots=True)
+class User:
     id: int
     name: str
     safe_name: str
+    email: str | None
     priv: int
-    pw_bcrypt: str
+    pw_bcrypt: str | None
     country: str
     silence_end: int
     donor_end: int
@@ -97,7 +99,8 @@ class User(TypedDict):
     api_key: str | None
 
 
-class SearchUser(TypedDict):
+@dataclass(frozen=True, slots=True)
+class SearchUser:
     id: int
     name: str
 
@@ -105,6 +108,64 @@ class SearchUser(TypedDict):
 class UsersRepository:
     def __init__(self, database: Database) -> None:
         self._database = database
+
+    def _serialize_user(self, user: User) -> MySQLRow:
+        return {
+            "id": user.id,
+            "name": user.name,
+            "safe_name": user.safe_name,
+            "email": user.email,
+            "priv": user.priv,
+            "pw_bcrypt": user.pw_bcrypt,
+            "country": user.country,
+            "silence_end": user.silence_end,
+            "donor_end": user.donor_end,
+            "creation_time": user.creation_time,
+            "latest_activity": user.latest_activity,
+            "clan_id": user.clan_id,
+            "clan_priv": user.clan_priv,
+            "preferred_mode": user.preferred_mode,
+            "play_style": user.play_style,
+            "custom_badge_name": user.custom_badge_name,
+            "custom_badge_icon": user.custom_badge_icon,
+            "userpage_content": user.userpage_content,
+            "api_key": user.api_key,
+        }
+
+    def _deserialize_user(self, row: MySQLRow) -> User:
+        return User(
+            id=row["id"],
+            name=row["name"],
+            safe_name=row["safe_name"],
+            email=row.get("email"),
+            priv=row["priv"],
+            pw_bcrypt=row.get("pw_bcrypt"),
+            country=row["country"],
+            silence_end=row["silence_end"],
+            donor_end=row["donor_end"],
+            creation_time=row["creation_time"],
+            latest_activity=row["latest_activity"],
+            clan_id=row["clan_id"],
+            clan_priv=row["clan_priv"],
+            preferred_mode=row["preferred_mode"],
+            play_style=row["play_style"],
+            custom_badge_name=row["custom_badge_name"],
+            custom_badge_icon=row["custom_badge_icon"],
+            userpage_content=row["userpage_content"],
+            api_key=row.get("api_key"),
+        )
+
+    def _serialize_search_user(self, user: SearchUser) -> MySQLRow:
+        return {
+            "id": user.id,
+            "name": user.name,
+        }
+
+    def _deserialize_search_user(self, row: MySQLRow) -> SearchUser:
+        return SearchUser(
+            id=row["id"],
+            name=row["name"],
+        )
 
     async def create(
         self,
@@ -128,7 +189,7 @@ class UsersRepository:
         select_stmt = select(*READ_PARAMS).where(UsersTable.id == rec_id)
         user = await self._database.fetch_one(select_stmt)
         assert user is not None
-        return cast(User, user)
+        return self._deserialize_user(user)
 
     async def fetch_one(
         self,
@@ -156,7 +217,7 @@ class UsersRepository:
             select_stmt = select_stmt.where(UsersTable.email == email)
 
         user = await self._database.fetch_one(select_stmt)
-        return cast(User | None, user)
+        return self._deserialize_user(user) if user is not None else None
 
     async def fetch_count(
         self,
@@ -184,7 +245,7 @@ class UsersRepository:
 
         rec = await self._database.fetch_one(select_stmt)
         assert rec is not None
-        return cast(int, rec["count"])
+        return int(rec["count"])
 
     async def search_public(self, name: str | None = None) -> list[SearchUser]:
         select_stmt = (
@@ -202,7 +263,7 @@ class UsersRepository:
             select_stmt = select_stmt.where(UsersTable.name.like(f"%{name}%"))
 
         users = await self._database.fetch_all(select_stmt)
-        return cast(list[SearchUser], users)
+        return [self._deserialize_search_user(user) for user in users]
 
     async def fetch_many(
         self,
@@ -234,7 +295,7 @@ class UsersRepository:
             select_stmt = select_stmt.limit(page_size).offset((page - 1) * page_size)
 
         users = await self._database.fetch_all(select_stmt)
-        return cast(list[User], users)
+        return [self._deserialize_user(user) for user in users]
 
     async def partial_update(
         self,
@@ -245,7 +306,7 @@ class UsersRepository:
         country: str | _UnsetSentinel = UNSET,
         silence_end: int | _UnsetSentinel = UNSET,
         donor_end: int | _UnsetSentinel = UNSET,
-        creation_time: _UnsetSentinel | _UnsetSentinel = UNSET,
+        creation_time: int | _UnsetSentinel = UNSET,
         latest_activity: int | _UnsetSentinel = UNSET,
         clan_id: int | _UnsetSentinel = UNSET,
         clan_priv: int | _UnsetSentinel = UNSET,
@@ -295,7 +356,7 @@ class UsersRepository:
 
         select_stmt = select(*READ_PARAMS).where(UsersTable.id == id)
         user = await self._database.fetch_one(select_stmt)
-        return cast(User | None, user)
+        return self._deserialize_user(user) if user is not None else None
 
 
 # TODO: delete?

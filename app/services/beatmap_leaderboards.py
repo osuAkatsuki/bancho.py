@@ -248,7 +248,7 @@ class BeatmapLeaderboardService:
 
     async def _fetch_clan_tag(self, clan_id: int) -> str | None:
         clan = await self.clans.fetch_one(id=clan_id)
-        return clan["tag"] if clan is not None else None
+        return clan.tag if clan is not None else None
 
     async def _map_exists_by_filename(self, filename: str) -> bool:
         return await self.maps.fetch_one(filename=filename) is not None
@@ -259,5 +259,5 @@ class BeatmapLeaderboardService:
             page=None,
             page_size=None,
         )
-        ratings = [row["rating"] for row in map_ratings]
+        ratings = [row.rating for row in map_ratings]
         return sum(ratings) / len(ratings) if ratings else 0.0

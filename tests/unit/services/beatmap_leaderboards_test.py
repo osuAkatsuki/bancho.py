@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+from datetime import datetime
 from types import SimpleNamespace
 
 import app.services.beatmap_leaderboards as beatmap_leaderboards
 from app.constants.beatmap_statuses import RankedStatus
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
+from app.repositories.clans import Clan
+from app.repositories.ratings import Rating
+from app.repositories.scores import BeatmapLeaderboardScoreRow
 
 
 class _FakeScoresService:
@@ -16,22 +20,22 @@ class _FakeScoresService:
         self.calls.append(kwargs)
         return SimpleNamespace(
             score_rows=[
-                {
-                    "id": 10,
-                    "leaderboard_value": 987.6,
-                    "max_combo": 321,
-                    "n50": 1,
-                    "n100": 2,
-                    "n300": 300,
-                    "nmiss": 0,
-                    "nkatu": 4,
-                    "ngeki": 5,
-                    "perfect": 1,
-                    "mods": Mods.RELAX.value,
-                    "time": 1_704_110_400,
-                    "userid": 6,
-                    "name": "score-user",
-                },
+                BeatmapLeaderboardScoreRow(
+                    id=10,
+                    leaderboard_value=987.6,
+                    max_combo=321,
+                    n50=1,
+                    n100=2,
+                    n300=300,
+                    nmiss=0,
+                    nkatu=4,
+                    ngeki=5,
+                    perfect=1,
+                    mods=Mods.RELAX.value,
+                    time=1_704_110_400,
+                    userid=6,
+                    name="score-user",
+                ),
             ],
             personal_best_score_row={
                 "id": 11,
@@ -52,8 +56,18 @@ class _FakeScoresService:
 
 
 class _FakeClans:
-    async def fetch_one(self, *, id: int) -> dict[str, str] | None:
-        return {"tag": "AK"} if id == 123 else None
+    async def fetch_one(self, *, id: int) -> Clan | None:
+        return (
+            Clan(
+                id=id,
+                name="Akatsuki",
+                tag="AK",
+                owner=1,
+                created_at=datetime(2024, 1, 1),
+            )
+            if id == 123
+            else None
+        )
 
 
 class _FakeMaps:
@@ -75,8 +89,11 @@ class _FakeRatings:
         map_md5: str,
         page: int | None,
         page_size: int | None,
-    ) -> list[dict[str, int]]:
-        return [{"rating": 8}, {"rating": 10}]
+    ) -> list[Rating]:
+        return [
+            Rating(userid=1, map_md5=map_md5, rating=8),
+            Rating(userid=2, map_md5=map_md5, rating=10),
+        ]
 
 
 async def _record_strange_occurrence(obj: object) -> None:

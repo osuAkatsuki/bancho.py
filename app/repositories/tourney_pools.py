@@ -1,8 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
-from typing import TypedDict
-from typing import cast
 
 from sqlalchemy import Column
 from sqlalchemy import DateTime
@@ -15,6 +14,7 @@ from sqlalchemy import insert
 from sqlalchemy import select
 
 from app.adapters.database import Database
+from app.adapters.database import MySQLRow
 from app.repositories import Base
 
 
@@ -29,7 +29,8 @@ class TourneyPoolsTable(Base):
     __table_args__ = (Index("tourney_pools_users_id_fk", created_by),)
 
 
-class TourneyPool(TypedDict):
+@dataclass(frozen=True, slots=True)
+class TourneyPool:
     id: int
     name: str
     created_at: datetime
@@ -48,6 +49,22 @@ class TourneyPoolsRepository:
     def __init__(self, database: Database) -> None:
         self._database = database
 
+    def _serialize_tourney_pool(self, tourney_pool: TourneyPool) -> MySQLRow:
+        return {
+            "id": tourney_pool.id,
+            "name": tourney_pool.name,
+            "created_at": tourney_pool.created_at,
+            "created_by": tourney_pool.created_by,
+        }
+
+    def _deserialize_tourney_pool(self, row: MySQLRow) -> TourneyPool:
+        return TourneyPool(
+            id=row["id"],
+            name=row["name"],
+            created_at=row["created_at"],
+            created_by=row["created_by"],
+        )
+
     async def create(self, name: str, created_by: int) -> TourneyPool:
         """Create a new tourney pool entry in the database."""
         insert_stmt = insert(TourneyPoolsTable).values(
@@ -60,7 +77,7 @@ class TourneyPoolsRepository:
         select_stmt = select(*READ_PARAMS).where(TourneyPoolsTable.id == rec_id)
         tourney_pool = await self._database.fetch_one(select_stmt)
         assert tourney_pool is not None
-        return cast(TourneyPool, tourney_pool)
+        return self._deserialize_tourney_pool(tourney_pool)
 
     async def fetch_many(
         self,
@@ -79,19 +96,30 @@ class TourneyPoolsRepository:
             select_stmt = select_stmt.limit(page_size).offset((page - 1) * page_size)
 
         tourney_pools = await self._database.fetch_all(select_stmt)
-        return cast(list[TourneyPool], tourney_pools)
+        return [
+            self._deserialize_tourney_pool(tourney_pool)
+            for tourney_pool in tourney_pools
+        ]
 
     async def fetch_by_name(self, name: str) -> TourneyPool | None:
         """Fetch a tourney pool by name from the database."""
         select_stmt = select(*READ_PARAMS).where(TourneyPoolsTable.name == name)
         tourney_pool = await self._database.fetch_one(select_stmt)
-        return cast(TourneyPool | None, tourney_pool)
+        return (
+            self._deserialize_tourney_pool(tourney_pool)
+            if tourney_pool is not None
+            else None
+        )
 
     async def fetch_by_id(self, id: int) -> TourneyPool | None:
         """Fetch a tourney pool by id from the database."""
         select_stmt = select(*READ_PARAMS).where(TourneyPoolsTable.id == id)
         tourney_pool = await self._database.fetch_one(select_stmt)
-        return cast(TourneyPool | None, tourney_pool)
+        return (
+            self._deserialize_tourney_pool(tourney_pool)
+            if tourney_pool is not None
+            else None
+        )
 
     async def delete_by_id(self, id: int) -> TourneyPool | None:
         """Delete a tourney pool by id from the database."""
@@ -102,4 +130,4 @@ class TourneyPoolsRepository:
 
         delete_stmt = delete(TourneyPoolsTable).where(TourneyPoolsTable.id == id)
         await self._database.execute(delete_stmt)
-        return cast(TourneyPool, tourney_pool)
+        return self._deserialize_tourney_pool(tourney_pool)

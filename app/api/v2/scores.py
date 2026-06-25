@@ -44,7 +44,7 @@ async def get_all_scores(
         page_size=page_size,
     )
 
-    response = [Score.from_mapping(rec) for rec in listing.scores]
+    response = [Score.model_validate(rec) for rec in listing.scores]
 
     return responses.success(
         content=response,
@@ -71,5 +71,5 @@ async def get_score(
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
-    response = Score.from_mapping(data)
+    response = Score.model_validate(data)
     return responses.success(response)

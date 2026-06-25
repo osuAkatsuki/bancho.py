@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from typing import TypedDict
-from typing import cast
+from dataclasses import dataclass
 
 from sqlalchemy import Column
 from sqlalchemy import Index
@@ -17,6 +16,7 @@ from sqlalchemy.dialects.mysql import TINYINT
 from app._typing import UNSET
 from app._typing import _UnsetSentinel
 from app.adapters.database import Database
+from app.adapters.database import MySQLRow
 from app.repositories import Base
 
 
@@ -46,7 +46,8 @@ READ_PARAMS = (
 )
 
 
-class Channel(TypedDict):
+@dataclass(frozen=True, slots=True)
+class Channel:
     id: int
     name: str
     topic: str
@@ -58,6 +59,26 @@ class Channel(TypedDict):
 class ChannelsRepository:
     def __init__(self, database: Database) -> None:
         self._database = database
+
+    def _serialize_channel(self, channel: Channel) -> MySQLRow:
+        return {
+            "id": channel.id,
+            "name": channel.name,
+            "topic": channel.topic,
+            "read_priv": channel.read_priv,
+            "write_priv": channel.write_priv,
+            "auto_join": channel.auto_join,
+        }
+
+    def _deserialize_channel(self, row: MySQLRow) -> Channel:
+        return Channel(
+            id=row["id"],
+            name=row["name"],
+            topic=row["topic"],
+            read_priv=row["read_priv"],
+            write_priv=row["write_priv"],
+            auto_join=bool(row["auto_join"]),
+        )
 
     async def create(
         self,
@@ -81,7 +102,7 @@ class ChannelsRepository:
         channel = await self._database.fetch_one(select_stmt)
 
         assert channel is not None
-        return cast(Channel, channel)
+        return self._deserialize_channel(channel)
 
     async def fetch_one(
         self,
@@ -100,7 +121,7 @@ class ChannelsRepository:
             select_stmt = select_stmt.where(ChannelsTable.name == name)
 
         channel = await self._database.fetch_one(select_stmt)
-        return cast(Channel | None, channel)
+        return self._deserialize_channel(channel) if channel is not None else None
 
     async def fetch_count(
         self,
@@ -122,7 +143,7 @@ class ChannelsRepository:
 
         rec = await self._database.fetch_one(select_stmt)
         assert rec is not None
-        return cast(int, rec["count"])
+        return int(rec["count"])
 
     async def fetch_many(
         self,
@@ -146,7 +167,7 @@ class ChannelsRepository:
             select_stmt = select_stmt.limit(page_size).offset((page - 1) * page_size)
 
         channels = await self._database.fetch_all(select_stmt)
-        return cast(list[Channel], channels)
+        return [self._deserialize_channel(channel) for channel in channels]
 
     async def partial_update(
         self,
@@ -172,7 +193,7 @@ class ChannelsRepository:
 
         select_stmt = select(*READ_PARAMS).where(ChannelsTable.name == name)
         channel = await self._database.fetch_one(select_stmt)
-        return cast(Channel | None, channel)
+        return self._deserialize_channel(channel) if channel is not None else None
 
     async def delete_one(
         self,
@@ -186,4 +207,4 @@ class ChannelsRepository:
 
         delete_stmt = delete(ChannelsTable).where(ChannelsTable.name == name)
         await self._database.execute(delete_stmt)
-        return cast(Channel | None, channel)
+        return self._deserialize_channel(channel)

@@ -109,7 +109,7 @@ class AccountRegistrationService:
             player = registered_account.player
 
             self.increment_metric("bancho.registrations")
-            log(f"<{username} ({player['id']})> has registered!", Ansi.LGREEN)
+            log(f"<{username} ({player.id})> has registered!", Ansi.LGREEN)
 
         return AccountRegistrationResult(code=AccountRegistrationResultCode.OK)
 
@@ -203,7 +203,7 @@ class AccountRegistrationService:
                 pw_bcrypt=password_bcrypt,
                 country=country,
             )
-            await self.stats.create_all_modes(player_id=player["id"])
+            await self.stats.create_all_modes(player_id=player.id)
 
         return RegisteredAccount(
             player=player,

@@ -44,7 +44,9 @@ class BanchoAuthenticationService:
         if user_info is None:
             return None
 
-        trusted_hashword = user_info["pw_bcrypt"].encode()
+        if user_info.pw_bcrypt is None:
+            return None
+        trusted_hashword = user_info.pw_bcrypt.encode()
 
         # in-memory bcrypt lookup cache for performance
         if trusted_hashword in self.password_cache:  # ~0.01 ms
@@ -156,4 +158,4 @@ class BanchoLoginService:
         self,
         matches: list[ClientHashWithPlayer],
     ) -> bool:
-        return not all([match["priv"] & Privileges.UNRESTRICTED for match in matches])
+        return not all([match.priv & Privileges.UNRESTRICTED for match in matches])

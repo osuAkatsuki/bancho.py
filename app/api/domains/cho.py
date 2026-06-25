@@ -708,8 +708,7 @@ async def handle_osu_login_request(
         }
 
     if osu_version.stream is OsuStream.TOURNEY and not (
-        user_info["priv"] & Privileges.DONATOR
-        and user_info["priv"] & Privileges.UNRESTRICTED
+        user_info.priv & Privileges.DONATOR and user_info.priv & Privileges.UNRESTRICTED
     ):
         # trying to use tourney client with insufficient privileges.
         return {
@@ -722,14 +721,14 @@ async def handle_osu_login_request(
     """ login credentials verified """
 
     await bancho_login_service.record_login(
-        user_id=user_info["id"],
+        user_id=user_info.id,
         ip=str(ip),
         osu_version=osu_version.date,
         osu_stream=osu_version.stream,
     )
 
     await bancho_login_service.record_client_hashes(
-        user_id=user_info["id"],
+        user_id=user_info.id,
         osu_path_md5=login_data["osu_path_md5"],
         adapters_md5=login_data["adapters_md5"],
         uninstall_md5=login_data["uninstall_md5"],
@@ -750,7 +749,7 @@ async def handle_osu_login_request(
         disk_signature_md5 = None
 
     hw_matches = await bancho_login_service.fetch_hardware_matches(
-        user_id=user_info["id"],
+        user_id=user_info.id,
         running_under_wine=running_under_wine,
         adapters_md5=login_data["adapters_md5"],
         uninstall_md5=login_data["uninstall_md5"],
@@ -759,7 +758,7 @@ async def handle_osu_login_request(
 
     if hw_matches:
         # we have other accounts with matching hashes
-        if user_info["priv"] & Privileges.VERIFIED:
+        if user_info.priv & Privileges.VERIFIED:
             # this is a normal, registered & verified player.
             # TODO: this user may be multi-accounting; there may be
             # some desirable behavior to implement here in the future.
@@ -787,11 +786,11 @@ async def handle_osu_login_request(
     # get clan & clan priv if we're in a clan
     clan_id: int | None = None
     clan_priv: ClanPrivileges | None = None
-    if user_info["clan_id"] != 0:
-        clan_id = user_info["clan_id"]
-        clan_priv = ClanPrivileges(user_info["clan_priv"])
+    if user_info.clan_id != 0:
+        clan_id = user_info.clan_id
+        clan_priv = ClanPrivileges(user_info.clan_priv)
 
-    db_country = user_info["country"]
+    db_country = user_info.country
 
     geoloc = await app.state.services.fetch_geoloc(ip, headers)
 
@@ -812,7 +811,7 @@ async def handle_osu_login_request(
         log(f"Fixing {login_data['username']}'s country.", Ansi.LGREEN)
 
         await bancho_login_service.update_country(
-            user_id=user_info["id"],
+            user_id=user_info.id,
             country=geoloc["country"]["acronym"],
         )
 
@@ -826,23 +825,24 @@ async def handle_osu_login_request(
         ip=ip,
     )
 
+    assert user_info.pw_bcrypt is not None
     player = Player(
-        id=user_info["id"],
-        name=user_info["name"],
-        priv=Privileges(user_info["priv"]),
-        pw_bcrypt=user_info["pw_bcrypt"].encode(),
+        id=user_info.id,
+        name=user_info.name,
+        priv=Privileges(user_info.priv),
+        pw_bcrypt=user_info.pw_bcrypt.encode(),
         token=Player.generate_token(),
         clan_id=clan_id,
         clan_priv=clan_priv,
         geoloc=geoloc,
         utc_offset=login_data["utc_offset"],
         pm_private=login_data["pm_private"],
-        silence_end=user_info["silence_end"],
-        donor_end=user_info["donor_end"],
+        silence_end=user_info.silence_end,
+        donor_end=user_info.donor_end,
         client_details=client_details,
         login_time=login_time,
         is_tourney_client=osu_version.stream == "tourney",
-        api_key=user_info["api_key"],
+        api_key=user_info.api_key,
     )
 
     data = bytearray(app.packets.protocol_version(19))
@@ -934,21 +934,21 @@ async def handle_osu_login_request(
             # Add "Unread messages" header as the first message
             # for any given sender, to make it clear that the
             # messages are coming from the mail system.
-            if msg["from_id"] not in sent_to:
+            if msg.from_id not in sent_to:
                 data += app.packets.send_message(
-                    sender=msg["from_name"],
+                    sender=msg.from_name,
                     msg="Unread messages",
-                    recipient=msg["to_name"],
-                    sender_id=msg["from_id"],
+                    recipient=msg.to_name,
+                    sender_id=msg.from_id,
                 )
-                sent_to.add(msg["from_id"])
+                sent_to.add(msg.from_id)
 
-            msg_time = datetime.fromtimestamp(msg["time"])
+            msg_time = datetime.fromtimestamp(msg.time)
             data += app.packets.send_message(
-                sender=msg["from_name"],
-                msg=f'[{msg_time:%a %b %d @ %H:%M%p}] {msg["msg"]}',
-                recipient=msg["to_name"],
-                sender_id=msg["from_id"],
+                sender=msg.from_name,
+                msg=f"[{msg_time:%a %b %d @ %H:%M%p}] {msg.msg}",
+                recipient=msg.to_name,
+                sender_id=msg.from_id,
             )
 
         if not player.priv & Privileges.VERIFIED:

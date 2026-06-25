@@ -17,6 +17,7 @@ from app.objects.player import ModeData
 from app.objects.score import Grade
 from app.objects.score import Score
 from app.repositories.achievements import Achievement
+from app.repositories.scores import BeatmapLeaderboardScoreRow
 
 
 def _score() -> Score:
@@ -137,20 +138,20 @@ def test_build_submission_charts_formats_osu_client_response() -> None:
     score = _score()
     previous_stats, current_stats = _stats()
     achievements: list[Achievement] = [
-        {
-            "id": 1,
-            "file": "osu-skill-pass-4",
-            "name": "Insanity Approaches",
-            "desc": "You're not twitching, you're just ready.",
-            "cond": lambda score, mode_vn: True,
-        },
-        {
-            "id": 2,
-            "file": "all-intro-hidden",
-            "name": "Blindsight",
-            "desc": "I can see just perfectly",
-            "cond": lambda score, mode_vn: True,
-        },
+        Achievement(
+            id=1,
+            file="osu-skill-pass-4",
+            name="Insanity Approaches",
+            desc="You're not twitching, you're just ready.",
+            cond=lambda score, mode_vn: True,
+        ),
+        Achievement(
+            id=2,
+            file="all-intro-hidden",
+            name="Blindsight",
+            desc="I can see just perfectly",
+            cond=lambda score, mode_vn: True,
+        ),
     ]
 
     response = osu.build_submission_charts(
@@ -233,13 +234,13 @@ def test_build_score_submission_response_formats_unlocked_achievements() -> None
     score = _score()
     previous_stats, current_stats = _stats()
     achievements: list[Achievement] = [
-        {
-            "id": 1,
-            "file": "osu-skill-pass-4",
-            "name": "Insanity Approaches",
-            "desc": "You're not twitching, you're just ready.",
-            "cond": lambda score, mode_vn: True,
-        },
+        Achievement(
+            id=1,
+            file="osu-skill-pass-4",
+            name="Insanity Approaches",
+            desc="You're not twitching, you're just ready.",
+            cond=lambda score, mode_vn: True,
+        ),
     ]
 
     response = osu.build_score_submission_response(
@@ -286,22 +287,22 @@ def test_format_scores_response_formats_personal_best_and_leaderboard_rows() -> 
             beatmap_name="Artist - Title [Hard]",
             beatmap_rating=9.5,
             score_rows=[
-                {
-                    "id": 10,
-                    "leaderboard_value": 987.6,
-                    "max_combo": 321,
-                    "n50": 1,
-                    "n100": 2,
-                    "n300": 300,
-                    "nmiss": 0,
-                    "nkatu": 4,
-                    "ngeki": 5,
-                    "perfect": 1,
-                    "mods": Mods.HIDDEN.value,
-                    "time": 1_704_110_400,
-                    "userid": 7,
-                    "name": "leaderboard-user",
-                },
+                BeatmapLeaderboardScoreRow(
+                    id=10,
+                    leaderboard_value=987.6,
+                    max_combo=321,
+                    n50=1,
+                    n100=2,
+                    n300=300,
+                    nmiss=0,
+                    nkatu=4,
+                    ngeki=5,
+                    perfect=1,
+                    mods=Mods.HIDDEN.value,
+                    time=1_704_110_400,
+                    userid=7,
+                    name="leaderboard-user",
+                ),
             ],
             personal_best_score_row={
                 "id": 11,

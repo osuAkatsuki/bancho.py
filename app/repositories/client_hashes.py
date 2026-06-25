@@ -1,8 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
-from typing import TypedDict
-from typing import cast
 
 from sqlalchemy import CHAR
 from sqlalchemy import Column
@@ -17,6 +16,7 @@ from sqlalchemy.sql import ColumnElement
 from sqlalchemy.types import Boolean
 
 from app.adapters.database import Database
+from app.adapters.database import MySQLRow
 from app.repositories import Base
 from app.repositories.users import UsersTable
 
@@ -44,7 +44,8 @@ READ_PARAMS = (
 )
 
 
-class ClientHash(TypedDict):
+@dataclass(frozen=True, slots=True)
+class ClientHash:
     userid: int
     osupath: str
     adapters: str
@@ -54,7 +55,15 @@ class ClientHash(TypedDict):
     occurrences: int
 
 
-class ClientHashWithPlayer(ClientHash):
+@dataclass(frozen=True, slots=True)
+class ClientHashWithPlayer:
+    userid: int
+    osupath: str
+    adapters: str
+    uninstall_id: str
+    disk_serial: str
+    latest_time: datetime
+    occurrences: int
     name: str
     priv: int
 
@@ -62,6 +71,60 @@ class ClientHashWithPlayer(ClientHash):
 class ClientHashesRepository:
     def __init__(self, database: Database) -> None:
         self._database = database
+
+    def _serialize_client_hash(self, client_hash: ClientHash) -> MySQLRow:
+        return {
+            "userid": client_hash.userid,
+            "osupath": client_hash.osupath,
+            "adapters": client_hash.adapters,
+            "uninstall_id": client_hash.uninstall_id,
+            "disk_serial": client_hash.disk_serial,
+            "latest_time": client_hash.latest_time,
+            "occurrences": client_hash.occurrences,
+        }
+
+    def _deserialize_client_hash(self, row: MySQLRow) -> ClientHash:
+        return ClientHash(
+            userid=row["userid"],
+            osupath=row["osupath"],
+            adapters=row["adapters"],
+            uninstall_id=row["uninstall_id"],
+            disk_serial=row["disk_serial"],
+            latest_time=row["latest_time"],
+            occurrences=row["occurrences"],
+        )
+
+    def _serialize_client_hash_with_player(
+        self,
+        client_hash: ClientHashWithPlayer,
+    ) -> MySQLRow:
+        return {
+            "userid": client_hash.userid,
+            "osupath": client_hash.osupath,
+            "adapters": client_hash.adapters,
+            "uninstall_id": client_hash.uninstall_id,
+            "disk_serial": client_hash.disk_serial,
+            "latest_time": client_hash.latest_time,
+            "occurrences": client_hash.occurrences,
+            "name": client_hash.name,
+            "priv": client_hash.priv,
+        }
+
+    def _deserialize_client_hash_with_player(
+        self,
+        row: MySQLRow,
+    ) -> ClientHashWithPlayer:
+        return ClientHashWithPlayer(
+            userid=row["userid"],
+            osupath=row["osupath"],
+            adapters=row["adapters"],
+            uninstall_id=row["uninstall_id"],
+            disk_serial=row["disk_serial"],
+            latest_time=row["latest_time"],
+            occurrences=row["occurrences"],
+            name=row["name"],
+            priv=row["priv"],
+        )
 
     async def create(
         self,
@@ -102,7 +165,7 @@ class ClientHashesRepository:
         client_hash = await self._database.fetch_one(select_stmt)
 
         assert client_hash is not None
-        return cast(ClientHash, client_hash)
+        return self._deserialize_client_hash(client_hash)
 
     async def fetch_any_hardware_matches_for_user(
         self,
@@ -137,4 +200,7 @@ class ClientHashesRepository:
             select_stmt = select_stmt.where(or_(*oneof_filters))
 
         client_hashes = await self._database.fetch_all(select_stmt)
-        return cast(list[ClientHashWithPlayer], client_hashes)
+        return [
+            self._deserialize_client_hash_with_player(client_hash)
+            for client_hash in client_hashes
+        ]

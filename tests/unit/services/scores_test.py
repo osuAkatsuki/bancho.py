@@ -6,6 +6,11 @@ from types import SimpleNamespace
 import app.services.scores as scores
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
+from app.repositories.scores import PublicMapScore
+from app.repositories.scores import PublicMostPlayedMap
+from app.repositories.scores import PublicPlayerScore
+from app.repositories.scores import ReplayHeader
+from app.repositories.scores import Score
 
 
 class _FakeScoresRepository:
@@ -32,11 +37,34 @@ class _FakeScoresRepository:
         user_id: int | None = None,
         page: int | None = None,
         page_size: int | None = None,
-    ) -> list[dict[str, object]]:
+    ) -> list[Score]:
         return []
 
-    async def fetch_one(self, id: int) -> dict[str, object] | None:
-        return {"id": id}
+    async def fetch_one(self, id: int) -> Score | None:
+        return Score(
+            id=id,
+            map_md5="map-md5",
+            score=1_000_000,
+            pp=123.45,
+            acc=98.76,
+            max_combo=321,
+            mods=Mods.HIDDEN.value,
+            n300=300,
+            n100=5,
+            n50=1,
+            nmiss=0,
+            ngeki=0,
+            nkatu=0,
+            grade="A",
+            status=2,
+            mode=4,
+            play_time=datetime(2024, 1, 1),
+            time_elapsed=60_000,
+            client_flags=0,
+            userid=3,
+            perfect=1,
+            online_checksum="checksum",
+        )
 
     async def fetch_public_player_scores(
         self,
@@ -49,7 +77,7 @@ class _FakeScoresRepository:
         limit: int,
         include_loved: bool,
         include_failed: bool,
-    ) -> list[dict[str, object]]:
+    ) -> list[PublicPlayerScore]:
         self.player_score_calls.append(
             {
                 "user_id": user_id,
@@ -63,48 +91,48 @@ class _FakeScoresRepository:
             },
         )
         return [
-            {
-                "id": 1,
-                "map_md5": "known-map",
-                "score": 1_000_000,
-                "pp": 123.45,
-                "acc": 98.76,
-                "max_combo": 321,
-                "mods": Mods.HIDDEN.value,
-                "n300": 300,
-                "n100": 5,
-                "n50": 1,
-                "nmiss": 0,
-                "ngeki": 0,
-                "nkatu": 0,
-                "grade": "A",
-                "status": 2,
-                "mode": 4,
-                "play_time": datetime(2024, 1, 1),
-                "time_elapsed": 60_000,
-                "perfect": 1,
-            },
-            {
-                "id": 2,
-                "map_md5": "missing-map",
-                "score": 500_000,
-                "pp": 50.0,
-                "acc": 90.0,
-                "max_combo": 123,
-                "mods": 0,
-                "n300": 250,
-                "n100": 25,
-                "n50": 5,
-                "nmiss": 2,
-                "ngeki": 0,
-                "nkatu": 0,
-                "grade": "B",
-                "status": 2,
-                "mode": 4,
-                "play_time": datetime(2024, 1, 2),
-                "time_elapsed": 60_000,
-                "perfect": 0,
-            },
+            PublicPlayerScore(
+                id=1,
+                map_md5="known-map",
+                score=1_000_000,
+                pp=123.45,
+                acc=98.76,
+                max_combo=321,
+                mods=Mods.HIDDEN.value,
+                n300=300,
+                n100=5,
+                n50=1,
+                nmiss=0,
+                ngeki=0,
+                nkatu=0,
+                grade="A",
+                status=2,
+                mode=4,
+                play_time=datetime(2024, 1, 1),
+                time_elapsed=60_000,
+                perfect=1,
+            ),
+            PublicPlayerScore(
+                id=2,
+                map_md5="missing-map",
+                score=500_000,
+                pp=50.0,
+                acc=90.0,
+                max_combo=123,
+                mods=0,
+                n300=250,
+                n100=25,
+                n50=5,
+                nmiss=2,
+                ngeki=0,
+                nkatu=0,
+                grade="B",
+                status=2,
+                mode=4,
+                play_time=datetime(2024, 1, 2),
+                time_elapsed=60_000,
+                perfect=0,
+            ),
         ]
 
     async def fetch_public_map_scores(
@@ -116,7 +144,7 @@ class _FakeScoresRepository:
         strong_mods_equality: bool,
         scope: str,
         limit: int,
-    ) -> list[dict[str, object]]:
+    ) -> list[PublicMapScore]:
         self.map_score_calls.append(
             {
                 "map_md5": map_md5,
@@ -127,7 +155,34 @@ class _FakeScoresRepository:
                 "limit": limit,
             },
         )
-        return [{"map_md5": map_md5, "score": 123}]
+        return [
+            PublicMapScore(
+                map_md5=map_md5,
+                score=123,
+                pp=12.3,
+                acc=98.0,
+                max_combo=100,
+                mods=0,
+                n300=300,
+                n100=0,
+                n50=0,
+                nmiss=0,
+                ngeki=0,
+                nkatu=0,
+                grade="A",
+                status=2,
+                mode=mode,
+                play_time=datetime(2024, 1, 1),
+                time_elapsed=60_000,
+                userid=3,
+                perfect=1,
+                player_name="player",
+                player_country="CA",
+                clan_id=None,
+                clan_name=None,
+                clan_tag=None,
+            ),
+        ]
 
     async def fetch_public_player_most_played_maps(
         self,
@@ -135,11 +190,41 @@ class _FakeScoresRepository:
         user_id: int,
         mode: int,
         limit: int,
-    ) -> list[dict[str, object]]:
-        return [{"id": 1, "plays": limit, "user_id": user_id, "mode": mode}]
+    ) -> list[PublicMostPlayedMap]:
+        return [
+            PublicMostPlayedMap(
+                md5="map-md5",
+                id=1,
+                set_id=2,
+                status=2,
+                artist="Artist",
+                title="Title",
+                version="Hard",
+                creator="creator",
+                plays=limit,
+            ),
+        ]
 
-    async def fetch_replay_header(self, score_id: int) -> dict[str, object] | None:
-        return {"score_id": score_id}
+    async def fetch_replay_header(self, score_id: int) -> ReplayHeader | None:
+        return ReplayHeader(
+            username="player",
+            map_md5="map-md5",
+            artist="Artist",
+            title="Title",
+            version="Hard",
+            mode=0,
+            n300=300,
+            n100=0,
+            n50=0,
+            ngeki=0,
+            nkatu=0,
+            nmiss=0,
+            score=score_id,
+            max_combo=100,
+            perfect=1,
+            mods=0,
+            play_time=datetime(2024, 1, 1),
+        )
 
 
 class _FakeBeatmapFetcher:
@@ -255,7 +340,34 @@ async def test_scores_service_fetches_public_map_scores() -> None:
         limit=25,
     )
 
-    assert rows == [{"map_md5": "map-md5", "score": 123}]
+    assert rows == [
+        PublicMapScore(
+            map_md5="map-md5",
+            score=123,
+            pp=12.3,
+            acc=98.0,
+            max_combo=100,
+            mods=0,
+            n300=300,
+            n100=0,
+            n50=0,
+            nmiss=0,
+            ngeki=0,
+            nkatu=0,
+            grade="A",
+            status=2,
+            mode=0,
+            play_time=datetime(2024, 1, 1),
+            time_elapsed=60_000,
+            userid=3,
+            perfect=1,
+            player_name="player",
+            player_country="CA",
+            clan_id=None,
+            clan_name=None,
+            clan_tag=None,
+        ),
+    ]
     assert scores_repo.map_score_calls == [
         {
             "map_md5": "map-md5",

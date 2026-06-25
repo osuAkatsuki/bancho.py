@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from typing import TypedDict
-from typing import cast
+from dataclasses import dataclass
 
 from sqlalchemy import Column
 from sqlalchemy import Index
@@ -11,6 +10,7 @@ from sqlalchemy import insert
 from sqlalchemy import select
 
 from app.adapters.database import Database
+from app.adapters.database import MySQLRow
 from app.repositories import Base
 
 
@@ -36,7 +36,8 @@ READ_PARAMS = (
 )
 
 
-class TourneyPoolMap(TypedDict):
+@dataclass(frozen=True, slots=True)
+class TourneyPoolMap:
     map_id: int
     pool_id: int
     mods: int
@@ -46,6 +47,25 @@ class TourneyPoolMap(TypedDict):
 class TourneyPoolMapsRepository:
     def __init__(self, database: Database) -> None:
         self._database = database
+
+    def _serialize_tourney_pool_map(
+        self,
+        tourney_pool_map: TourneyPoolMap,
+    ) -> MySQLRow:
+        return {
+            "map_id": tourney_pool_map.map_id,
+            "pool_id": tourney_pool_map.pool_id,
+            "mods": tourney_pool_map.mods,
+            "slot": tourney_pool_map.slot,
+        }
+
+    def _deserialize_tourney_pool_map(self, row: MySQLRow) -> TourneyPoolMap:
+        return TourneyPoolMap(
+            map_id=row["map_id"],
+            pool_id=row["pool_id"],
+            mods=row["mods"],
+            slot=row["slot"],
+        )
 
     async def create(
         self,
@@ -70,7 +90,7 @@ class TourneyPoolMapsRepository:
         )
         tourney_pool_map = await self._database.fetch_one(select_stmt)
         assert tourney_pool_map is not None
-        return cast(TourneyPoolMap, tourney_pool_map)
+        return self._deserialize_tourney_pool_map(tourney_pool_map)
 
     async def fetch_many(
         self,
@@ -92,7 +112,10 @@ class TourneyPoolMapsRepository:
             select_stmt = select_stmt.limit(page_size).offset((page - 1) * page_size)
 
         tourney_pool_maps = await self._database.fetch_all(select_stmt)
-        return cast(list[TourneyPoolMap], tourney_pool_maps)
+        return [
+            self._deserialize_tourney_pool_map(tourney_pool_map)
+            for tourney_pool_map in tourney_pool_maps
+        ]
 
     async def fetch_by_pool_and_pick(
         self,
@@ -108,7 +131,11 @@ class TourneyPoolMapsRepository:
             .where(TourneyPoolMapsTable.slot == slot)
         )
         tourney_pool_map = await self._database.fetch_one(select_stmt)
-        return cast(TourneyPoolMap | None, tourney_pool_map)
+        return (
+            self._deserialize_tourney_pool_map(tourney_pool_map)
+            if tourney_pool_map is not None
+            else None
+        )
 
     async def delete_map_from_pool(
         self,
@@ -133,7 +160,7 @@ class TourneyPoolMapsRepository:
         )
 
         await self._database.execute(delete_stmt)
-        return cast(TourneyPoolMap, tourney_pool_map)
+        return self._deserialize_tourney_pool_map(tourney_pool_map)
 
     async def delete_all_in_pool(self, pool_id: int) -> list[TourneyPoolMap]:
         """Delete all map pool entries from a given tourney pool from the database."""
@@ -148,4 +175,7 @@ class TourneyPoolMapsRepository:
             TourneyPoolMapsTable.pool_id == pool_id,
         )
         await self._database.execute(delete_stmt)
-        return cast(list[TourneyPoolMap], tourney_pool_maps)
+        return [
+            self._deserialize_tourney_pool_map(tourney_pool_map)
+            for tourney_pool_map in tourney_pool_maps
+        ]

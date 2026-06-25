@@ -1,8 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
-from typing import TypedDict
-from typing import cast
 
 from sqlalchemy import Column
 from sqlalchemy import DateTime
@@ -13,6 +12,7 @@ from sqlalchemy import insert
 from sqlalchemy import select
 
 from app.adapters.database import Database
+from app.adapters.database import MySQLRow
 from app.repositories import Base
 
 
@@ -37,7 +37,8 @@ READ_PARAMS = (
 )
 
 
-class Log(TypedDict):
+@dataclass(frozen=True, slots=True)
+class Log:
     id: int
     _from: int
     to: int
@@ -49,6 +50,26 @@ class Log(TypedDict):
 class LogsRepository:
     def __init__(self, database: Database) -> None:
         self._database = database
+
+    def _serialize_log(self, log: Log) -> MySQLRow:
+        return {
+            "id": log.id,
+            "from": log._from,
+            "to": log.to,
+            "action": log.action,
+            "msg": log.msg,
+            "time": log.time,
+        }
+
+    def _deserialize_log(self, row: MySQLRow) -> Log:
+        return Log(
+            id=row["id"],
+            _from=row["from"],
+            to=row["to"],
+            action=row["action"],
+            msg=row["msg"],
+            time=row["time"],
+        )
 
     async def create(
         self,
@@ -72,4 +93,4 @@ class LogsRepository:
         select_stmt = select(*READ_PARAMS).where(LogTable.id == rec_id)
         log = await self._database.fetch_one(select_stmt)
         assert log is not None
-        return cast(Log, log)
+        return self._deserialize_log(log)

@@ -31,7 +31,7 @@ async def get_clans(
 ) -> Success[list[Clan]] | Failure:
     listing = await clans_service.fetch_clans(page=page, page_size=page_size)
 
-    response = [Clan.from_mapping(rec) for rec in listing.clans]
+    response = [Clan.model_validate(rec) for rec in listing.clans]
     return responses.success(
         content=response,
         meta={
@@ -57,5 +57,5 @@ async def get_clan(
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
-    response = Clan.from_mapping(data)
+    response = Clan.model_validate(data)
     return responses.success(response)

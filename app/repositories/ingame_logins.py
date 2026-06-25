@@ -1,9 +1,8 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import date
 from datetime import datetime
-from typing import TypedDict
-from typing import cast
 
 from sqlalchemy import Column
 from sqlalchemy import Date
@@ -15,6 +14,7 @@ from sqlalchemy import insert
 from sqlalchemy import select
 
 from app.adapters.database import Database
+from app.adapters.database import MySQLRow
 from app.repositories import Base
 
 
@@ -39,25 +39,39 @@ READ_PARAMS = (
 )
 
 
-class IngameLogin(TypedDict):
+@dataclass(frozen=True, slots=True)
+class IngameLogin:
     id: int
-    userid: str
+    userid: int
     ip: str
     osu_ver: date
     osu_stream: str
     datetime: datetime
 
 
-class InGameLoginUpdateFields(TypedDict, total=False):
-    userid: str
-    ip: str
-    osu_ver: date
-    osu_stream: str
-
-
 class IngameLoginsRepository:
     def __init__(self, database: Database) -> None:
         self._database = database
+
+    def _serialize_ingame_login(self, ingame_login: IngameLogin) -> MySQLRow:
+        return {
+            "id": ingame_login.id,
+            "userid": ingame_login.userid,
+            "ip": ingame_login.ip,
+            "osu_ver": ingame_login.osu_ver,
+            "osu_stream": ingame_login.osu_stream,
+            "datetime": ingame_login.datetime,
+        }
+
+    def _deserialize_ingame_login(self, row: MySQLRow) -> IngameLogin:
+        return IngameLogin(
+            id=row["id"],
+            userid=row["userid"],
+            ip=row["ip"],
+            osu_ver=row["osu_ver"],
+            osu_stream=row["osu_stream"],
+            datetime=row["datetime"],
+        )
 
     async def create(
         self,
@@ -80,13 +94,17 @@ class IngameLoginsRepository:
         ingame_login = await self._database.fetch_one(select_stmt)
 
         assert ingame_login is not None
-        return cast(IngameLogin, ingame_login)
+        return self._deserialize_ingame_login(ingame_login)
 
     async def fetch_one(self, id: int) -> IngameLogin | None:
         """Fetch a login entry from the database."""
         select_stmt = select(*READ_PARAMS).where(IngameLoginsTable.id == id)
         ingame_login = await self._database.fetch_one(select_stmt)
-        return cast(IngameLogin | None, ingame_login)
+        return (
+            self._deserialize_ingame_login(ingame_login)
+            if ingame_login is not None
+            else None
+        )
 
     async def fetch_count(
         self,
@@ -102,7 +120,7 @@ class IngameLoginsRepository:
 
         rec = await self._database.fetch_one(select_stmt)
         assert rec is not None
-        return cast(int, rec["count"])
+        return int(rec["count"])
 
     async def fetch_many(
         self,
@@ -129,4 +147,7 @@ class IngameLoginsRepository:
             select_stmt.limit(page_size).offset((page - 1) * page_size)
 
         ingame_logins = await self._database.fetch_all(select_stmt)
-        return cast(list[IngameLogin], ingame_logins)
+        return [
+            self._deserialize_ingame_login(ingame_login)
+            for ingame_login in ingame_logins
+        ]

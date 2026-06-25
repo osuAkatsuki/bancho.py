@@ -401,12 +401,12 @@ async def top(ctx: Context) -> str | None:
         "AND s.status = 2 "
         "AND b.status in (2, 3) "
         "ORDER BY s.pp DESC LIMIT 10",
-        {"user_id": user["id"], "mode": mode},
+        {"user_id": user.id, "mode": mode},
     )
     if not scores:
         return "No scores"
 
-    user_embed = f"[https://{app.settings.DOMAIN}/u/{user['id']} {user['name']}]"
+    user_embed = f"[https://{app.settings.DOMAIN}/u/{user.id} {user.name}]"
 
     return "\n".join(
         [f"Top 10 scores for {user_embed} ({ctx.args[0]})."]
@@ -604,9 +604,9 @@ async def requests(ctx: Context) -> str | None:
     # group rows into {map_id: [map_request, ...]}
     grouped: dict[int, list[MapRequest]] = {}
     for row in rows:
-        if row["map_id"] not in grouped:
-            grouped[row["map_id"]] = []
-        grouped[row["map_id"]].append(row)
+        if row.map_id not in grouped:
+            grouped[row.map_id] = []
+        grouped[row.map_id].append(row)
 
     if not grouped:
         return "The queue is clean! (0 map request(s))"
@@ -620,10 +620,10 @@ async def requests(ctx: Context) -> str | None:
             log(f"Failed to find requested map ({map_id})?", Ansi.LYELLOW)
             continue
 
-        first_review = min(reviews, key=lambda r: r["datetime"])
+        first_review = min(reviews, key=lambda r: r.datetime)
 
         l.append(
-            f"{len(reviews)}x request(s) starting {first_review['datetime']:%Y-%m-%d}: {bmap.embed}",
+            f"{len(reviews)}x request(s) starting {first_review.datetime:%Y-%m-%d}: {bmap.embed}",
         )
 
     return "\n".join(l)
@@ -683,7 +683,7 @@ async def _map(ctx: Context) -> str | None:
 
             # select all map ids for clearing map requests.
             modified_beatmap_ids = [
-                row["id"]
+                row.id
                 for row in await repositories.maps.fetch_many(
                     set_id=bmap.set_id,
                 )
@@ -901,7 +901,7 @@ async def user(ctx: Context) -> str | None:
         else None
     )
     display_name = (
-        f"[{user_clan['tag']}] {player.name}" if user_clan is not None else player.name
+        f"[{user_clan.tag}] {player.name}" if user_clan is not None else player.name
     )
 
     return "\n".join(
@@ -1936,14 +1936,11 @@ async def mp_loadpool(ctx: Context, match: Match) -> str | None:
     if tourney_pool is None:
         return "Could not find a pool by that name!"
 
-    if (
-        match.tourney_pool is not None
-        and match.tourney_pool["id"] == tourney_pool["id"]
-    ):
-        return f"{tourney_pool['name']} already selected!"
+    if match.tourney_pool is not None and match.tourney_pool.id == tourney_pool.id:
+        return f"{tourney_pool.name} already selected!"
 
     match.tourney_pool = tourney_pool
-    return f"{tourney_pool['name']} selected."
+    return f"{tourney_pool.name} selected."
 
 
 @mp_commands.add(Privileges.UNRESTRICTED, aliases=["ulp"])
@@ -1985,7 +1982,7 @@ async def mp_ban(ctx: Context, match: Match) -> str | None:
     slot = int(r_match[2])
 
     map_pick = await get_legacy_repositories().tourney_pool_maps.fetch_by_pool_and_pick(
-        pool_id=match.tourney_pool["id"],
+        pool_id=match.tourney_pool.id,
         mods=mods,
         slot=slot,
     )
@@ -2021,7 +2018,7 @@ async def mp_unban(ctx: Context, match: Match) -> str | None:
     slot = int(r_match[2])
 
     map_pick = await get_legacy_repositories().tourney_pool_maps.fetch_by_pool_and_pick(
-        pool_id=match.tourney_pool["id"],
+        pool_id=match.tourney_pool.id,
         mods=mods,
         slot=slot,
     )
@@ -2057,7 +2054,7 @@ async def mp_pick(ctx: Context, match: Match) -> str | None:
     slot = int(r_match[2])
 
     map_pick = await get_legacy_repositories().tourney_pool_maps.fetch_by_pool_and_pick(
-        pool_id=match.tourney_pool["id"],
+        pool_id=match.tourney_pool.id,
         mods=mods,
         slot=slot,
     )
@@ -2067,7 +2064,7 @@ async def mp_pick(ctx: Context, match: Match) -> str | None:
     if (mods, slot) in match.bans:
         return f"{mods_slot} has been banned from being picked."
 
-    bmap = await Beatmap.from_bid(map_pick["map_id"])
+    bmap = await Beatmap.from_bid(map_pick.map_id)
     if not bmap:
         return f"Found no beatmap for {mods_slot} pick."
 
@@ -2153,10 +2150,10 @@ async def pool_delete(ctx: Context) -> str | None:
         return "Could not find a pool by that name!"
 
     await get_legacy_repositories().tourney_pools.delete_by_id(
-        existing_pool["id"],
+        existing_pool.id,
     )
     await get_legacy_repositories().tourney_pool_maps.delete_all_in_pool(
-        pool_id=existing_pool["id"],
+        pool_id=existing_pool.id,
     )
 
     return f"{name} deleted."
@@ -2194,20 +2191,20 @@ async def pool_add(ctx: Context) -> str | None:
         return "Could not find a pool by that name!"
 
     tourney_pool_maps = await get_legacy_repositories().tourney_pool_maps.fetch_many(
-        pool_id=tourney_pool["id"],
+        pool_id=tourney_pool.id,
     )
     for pool_map in tourney_pool_maps:
-        if mods == pool_map["mods"] and slot == pool_map["slot"]:
-            pool_beatmap = await Beatmap.from_bid(pool_map["map_id"])
+        if mods == pool_map.mods and slot == pool_map.slot:
+            pool_beatmap = await Beatmap.from_bid(pool_map.map_id)
             assert pool_beatmap is not None
             return f"{mods_slot} is already {pool_beatmap.embed}!"
 
-        if pool_map["map_id"] == bmap.id:
+        if pool_map.map_id == bmap.id:
             return f"{bmap.embed} is already in the pool!"
 
     await get_legacy_repositories().tourney_pool_maps.create(
         map_id=bmap.id,
-        pool_id=tourney_pool["id"],
+        pool_id=tourney_pool.id,
         mods=mods,
         slot=slot,
     )
@@ -2240,7 +2237,7 @@ async def pool_remove(ctx: Context) -> str | None:
         return "Could not find a pool by that name!"
 
     map_pick = await get_legacy_repositories().tourney_pool_maps.fetch_by_pool_and_pick(
-        pool_id=tourney_pool["id"],
+        pool_id=tourney_pool.id,
         mods=mods,
         slot=slot,
     )
@@ -2248,8 +2245,8 @@ async def pool_remove(ctx: Context) -> str | None:
         return f"Found no {mods_slot} pick in the pool."
 
     await get_legacy_repositories().tourney_pool_maps.delete_map_from_pool(
-        map_pick["pool_id"],
-        map_pick["map_id"],
+        map_pick.pool_id,
+        map_pick.map_id,
     )
 
     return f"{mods_slot} removed from {name}."
@@ -2269,15 +2266,14 @@ async def pool_list(ctx: Context) -> str | None:
 
     for pool in tourney_pools:
         created_by = await get_legacy_repositories().users.fetch_one(
-            id=pool["created_by"],
+            id=pool.created_by,
         )
         if created_by is None:
-            log(f"Could not find pool creator (Id {pool['created_by']}).", Ansi.LRED)
+            log(f"Could not find pool creator (Id {pool.created_by}).", Ansi.LRED)
             continue
 
         l.append(
-            f"[{pool['created_at']:%Y-%m-%d}] "
-            f"{pool['name']}, by {created_by['name']}.",
+            f"[{pool.created_at:%Y-%m-%d}] " f"{pool.name}, by {created_by.name}.",
         )
 
     return "\n".join(l)
@@ -2297,24 +2293,24 @@ async def pool_info(ctx: Context) -> str | None:
     if tourney_pool is None:
         return "Could not find a pool by that name!"
 
-    _time = tourney_pool["created_at"].strftime("%H:%M:%S%p")
-    _date = tourney_pool["created_at"].strftime("%Y-%m-%d")
+    _time = tourney_pool.created_at.strftime("%H:%M:%S%p")
+    _date = tourney_pool.created_at.strftime("%Y-%m-%d")
     datetime_fmt = f"Created at {_time} on {_date}"
     l = [
-        f"{tourney_pool['id']}. {tourney_pool['name']}, by {tourney_pool['created_by']} | {datetime_fmt}.",
+        f"{tourney_pool.id}. {tourney_pool.name}, by {tourney_pool.created_by} | {datetime_fmt}.",
     ]
 
     for tourney_map in sorted(
         await get_legacy_repositories().tourney_pool_maps.fetch_many(
-            pool_id=tourney_pool["id"],
+            pool_id=tourney_pool.id,
         ),
-        key=lambda x: (repr(Mods(x["mods"])), x["slot"]),
+        key=lambda x: (repr(Mods(x.mods)), x.slot),
     ):
-        bmap = await Beatmap.from_bid(tourney_map["map_id"])
+        bmap = await Beatmap.from_bid(tourney_map.map_id)
         if bmap is None:
-            log(f"Could not find beatmap {tourney_map['map_id']}.", Ansi.LRED)
+            log(f"Could not find beatmap {tourney_map.map_id}.", Ansi.LRED)
             continue
-        l.append(f"{Mods(tourney_map['mods'])!r}{tourney_map['slot']}: {bmap.embed}")
+        l.append(f"{Mods(tourney_map.mods)!r}{tourney_map.slot}: {bmap.embed}")
 
     return "\n".join(l)
 
@@ -2360,7 +2356,7 @@ async def clan_create(ctx: Context) -> str | None:
             id=ctx.player.clan_id,
         )
         if clan:
-            clan_display_name = f"[{clan['tag']}] {clan['name']}"
+            clan_display_name = f"[{clan.tag}] {clan.name}"
             return f"You're already a member of {clan_display_name}!"
 
     if await get_legacy_repositories().clans.fetch_one(name=name):
@@ -2377,18 +2373,18 @@ async def clan_create(ctx: Context) -> str | None:
     )
 
     # set owner's clan & clan priv (cache & sql)
-    ctx.player.clan_id = new_clan["id"]
+    ctx.player.clan_id = new_clan.id
     ctx.player.clan_priv = ClanPrivileges.Owner
 
     await get_legacy_repositories().users.partial_update(
         ctx.player.id,
-        clan_id=new_clan["id"],
+        clan_id=new_clan.id,
         clan_priv=ClanPrivileges.Owner,
     )
 
     # announce clan creation
     announce_chan = app.state.sessions.channels.get_by_name("#announce")
-    clan_display_name = f"[{new_clan['tag']}] {new_clan['name']}"
+    clan_display_name = f"[{new_clan.tag}] {new_clan.name}"
     if announce_chan:
         msg = f"\x01ACTION founded {clan_display_name}."
         announce_chan.send(msg, sender=ctx.player, to_self=True)
@@ -2420,13 +2416,13 @@ async def clan_disband(ctx: Context) -> str | None:
         if not clan:
             return "You're not a member of a clan!"
 
-    await get_legacy_repositories().clans.delete_one(clan["id"])
+    await get_legacy_repositories().clans.delete_one(clan.id)
 
     # remove all members from the clan
     clan_member_ids = [
-        clan_member["id"]
+        clan_member.id
         for clan_member in await get_legacy_repositories().users.fetch_many(
-            clan_id=clan["id"],
+            clan_id=clan.id,
         )
     ]
     for member_id in clan_member_ids:
@@ -2443,7 +2439,7 @@ async def clan_disband(ctx: Context) -> str | None:
 
     # announce clan disbanding
     announce_chan = app.state.sessions.channels.get_by_name("#announce")
-    clan_display_name = f"[{clan['tag']}] {clan['name']}"
+    clan_display_name = f"[{clan.tag}] {clan.name}"
     if announce_chan:
         msg = f"\x01ACTION disbanded {clan_display_name}."
         announce_chan.send(msg, sender=ctx.player, to_self=True)
@@ -2463,16 +2459,16 @@ async def clan_info(ctx: Context) -> str | None:
     if not clan:
         return "Could not find a clan by that tag."
 
-    clan_display_name = f"[{clan['tag']}] {clan['name']}"
-    msg = [f"{clan_display_name} | Founded {clan['created_at']:%b %d, %Y}."]
+    clan_display_name = f"[{clan.tag}] {clan.name}"
+    msg = [f"{clan_display_name} | Founded {clan.created_at:%b %d, %Y}."]
 
     # get members privs from sql
     clan_members = await get_legacy_repositories().users.fetch_many(
-        clan_id=clan["id"],
+        clan_id=clan.id,
     )
-    for member in sorted(clan_members, key=lambda m: m["clan_priv"], reverse=True):
-        priv_str = ("Member", "Officer", "Owner")[member["clan_priv"] - 1]
-        msg.append(f"[{priv_str}] {member['name']}")
+    for member in sorted(clan_members, key=lambda m: m.clan_priv, reverse=True):
+        priv_str = ("Member", "Officer", "Owner")[member.clan_priv - 1]
+        msg.append(f"[{priv_str}] {member.name}")
 
     return "\n".join(msg)
 
@@ -2492,7 +2488,7 @@ async def clan_leave(ctx: Context) -> str | None:
         return "You're not in a clan."
 
     clan_members = await get_legacy_repositories().users.fetch_many(
-        clan_id=clan["id"],
+        clan_id=clan.id,
     )
 
     await get_legacy_repositories().users.partial_update(
@@ -2503,11 +2499,11 @@ async def clan_leave(ctx: Context) -> str | None:
     ctx.player.clan_id = None
     ctx.player.clan_priv = None
 
-    clan_display_name = f"[{clan['tag']}] {clan['name']}"
+    clan_display_name = f"[{clan.tag}] {clan.name}"
 
     if not clan_members:
         # no members left, disband clan
-        await get_legacy_repositories().clans.delete_one(clan["id"])
+        await get_legacy_repositories().clans.delete_one(clan.id)
 
         # announce clan disbanding
         announce_chan = app.state.sessions.channels.get_by_name("#announce")
@@ -2543,7 +2539,7 @@ async def clan_list(ctx: Context) -> str | None:
     msg = [f"bancho.py clans listing ({num_clans} total)."]
 
     for idx, clan in enumerate(all_clans, offset):
-        clan_display_name = f"[{clan['tag']}] {clan['name']}"
+        clan_display_name = f"[{clan.tag}] {clan.name}"
         msg.append(f"{idx + 1}. {clan_display_name}")
 
     return "\n".join(msg)

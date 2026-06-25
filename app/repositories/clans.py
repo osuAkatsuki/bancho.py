@@ -1,8 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
-from typing import TypedDict
-from typing import cast
 
 from sqlalchemy import Column
 from sqlalchemy import DateTime
@@ -18,6 +17,7 @@ from sqlalchemy import update
 from app._typing import UNSET
 from app._typing import _UnsetSentinel
 from app.adapters.database import Database
+from app.adapters.database import MySQLRow
 from app.repositories import Base
 
 
@@ -46,7 +46,8 @@ READ_PARAMS = (
 )
 
 
-class Clan(TypedDict):
+@dataclass(frozen=True, slots=True)
+class Clan:
     id: int
     name: str
     tag: str
@@ -57,6 +58,24 @@ class Clan(TypedDict):
 class ClansRepository:
     def __init__(self, database: Database) -> None:
         self._database = database
+
+    def _serialize_clan(self, clan: Clan) -> MySQLRow:
+        return {
+            "id": clan.id,
+            "name": clan.name,
+            "tag": clan.tag,
+            "owner": clan.owner,
+            "created_at": clan.created_at,
+        }
+
+    def _deserialize_clan(self, row: MySQLRow) -> Clan:
+        return Clan(
+            id=row["id"],
+            name=row["name"],
+            tag=row["tag"],
+            owner=row["owner"],
+            created_at=row["created_at"],
+        )
 
     async def create(
         self,
@@ -77,7 +96,7 @@ class ClansRepository:
         clan = await self._database.fetch_one(select_stmt)
 
         assert clan is not None
-        return cast(Clan, clan)
+        return self._deserialize_clan(clan)
 
     async def fetch_one(
         self,
@@ -102,7 +121,7 @@ class ClansRepository:
             select_stmt = select_stmt.where(ClansTable.owner == owner)
 
         clan = await self._database.fetch_one(select_stmt)
-        return cast(Clan | None, clan)
+        return self._deserialize_clan(clan) if clan is not None else None
 
     async def fetch_count(self) -> int:
         """Fetch the number of clans in the database."""
@@ -110,7 +129,7 @@ class ClansRepository:
         rec = await self._database.fetch_one(select_stmt)
 
         assert rec is not None
-        return cast(int, rec["count"])
+        return int(rec["count"])
 
     async def fetch_many(
         self,
@@ -123,7 +142,7 @@ class ClansRepository:
             select_stmt = select_stmt.limit(page_size).offset((page - 1) * page_size)
 
         clans = await self._database.fetch_all(select_stmt)
-        return cast(list[Clan], clans)
+        return [self._deserialize_clan(clan) for clan in clans]
 
     async def partial_update(
         self,
@@ -145,7 +164,7 @@ class ClansRepository:
 
         select_stmt = select(*READ_PARAMS).where(ClansTable.id == id)
         clan = await self._database.fetch_one(select_stmt)
-        return cast(Clan | None, clan)
+        return self._deserialize_clan(clan) if clan is not None else None
 
     async def delete_one(self, id: int) -> Clan | None:
         """Delete a clan from the database."""
@@ -156,4 +175,4 @@ class ClansRepository:
 
         delete_stmt = delete(ClansTable).where(ClansTable.id == id)
         await self._database.execute(delete_stmt)
-        return cast(Clan, clan)
+        return self._deserialize_clan(clan)

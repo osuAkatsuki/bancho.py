@@ -50,7 +50,7 @@ async def get_maps(
         page_size=page_size,
     )
 
-    response = [Map.from_mapping(rec) for rec in listing.maps]
+    response = [Map.model_validate(rec) for rec in listing.maps]
 
     return responses.success(
         content=response,
@@ -77,5 +77,5 @@ async def get_map(
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
-    response = Map.from_mapping(data)
+    response = Map.model_validate(data)
     return responses.success(response)

@@ -16,26 +16,23 @@ async def test_search_public_filters_to_verified_unrestricted_users() -> None:
     restricted = await factories.create_user()
 
     await users.partial_update(
-        id=visible["id"],
+        id=visible.id,
         name=f"search-{suffix}-visible",
         priv=(Privileges.UNRESTRICTED | Privileges.VERIFIED).value,
     )
     await users.partial_update(
-        id=unverified["id"],
+        id=unverified.id,
         name=f"search-{suffix}-unverified",
         priv=Privileges.UNRESTRICTED.value,
     )
     await users.partial_update(
-        id=restricted["id"],
+        id=restricted.id,
         name=f"search-{suffix}-restricted",
         priv=Privileges.VERIFIED.value,
     )
 
     rows = await users.search_public(name=f"search-{suffix}")
 
-    assert rows == [
-        {
-            "id": visible["id"],
-            "name": f"search-{suffix}-visible",
-        },
+    assert [(row.id, row.name) for row in rows] == [
+        (visible.id, f"search-{suffix}-visible"),
     ]

@@ -1,9 +1,8 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
-from typing import TypedDict
-from typing import cast
 
 from sqlalchemy import Column
 from sqlalchemy import DateTime
@@ -22,6 +21,7 @@ from sqlalchemy.dialects.mysql import TINYINT
 from app._typing import UNSET
 from app._typing import _UnsetSentinel
 from app.adapters.database import Database
+from app.adapters.database import MySQLRow
 from app.repositories import Base
 
 
@@ -101,7 +101,8 @@ READ_PARAMS = (
 )
 
 
-class Map(TypedDict):
+@dataclass(frozen=True, slots=True)
+class Map:
     id: int
     server: str
     set_id: int
@@ -127,7 +128,8 @@ class Map(TypedDict):
     diff: float
 
 
-class MapSetInfo(TypedDict):
+@dataclass(frozen=True, slots=True)
+class MapSetInfo:
     set_id: int
     artist: str
     title: str
@@ -139,6 +141,80 @@ class MapSetInfo(TypedDict):
 class MapsRepository:
     def __init__(self, database: Database) -> None:
         self._database = database
+
+    def _serialize_map(self, map: Map) -> MySQLRow:
+        return {
+            "id": map.id,
+            "server": map.server,
+            "set_id": map.set_id,
+            "status": map.status,
+            "md5": map.md5,
+            "artist": map.artist,
+            "title": map.title,
+            "version": map.version,
+            "creator": map.creator,
+            "filename": map.filename,
+            "last_update": map.last_update,
+            "total_length": map.total_length,
+            "max_combo": map.max_combo,
+            "frozen": map.frozen,
+            "plays": map.plays,
+            "passes": map.passes,
+            "mode": map.mode,
+            "bpm": map.bpm,
+            "cs": map.cs,
+            "ar": map.ar,
+            "od": map.od,
+            "hp": map.hp,
+            "diff": map.diff,
+        }
+
+    def _deserialize_map(self, row: MySQLRow) -> Map:
+        return Map(
+            id=row["id"],
+            server=str(row["server"]),
+            set_id=row["set_id"],
+            status=row["status"],
+            md5=row["md5"],
+            artist=row["artist"],
+            title=row["title"],
+            version=row["version"],
+            creator=row["creator"],
+            filename=row["filename"],
+            last_update=row["last_update"],
+            total_length=row["total_length"],
+            max_combo=row["max_combo"],
+            frozen=bool(row["frozen"]),
+            plays=row["plays"],
+            passes=row["passes"],
+            mode=row["mode"],
+            bpm=row["bpm"],
+            cs=row["cs"],
+            ar=row["ar"],
+            od=row["od"],
+            hp=row["hp"],
+            diff=row["diff"],
+        )
+
+    def _serialize_map_set_info(self, bmapset: MapSetInfo) -> MySQLRow:
+        return {
+            "set_id": bmapset.set_id,
+            "artist": bmapset.artist,
+            "title": bmapset.title,
+            "status": bmapset.status,
+            "creator": bmapset.creator,
+            "last_update": bmapset.last_update,
+        }
+
+    def _deserialize_map_set_info(self, row: MySQLRow) -> MapSetInfo:
+        return MapSetInfo(
+            set_id=row["set_id"],
+            artist=row["artist"],
+            title=row["title"],
+            status=row["status"],
+            creator=row["creator"],
+            last_update=row["last_update"],
+        )
 
     async def create(
         self,
@@ -197,7 +273,7 @@ class MapsRepository:
         select_stmt = select(*READ_PARAMS).where(MapsTable.id == id)
         map = await self._database.fetch_one(select_stmt)
         assert map is not None
-        return cast(Map, map)
+        return self._deserialize_map(map)
 
     async def fetch_one(
         self,
@@ -218,7 +294,7 @@ class MapsRepository:
             select_stmt = select_stmt.where(MapsTable.filename == filename)
 
         map = await self._database.fetch_one(select_stmt)
-        return cast(Map | None, map)
+        return self._deserialize_map(map) if map is not None else None
 
     async def fetch_set_info(
         self,
@@ -252,7 +328,7 @@ class MapsRepository:
             select_stmt = select_stmt.where(MapsTable.md5 == md5)
 
         bmapset = await self._database.fetch_one(select_stmt)
-        return cast(MapSetInfo | None, bmapset)
+        return self._deserialize_map_set_info(bmapset) if bmapset is not None else None
 
     async def fetch_count(
         self,
@@ -286,7 +362,7 @@ class MapsRepository:
 
         rec = await self._database.fetch_one(select_stmt)
         assert rec is not None
-        return cast(int, rec["count"])
+        return int(rec["count"])
 
     async def fetch_many(
         self,
@@ -324,7 +400,7 @@ class MapsRepository:
             select_stmt = select_stmt.limit(page_size).offset((page - 1) * page_size)
 
         maps = await self._database.fetch_all(select_stmt)
-        return cast(list[Map], maps)
+        return [self._deserialize_map(map) for map in maps]
 
     async def partial_update(
         self,
@@ -403,7 +479,7 @@ class MapsRepository:
 
         select_stmt = select(*READ_PARAMS).where(MapsTable.id == id)
         map = await self._database.fetch_one(select_stmt)
-        return cast(Map | None, map)
+        return self._deserialize_map(map) if map is not None else None
 
     async def delete_one(self, id: int) -> Map | None:
         """Delete a beatmap entry from the database."""
@@ -414,4 +490,4 @@ class MapsRepository:
 
         delete_stmt = delete(MapsTable).where(MapsTable.id == id)
         await self._database.execute(delete_stmt)
-        return cast(Map, map)
+        return self._deserialize_map(map)

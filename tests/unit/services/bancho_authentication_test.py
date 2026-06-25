@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from typing import Any
 
 import bcrypt
 
@@ -9,7 +8,7 @@ from app.services.bancho import BanchoAuthenticationService
 
 
 class _FakeUsers:
-    def __init__(self, user: dict[str, Any] | None) -> None:
+    def __init__(self, user: object | None) -> None:
         self.user = user
         self.calls: list[dict[str, object]] = []
 
@@ -18,7 +17,7 @@ class _FakeUsers:
         *,
         name: str,
         fetch_all_fields: bool = False,
-    ) -> dict[str, Any] | None:
+    ) -> object | None:
         self.calls.append(
             {
                 "name": name,
@@ -114,7 +113,7 @@ async def test_authenticate_online_player_rejects_missing_cached_password_hash()
 async def test_authenticate_login_credentials_returns_user_from_cached_password() -> (
     None
 ):
-    user = {"pw_bcrypt": "bcrypt-hash"}
+    user = SimpleNamespace(pw_bcrypt="bcrypt-hash")
     users = _FakeUsers(user)
     service = BanchoAuthenticationService(
         users=users,
@@ -132,7 +131,7 @@ async def test_authenticate_login_credentials_returns_user_from_cached_password(
 
 
 async def test_authenticate_login_credentials_rejects_wrong_cached_password() -> None:
-    user = {"pw_bcrypt": "bcrypt-hash"}
+    user = SimpleNamespace(pw_bcrypt="bcrypt-hash")
     service = BanchoAuthenticationService(
         users=_FakeUsers(user),
         online_players=_FakeOnlinePlayers(None),
@@ -150,7 +149,7 @@ async def test_authenticate_login_credentials_rejects_wrong_cached_password() ->
 async def test_authenticate_login_credentials_caches_valid_bcrypt_password() -> None:
     password_md5 = b"password-md5"
     password_bcrypt = bcrypt.hashpw(password_md5, bcrypt.gensalt(rounds=4))
-    user = {"pw_bcrypt": password_bcrypt.decode()}
+    user = SimpleNamespace(pw_bcrypt=password_bcrypt.decode())
     password_cache: dict[bytes, bytes] = {}
     service = BanchoAuthenticationService(
         users=_FakeUsers(user),

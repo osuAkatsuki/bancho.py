@@ -39,6 +39,7 @@ from app.objects.player import ModeData
 from app.objects.player import Player
 from app.objects.score import Score
 from app.repositories.achievements import Achievement
+from app.repositories.scores import BeatmapLeaderboardScoreRow
 from app.services.accounts import AccountRegistrationResultCode
 from app.services.accounts import AccountRegistrationService
 from app.services.bancho import BanchoAuthenticationService
@@ -447,12 +448,10 @@ async def osuSearchSetHandler(
 
     return Response(
         (
-            "{set_id}.osz|{artist}|{title}|{creator}|"
-            "{status}|{rating:.1f}|{last_update}|{set_id}|"
-            "0|0|0|0|0"
-        )
-        .format(**bmapset, rating=rating)
-        .encode(),
+            f"{bmapset.set_id}.osz|{bmapset.artist}|{bmapset.title}|"
+            f"{bmapset.creator}|{bmapset.status}|{rating:.1f}|"
+            f"{bmapset.last_update}|{bmapset.set_id}|0|0|0|0|0"
+        ).encode(),
     )
     # 0s are threadid, has_vid, has_story, filesize, filesize_novid
 
@@ -495,9 +494,9 @@ def format_achievement_string(file: str, name: str, description: str) -> str:
 def format_achievements(achievements: Sequence[Achievement]) -> str:
     return "/".join(
         format_achievement_string(
-            achievement["file"],
-            achievement["name"],
-            achievement["desc"],
+            achievement.file,
+            achievement.name,
+            achievement.desc,
         )
         for achievement in achievements
     )
@@ -770,6 +769,31 @@ SCORE_LISTING_FMTSTR = (
 )
 
 
+def format_score_listing(
+    score_row: BeatmapLeaderboardScoreRow,
+    *,
+    rank: int,
+) -> str:
+    return SCORE_LISTING_FMTSTR.format(
+        id=score_row.id,
+        name=score_row.name,
+        score=int(round(score_row.leaderboard_value)),
+        max_combo=score_row.max_combo,
+        n50=score_row.n50,
+        n100=score_row.n100,
+        n300=score_row.n300,
+        nmiss=score_row.nmiss,
+        nkatu=score_row.nkatu,
+        ngeki=score_row.ngeki,
+        perfect=score_row.perfect,
+        mods=score_row.mods,
+        userid=score_row.userid,
+        rank=rank,
+        time=score_row.time,
+        has_replay="1",
+    )
+
+
 def format_scores_response(leaderboard: BeatmapLeaderboardResult) -> bytes:
     assert leaderboard.ranked_status is not None
     assert leaderboard.beatmap_id is not None
@@ -810,12 +834,7 @@ def format_scores_response(leaderboard: BeatmapLeaderboardResult) -> bytes:
 
     response_lines.extend(
         [
-            SCORE_LISTING_FMTSTR.format(
-                **score_row,
-                score=int(round(score_row["leaderboard_value"])),
-                has_replay="1",
-                rank=idx + 1,
-            )
+            format_score_listing(score_row, rank=idx + 1)
             for idx, score_row in enumerate(leaderboard.score_rows)
         ],
     )
@@ -924,18 +943,18 @@ async def osuComment(
         for cmt in comments:
             # note: this implementation does not support
             #       "player" or "creator" comment colours
-            if cmt["priv"] & Privileges.NOMINATOR:
+            if cmt.priv & Privileges.NOMINATOR:
                 fmt = "bat"
-            elif cmt["priv"] & Privileges.DONATOR:
+            elif cmt.priv & Privileges.DONATOR:
                 fmt = "supporter"
             else:
                 fmt = ""
 
-            if cmt["colour"]:
-                fmt += f'|{cmt["colour"]}'
+            if cmt.colour:
+                fmt += f"|{cmt.colour}"
 
             ret.append(
-                "{time}\t{target_type}\t{fmt}\t{comment}".format(fmt=fmt, **cmt),
+                f"{cmt.time}\t{cmt.target_type}\t{fmt}\t{cmt.comment}",
             )
 
         return Response("\n".join(ret).encode())

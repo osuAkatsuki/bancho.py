@@ -1,8 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
-from typing import TypedDict
-from typing import cast
 
 import pymysql
 from sqlalchemy import Column
@@ -21,6 +20,7 @@ from sqlalchemy.dialects.mysql import TINYINT
 from app._typing import UNSET
 from app._typing import _UnsetSentinel
 from app.adapters.database import Database
+from app.adapters.database import MySQLRow
 from app.constants.beatmap_statuses import RankedStatus
 from app.constants.privileges import Privileges
 from app.constants.score_statuses import SubmissionStatus
@@ -100,7 +100,8 @@ READ_PARAMS = (
 )
 
 
-class Score(TypedDict):
+@dataclass(frozen=True, slots=True)
+class Score:
     id: int
     map_md5: str
     score: int
@@ -125,17 +126,20 @@ class Score(TypedDict):
     online_checksum: str
 
 
-class FirstPlaceScore(TypedDict):
+@dataclass(frozen=True, slots=True)
+class FirstPlaceScore:
     id: int
     name: str
 
 
-class ScorePerformanceRow(TypedDict):
+@dataclass(frozen=True, slots=True)
+class ScorePerformanceRow:
     pp: float
     acc: float
 
 
-class BeatmapLeaderboardScoreRow(TypedDict):
+@dataclass(frozen=True, slots=True)
+class BeatmapLeaderboardScoreRow:
     id: int
     # score or pp, depending on the requested ScoringMetric.
     leaderboard_value: int | float
@@ -153,7 +157,8 @@ class BeatmapLeaderboardScoreRow(TypedDict):
     name: str
 
 
-class PersonalBestLeaderboardScoreRow(TypedDict):
+@dataclass(frozen=True, slots=True)
+class PersonalBestLeaderboardScoreRow:
     id: int
     # score or pp, depending on the requested ScoringMetric.
     leaderboard_value: int | float
@@ -169,7 +174,8 @@ class PersonalBestLeaderboardScoreRow(TypedDict):
     time: int
 
 
-class PublicPlayerScore(TypedDict):
+@dataclass(frozen=True, slots=True)
+class PublicPlayerScore:
     id: int
     map_md5: str
     score: int
@@ -191,7 +197,8 @@ class PublicPlayerScore(TypedDict):
     perfect: int
 
 
-class PublicMostPlayedMap(TypedDict):
+@dataclass(frozen=True, slots=True)
+class PublicMostPlayedMap:
     md5: str
     id: int
     set_id: int
@@ -203,7 +210,8 @@ class PublicMostPlayedMap(TypedDict):
     plays: int
 
 
-class PublicMapScore(TypedDict):
+@dataclass(frozen=True, slots=True)
+class PublicMapScore:
     map_md5: str
     score: int
     pp: float
@@ -230,7 +238,8 @@ class PublicMapScore(TypedDict):
     clan_tag: str | None
 
 
-class ReplayHeader(TypedDict):
+@dataclass(frozen=True, slots=True)
+class ReplayHeader:
     username: str
     map_md5: str
     artist: str
@@ -253,6 +262,344 @@ class ReplayHeader(TypedDict):
 class ScoresRepository:
     def __init__(self, database: Database) -> None:
         self._database = database
+
+    def _serialize_score(self, score: Score) -> MySQLRow:
+        return {
+            "id": score.id,
+            "map_md5": score.map_md5,
+            "score": score.score,
+            "pp": score.pp,
+            "acc": score.acc,
+            "max_combo": score.max_combo,
+            "mods": score.mods,
+            "n300": score.n300,
+            "n100": score.n100,
+            "n50": score.n50,
+            "nmiss": score.nmiss,
+            "ngeki": score.ngeki,
+            "nkatu": score.nkatu,
+            "grade": score.grade,
+            "status": score.status,
+            "mode": score.mode,
+            "play_time": score.play_time,
+            "time_elapsed": score.time_elapsed,
+            "client_flags": score.client_flags,
+            "userid": score.userid,
+            "perfect": score.perfect,
+            "online_checksum": score.online_checksum,
+        }
+
+    def _deserialize_score(self, row: MySQLRow) -> Score:
+        return Score(
+            id=row["id"],
+            map_md5=row["map_md5"],
+            score=row["score"],
+            pp=row["pp"],
+            acc=row["acc"],
+            max_combo=row["max_combo"],
+            mods=row["mods"],
+            n300=row["n300"],
+            n100=row["n100"],
+            n50=row["n50"],
+            nmiss=row["nmiss"],
+            ngeki=row["ngeki"],
+            nkatu=row["nkatu"],
+            grade=row["grade"],
+            status=row["status"],
+            mode=row["mode"],
+            play_time=row["play_time"],
+            time_elapsed=row["time_elapsed"],
+            client_flags=row["client_flags"],
+            userid=row["userid"],
+            perfect=row["perfect"],
+            online_checksum=row["online_checksum"],
+        )
+
+    def _serialize_first_place_score(self, score: FirstPlaceScore) -> MySQLRow:
+        return {
+            "id": score.id,
+            "name": score.name,
+        }
+
+    def _deserialize_first_place_score(self, row: MySQLRow) -> FirstPlaceScore:
+        return FirstPlaceScore(
+            id=row["id"],
+            name=row["name"],
+        )
+
+    def _serialize_score_performance_row(
+        self,
+        row: ScorePerformanceRow,
+    ) -> MySQLRow:
+        return {
+            "pp": row.pp,
+            "acc": row.acc,
+        }
+
+    def _deserialize_score_performance_row(
+        self,
+        row: MySQLRow,
+    ) -> ScorePerformanceRow:
+        return ScorePerformanceRow(
+            pp=row["pp"],
+            acc=row["acc"],
+        )
+
+    def _serialize_beatmap_leaderboard_score_row(
+        self,
+        row: BeatmapLeaderboardScoreRow,
+    ) -> MySQLRow:
+        return {
+            "id": row.id,
+            "leaderboard_value": row.leaderboard_value,
+            "max_combo": row.max_combo,
+            "n50": row.n50,
+            "n100": row.n100,
+            "n300": row.n300,
+            "nmiss": row.nmiss,
+            "nkatu": row.nkatu,
+            "ngeki": row.ngeki,
+            "perfect": row.perfect,
+            "mods": row.mods,
+            "time": row.time,
+            "userid": row.userid,
+            "name": row.name,
+        }
+
+    def _deserialize_beatmap_leaderboard_score_row(
+        self,
+        row: MySQLRow,
+    ) -> BeatmapLeaderboardScoreRow:
+        return BeatmapLeaderboardScoreRow(
+            id=row["id"],
+            leaderboard_value=row["leaderboard_value"],
+            max_combo=row["max_combo"],
+            n50=row["n50"],
+            n100=row["n100"],
+            n300=row["n300"],
+            nmiss=row["nmiss"],
+            nkatu=row["nkatu"],
+            ngeki=row["ngeki"],
+            perfect=row["perfect"],
+            mods=row["mods"],
+            time=row["time"],
+            userid=row["userid"],
+            name=row["name"],
+        )
+
+    def _serialize_personal_best_leaderboard_score_row(
+        self,
+        row: PersonalBestLeaderboardScoreRow,
+    ) -> MySQLRow:
+        return {
+            "id": row.id,
+            "leaderboard_value": row.leaderboard_value,
+            "max_combo": row.max_combo,
+            "n50": row.n50,
+            "n100": row.n100,
+            "n300": row.n300,
+            "nmiss": row.nmiss,
+            "nkatu": row.nkatu,
+            "ngeki": row.ngeki,
+            "perfect": row.perfect,
+            "mods": row.mods,
+            "time": row.time,
+        }
+
+    def _deserialize_personal_best_leaderboard_score_row(
+        self,
+        row: MySQLRow,
+    ) -> PersonalBestLeaderboardScoreRow:
+        return PersonalBestLeaderboardScoreRow(
+            id=row["id"],
+            leaderboard_value=row["leaderboard_value"],
+            max_combo=row["max_combo"],
+            n50=row["n50"],
+            n100=row["n100"],
+            n300=row["n300"],
+            nmiss=row["nmiss"],
+            nkatu=row["nkatu"],
+            ngeki=row["ngeki"],
+            perfect=row["perfect"],
+            mods=row["mods"],
+            time=row["time"],
+        )
+
+    def _serialize_public_player_score(self, row: PublicPlayerScore) -> MySQLRow:
+        return {
+            "id": row.id,
+            "map_md5": row.map_md5,
+            "score": row.score,
+            "pp": row.pp,
+            "acc": row.acc,
+            "max_combo": row.max_combo,
+            "mods": row.mods,
+            "n300": row.n300,
+            "n100": row.n100,
+            "n50": row.n50,
+            "nmiss": row.nmiss,
+            "ngeki": row.ngeki,
+            "nkatu": row.nkatu,
+            "grade": row.grade,
+            "status": row.status,
+            "mode": row.mode,
+            "play_time": row.play_time,
+            "time_elapsed": row.time_elapsed,
+            "perfect": row.perfect,
+        }
+
+    def _deserialize_public_player_score(self, row: MySQLRow) -> PublicPlayerScore:
+        return PublicPlayerScore(
+            id=row["id"],
+            map_md5=row["map_md5"],
+            score=row["score"],
+            pp=row["pp"],
+            acc=row["acc"],
+            max_combo=row["max_combo"],
+            mods=row["mods"],
+            n300=row["n300"],
+            n100=row["n100"],
+            n50=row["n50"],
+            nmiss=row["nmiss"],
+            ngeki=row["ngeki"],
+            nkatu=row["nkatu"],
+            grade=row["grade"],
+            status=row["status"],
+            mode=row["mode"],
+            play_time=row["play_time"],
+            time_elapsed=row["time_elapsed"],
+            perfect=row["perfect"],
+        )
+
+    def _serialize_public_most_played_map(
+        self,
+        row: PublicMostPlayedMap,
+    ) -> MySQLRow:
+        return {
+            "md5": row.md5,
+            "id": row.id,
+            "set_id": row.set_id,
+            "status": row.status,
+            "artist": row.artist,
+            "title": row.title,
+            "version": row.version,
+            "creator": row.creator,
+            "plays": row.plays,
+        }
+
+    def _deserialize_public_most_played_map(
+        self,
+        row: MySQLRow,
+    ) -> PublicMostPlayedMap:
+        return PublicMostPlayedMap(
+            md5=row["md5"],
+            id=row["id"],
+            set_id=row["set_id"],
+            status=row["status"],
+            artist=row["artist"],
+            title=row["title"],
+            version=row["version"],
+            creator=row["creator"],
+            plays=row["plays"],
+        )
+
+    def _serialize_public_map_score(self, row: PublicMapScore) -> MySQLRow:
+        return {
+            "map_md5": row.map_md5,
+            "score": row.score,
+            "pp": row.pp,
+            "acc": row.acc,
+            "max_combo": row.max_combo,
+            "mods": row.mods,
+            "n300": row.n300,
+            "n100": row.n100,
+            "n50": row.n50,
+            "nmiss": row.nmiss,
+            "ngeki": row.ngeki,
+            "nkatu": row.nkatu,
+            "grade": row.grade,
+            "status": row.status,
+            "mode": row.mode,
+            "play_time": row.play_time,
+            "time_elapsed": row.time_elapsed,
+            "userid": row.userid,
+            "perfect": row.perfect,
+            "player_name": row.player_name,
+            "player_country": row.player_country,
+            "clan_id": row.clan_id,
+            "clan_name": row.clan_name,
+            "clan_tag": row.clan_tag,
+        }
+
+    def _deserialize_public_map_score(self, row: MySQLRow) -> PublicMapScore:
+        return PublicMapScore(
+            map_md5=row["map_md5"],
+            score=row["score"],
+            pp=row["pp"],
+            acc=row["acc"],
+            max_combo=row["max_combo"],
+            mods=row["mods"],
+            n300=row["n300"],
+            n100=row["n100"],
+            n50=row["n50"],
+            nmiss=row["nmiss"],
+            ngeki=row["ngeki"],
+            nkatu=row["nkatu"],
+            grade=row["grade"],
+            status=row["status"],
+            mode=row["mode"],
+            play_time=row["play_time"],
+            time_elapsed=row["time_elapsed"],
+            userid=row["userid"],
+            perfect=row["perfect"],
+            player_name=row["player_name"],
+            player_country=row["player_country"],
+            clan_id=row["clan_id"],
+            clan_name=row["clan_name"],
+            clan_tag=row["clan_tag"],
+        )
+
+    def _serialize_replay_header(self, row: ReplayHeader) -> MySQLRow:
+        return {
+            "username": row.username,
+            "map_md5": row.map_md5,
+            "artist": row.artist,
+            "title": row.title,
+            "version": row.version,
+            "mode": row.mode,
+            "n300": row.n300,
+            "n100": row.n100,
+            "n50": row.n50,
+            "ngeki": row.ngeki,
+            "nkatu": row.nkatu,
+            "nmiss": row.nmiss,
+            "score": row.score,
+            "max_combo": row.max_combo,
+            "perfect": row.perfect,
+            "mods": row.mods,
+            "play_time": row.play_time,
+        }
+
+    def _deserialize_replay_header(self, row: MySQLRow) -> ReplayHeader:
+        return ReplayHeader(
+            username=row["username"],
+            map_md5=row["map_md5"],
+            artist=row["artist"],
+            title=row["title"],
+            version=row["version"],
+            mode=row["mode"],
+            n300=row["n300"],
+            n100=row["n100"],
+            n50=row["n50"],
+            ngeki=row["ngeki"],
+            nkatu=row["nkatu"],
+            nmiss=row["nmiss"],
+            score=row["score"],
+            max_combo=row["max_combo"],
+            perfect=row["perfect"],
+            mods=row["mods"],
+            play_time=row["play_time"],
+        )
 
     async def create(
         self,
@@ -309,7 +656,7 @@ class ScoresRepository:
         select_stmt = select(*READ_PARAMS).where(ScoresTable.id == rec_id)
         _score = await self._database.fetch_one(select_stmt)
         assert _score is not None
-        return cast(Score, _score)
+        return self._deserialize_score(_score)
 
     async def mark_previous_best_scores_submitted(
         self,
@@ -354,7 +701,7 @@ class ScoresRepository:
         )
 
         scores = await self._database.fetch_all(select_stmt)
-        return cast(list[ScorePerformanceRow], scores)
+        return [self._deserialize_score_performance_row(score) for score in scores]
 
     async def fetch_first_place_score(
         self,
@@ -381,14 +728,18 @@ class ScoresRepository:
         )
 
         first_place_score = await self._database.fetch_one(select_stmt)
-        return cast(FirstPlaceScore | None, first_place_score)
+        return (
+            self._deserialize_first_place_score(first_place_score)
+            if first_place_score is not None
+            else None
+        )
 
     async def fetch_one_by_online_checksum(self, online_checksum: str) -> Score | None:
         select_stmt = select(*READ_PARAMS).where(
             ScoresTable.online_checksum == online_checksum,
         )
         _score = await self._database.fetch_one(select_stmt)
-        return cast(Score | None, _score)
+        return self._deserialize_score(_score) if _score is not None else None
 
     async def fetch_beatmap_leaderboard_scores(
         self,
@@ -449,7 +800,10 @@ class ScoresRepository:
             select_stmt = select_stmt.where(UsersTable.country == country)
 
         score_rows = await self._database.fetch_all(select_stmt)
-        return cast(list[BeatmapLeaderboardScoreRow], score_rows)
+        return [
+            self._deserialize_beatmap_leaderboard_score_row(score_row)
+            for score_row in score_rows
+        ]
 
     async def fetch_personal_best_leaderboard_score(
         self,
@@ -489,7 +843,9 @@ class ScoresRepository:
 
         personal_best_score_row = await self._database.fetch_one(select_stmt)
         return (
-            cast(PersonalBestLeaderboardScoreRow, personal_best_score_row)
+            self._deserialize_personal_best_leaderboard_score_row(
+                personal_best_score_row,
+            )
             if personal_best_score_row is not None
             else None
         )
@@ -593,7 +949,7 @@ class ScoresRepository:
         select_stmt = select_stmt.order_by(sort_column.desc()).limit(limit)
 
         scores = await self._database.fetch_all(select_stmt)
-        return cast(list[PublicPlayerScore], scores)
+        return [self._deserialize_public_player_score(score) for score in scores]
 
     async def fetch_public_player_most_played_maps(
         self,
@@ -626,7 +982,7 @@ class ScoresRepository:
         )
 
         maps = await self._database.fetch_all(select_stmt)
-        return cast(list[PublicMostPlayedMap], maps)
+        return [self._deserialize_public_most_played_map(map) for map in maps]
 
     async def fetch_public_map_scores(
         self,
@@ -692,7 +1048,7 @@ class ScoresRepository:
         select_stmt = select_stmt.order_by(sort_column.desc()).limit(limit)
 
         scores = await self._database.fetch_all(select_stmt)
-        return cast(list[PublicMapScore], scores)
+        return [self._deserialize_public_map_score(score) for score in scores]
 
     async def fetch_replay_header(self, score_id: int) -> ReplayHeader | None:
         select_stmt = (
@@ -722,12 +1078,16 @@ class ScoresRepository:
         )
 
         replay_header = await self._database.fetch_one(select_stmt)
-        return cast(ReplayHeader | None, replay_header)
+        return (
+            self._deserialize_replay_header(replay_header)
+            if replay_header is not None
+            else None
+        )
 
     async def fetch_one(self, id: int) -> Score | None:
         select_stmt = select(*READ_PARAMS).where(ScoresTable.id == id)
         _score = await self._database.fetch_one(select_stmt)
-        return cast(Score | None, _score)
+        return self._deserialize_score(_score) if _score is not None else None
 
     async def fetch_count(
         self,
@@ -751,7 +1111,7 @@ class ScoresRepository:
 
         rec = await self._database.fetch_one(select_stmt)
         assert rec is not None
-        return cast(int, rec["count"])
+        return int(rec["count"])
 
     async def fetch_many(
         self,
@@ -779,7 +1139,7 @@ class ScoresRepository:
             select_stmt = select_stmt.limit(page_size).offset((page - 1) * page_size)
 
         scores = await self._database.fetch_all(select_stmt)
-        return cast(list[Score], scores)
+        return [self._deserialize_score(score) for score in scores]
 
     async def partial_update(
         self,
@@ -798,6 +1158,6 @@ class ScoresRepository:
 
         select_stmt = select(*READ_PARAMS).where(ScoresTable.id == id)
         _score = await self._database.fetch_one(select_stmt)
-        return cast(Score | None, _score)
+        return self._deserialize_score(_score) if _score is not None else None
 
     # TODO: delete

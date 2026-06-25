@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
-from typing import TypedDict
-from typing import cast
 
 from app._typing import UNSET
 from app._typing import _UnsetSentinel
 from app.adapters.database import Database
+from app.adapters.database import MySQLRow
 from app.repositories import Base
 
 if TYPE_CHECKING:
@@ -49,7 +49,8 @@ READ_PARAMS = (
 )
 
 
-class Achievement(TypedDict):
+@dataclass(frozen=True, slots=True)
+class Achievement:
     id: int
     file: str
     name: str
@@ -60,6 +61,24 @@ class Achievement(TypedDict):
 class AchievementsRepository:
     def __init__(self, database: Database) -> None:
         self._database = database
+
+    def _serialize_achievement(self, achievement: Achievement) -> MySQLRow:
+        return {
+            "id": achievement.id,
+            "file": achievement.file,
+            "name": achievement.name,
+            "desc": achievement.desc,
+            "cond": achievement.cond,
+        }
+
+    def _deserialize_achievement(self, row: MySQLRow) -> Achievement:
+        return Achievement(
+            id=row["id"],
+            file=row["file"],
+            name=row["name"],
+            desc=row["desc"],
+            cond=eval(f'lambda score, mode_vn: {row["cond"]}'),
+        )
 
     async def create(
         self,
@@ -81,8 +100,7 @@ class AchievementsRepository:
         achievement = await self._database.fetch_one(select_stmt)
         assert achievement is not None
 
-        achievement["cond"] = eval(f'lambda score, mode_vn: {achievement["cond"]}')
-        return cast(Achievement, achievement)
+        return self._deserialize_achievement(achievement)
 
     async def fetch_one(
         self,
@@ -104,8 +122,7 @@ class AchievementsRepository:
         if achievement is None:
             return None
 
-        achievement["cond"] = eval(f'lambda score, mode_vn: {achievement["cond"]}')
-        return cast(Achievement, achievement)
+        return self._deserialize_achievement(achievement)
 
     async def fetch_count(self) -> int:
         """Fetch the number of achievements."""
@@ -113,7 +130,7 @@ class AchievementsRepository:
 
         rec = await self._database.fetch_one(select_stmt)
         assert rec is not None
-        return cast(int, rec["count"])
+        return int(rec["count"])
 
     async def fetch_many(
         self,
@@ -126,10 +143,9 @@ class AchievementsRepository:
             select_stmt = select_stmt.limit(page_size).offset((page - 1) * page_size)
 
         achievements = await self._database.fetch_all(select_stmt)
-        for achievement in achievements:
-            achievement["cond"] = eval(f'lambda score, mode_vn: {achievement["cond"]}')
-
-        return cast(list[Achievement], achievements)
+        return [
+            self._deserialize_achievement(achievement) for achievement in achievements
+        ]
 
     async def partial_update(
         self,
@@ -157,8 +173,7 @@ class AchievementsRepository:
         if achievement is None:
             return None
 
-        achievement["cond"] = eval(f'lambda score, mode_vn: {achievement["cond"]}')
-        return cast(Achievement, achievement)
+        return self._deserialize_achievement(achievement)
 
     async def delete_one(
         self,
@@ -173,5 +188,4 @@ class AchievementsRepository:
         delete_stmt = delete(AchievementsTable).where(AchievementsTable.id == id)
         await self._database.execute(delete_stmt)
 
-        achievement["cond"] = eval(f'lambda score, mode_vn: {achievement["cond"]}')
-        return cast(Achievement, achievement)
+        return self._deserialize_achievement(achievement)

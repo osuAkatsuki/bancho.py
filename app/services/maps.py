@@ -101,20 +101,20 @@ class BeatmapInfoService:
             # send back vanilla grades. In theory this could be user-customizable.
             grades = ["N", "N", "N", "N"]
             for score in await self.scores.fetch_many(
-                map_md5=beatmap["md5"],
+                map_md5=beatmap.md5,
                 user_id=player_id,
                 mode=vanilla_mode,
                 status=SubmissionStatus.BEST,
             ):
-                grades[score["mode"]] = score["grade"]
+                grades[score.mode] = score.grade
 
             beatmap_info.append(
                 BeatmapInfo(
                     index=idx,
-                    id=beatmap["id"],
-                    set_id=beatmap["set_id"],
-                    md5=beatmap["md5"],
-                    status=beatmap["status"],
+                    id=beatmap.id,
+                    set_id=beatmap.set_id,
+                    md5=beatmap.md5,
+                    status=beatmap.status,
                     grades=grades,
                 ),
             )
@@ -169,7 +169,7 @@ class BeatmapRatingService:
             )
 
         map_ratings = await self.ratings.fetch_many(map_md5=map_md5)
-        ratings = [row["rating"] for row in map_ratings]
+        ratings = [row.rating for row in map_ratings]
         return BeatmapRatingResult(
             code=BeatmapRatingResultCode.ALREADY_VOTED,
             average_rating=sum(ratings) / len(ratings),

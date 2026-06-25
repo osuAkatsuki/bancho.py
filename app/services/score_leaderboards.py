@@ -87,18 +87,31 @@ class ScoreLeaderboardsService:
             )
         )
 
-        ranked_personal_best_score_row = None
+        ranked_personal_best_score_row: PersonalBestLeaderboardScoreListing | None = (
+            None
+        )
         if personal_best_score_row is not None:
             rank = await self.scores.fetch_personal_best_leaderboard_rank(
                 map_md5=map_md5,
                 mode=mode,
                 scoring_metric=scoring_metric,
-                score=personal_best_score_row["leaderboard_value"],
+                score=personal_best_score_row.leaderboard_value,
             )
-            ranked_personal_best_score_row = PersonalBestLeaderboardScoreListing(
-                **personal_best_score_row,
-                rank=rank,
-            )
+            ranked_personal_best_score_row = {
+                "id": personal_best_score_row.id,
+                "leaderboard_value": personal_best_score_row.leaderboard_value,
+                "max_combo": personal_best_score_row.max_combo,
+                "n50": personal_best_score_row.n50,
+                "n100": personal_best_score_row.n100,
+                "n300": personal_best_score_row.n300,
+                "nmiss": personal_best_score_row.nmiss,
+                "nkatu": personal_best_score_row.nkatu,
+                "ngeki": personal_best_score_row.ngeki,
+                "perfect": personal_best_score_row.perfect,
+                "mods": personal_best_score_row.mods,
+                "time": personal_best_score_row.time,
+                "rank": rank,
+            }
 
         return LeaderboardScores(
             score_rows=score_rows,

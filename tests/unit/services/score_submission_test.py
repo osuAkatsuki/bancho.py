@@ -8,7 +8,6 @@ from pathlib import Path
 from types import SimpleNamespace
 from types import TracebackType
 from typing import TypedDict
-from typing import cast
 
 import pytest
 
@@ -39,38 +38,10 @@ class _FirstPlaceScoreFetch(TypedDict):
     scoring_metric: ScoringMetric
 
 
-class _CreatedScore(TypedDict):
-    id: int
-
-
 class _PreviousBestUpdate(TypedDict):
     map_md5: str
     user_id: int
     mode: int
-
-
-class _CreatedScoreFields(TypedDict):
-    map_md5: str
-    score: int
-    pp: float
-    acc: float
-    max_combo: int
-    mods: int
-    n300: int
-    n100: int
-    n50: int
-    nmiss: int
-    ngeki: int
-    nkatu: int
-    grade: str
-    status: int
-    mode: int
-    play_time: datetime
-    time_elapsed: int
-    client_flags: int
-    user_id: int
-    perfect: int
-    online_checksum: str
 
 
 class _ScorePerformanceFetch(TypedDict):
@@ -505,7 +476,7 @@ def test_announce_first_place_sends_message_with_previous_first_place() -> None:
 
     score_submission.announce_first_place(
         score,
-        previous_first_place_score={"id": 9, "name": "old-user"},
+        previous_first_place_score=FirstPlaceScore(id=9, name="old-user"),
         announce_channel=channel,
         domain="osu.cmyui.xyz",
     )
@@ -528,7 +499,7 @@ def test_announce_first_place_omits_previous_holder_for_same_player() -> None:
 
     score_submission.announce_first_place(
         score,
-        previous_first_place_score={"id": 6, "name": "test-user"},
+        previous_first_place_score=FirstPlaceScore(id=6, name="test-user"),
         announce_channel=channel,
         domain="osu.cmyui.xyz",
     )
@@ -592,7 +563,7 @@ def test_announce_first_place_skips_ineligible_scores(condition: str) -> None:
 
     score_submission.announce_first_place(
         score,
-        previous_first_place_score={"id": 9, "name": "old-user"},
+        previous_first_place_score=FirstPlaceScore(id=9, name="old-user"),
         announce_channel=channel,
         domain="osu.cmyui.xyz",
     )
@@ -615,27 +586,27 @@ def test_announce_first_place_requires_announce_channel() -> None:
 class _FakeAchievements:
     async def fetch_many(self) -> list[Achievement]:
         return [
-            {
-                "id": 1,
-                "file": "osu-skill-pass-4",
-                "name": "Insanity Approaches",
-                "desc": "You're not twitching, you're just ready.",
-                "cond": lambda score, mode_vn: True,
-            },
-            {
-                "id": 2,
-                "file": "osu-combo-500",
-                "name": "500 Combo",
-                "desc": "Achieve a 500 combo.",
-                "cond": lambda score, mode_vn: False,
-            },
-            {
-                "id": 3,
-                "file": "all-intro-hidden",
-                "name": "Blindsight",
-                "desc": "I can see just perfectly",
-                "cond": lambda score, mode_vn: True,
-            },
+            Achievement(
+                id=1,
+                file="osu-skill-pass-4",
+                name="Insanity Approaches",
+                desc="You're not twitching, you're just ready.",
+                cond=lambda score, mode_vn: True,
+            ),
+            Achievement(
+                id=2,
+                file="osu-combo-500",
+                name="500 Combo",
+                desc="Achieve a 500 combo.",
+                cond=lambda score, mode_vn: False,
+            ),
+            Achievement(
+                id=3,
+                file="all-intro-hidden",
+                name="Blindsight",
+                desc="I can see just perfectly",
+                cond=lambda score, mode_vn: True,
+            ),
         ]
 
 
@@ -649,7 +620,7 @@ class _FakeUserAchievements:
         user_id: int,
     ) -> list[UserAchievement]:
         assert user_id == 6
-        return [{"userid": 6, "achid": 3}]
+        return [UserAchievement(userid=6, achid=3)]
 
     async def create(
         self,
@@ -658,7 +629,7 @@ class _FakeUserAchievements:
     ) -> UserAchievement:
         assert user_id == 6
         self.created_achievement_ids.append(achievement_id)
-        return {"userid": user_id, "achid": achievement_id}
+        return UserAchievement(userid=user_id, achid=achievement_id)
 
 
 class _FakeTransaction:
@@ -760,6 +731,11 @@ class _FakeOsuFileAvailability:
         return self.available
 
 
+class _CreatedScore:
+    def __init__(self, id: int) -> None:
+        self.id = id
+
+
 class _FakeScoresRepository:
     def __init__(
         self,
@@ -770,7 +746,7 @@ class _FakeScoresRepository:
     ) -> None:
         self.calls: list[str] = []
         self.previous_best_updates: list[_PreviousBestUpdate] = []
-        self.created_scores: list[_CreatedScoreFields] = []
+        self.created_scores: list[dict[str, object]] = []
         self.best_scores = best_scores if best_scores is not None else []
         self.first_place_score = first_place_score
         self.duplicate_score = duplicate_score
@@ -784,10 +760,10 @@ class _FakeScoresRepository:
         **score_fields: object,
     ) -> _CreatedScore:
         self.calls.append("create")
-        self.created_scores.append(cast(_CreatedScoreFields, score_fields))
+        self.created_scores.append(score_fields)
         if self.raise_duplicate_on_create:
             raise DuplicateScoreError
-        return {"id": 123}
+        return _CreatedScore(id=123)
 
     async def mark_previous_best_scores_submitted(
         self,
@@ -1115,8 +1091,8 @@ async def test_persist_score_submission_stats_updates_ranked_best_score_side_eff
     stats_repo = _FakeStatsRepository()
     scores_repo = _FakeScorePerformanceRepository(
         best_scores=[
-            {"pp": 100.0, "acc": 98.0},
-            {"pp": 50.0, "acc": 95.0},
+            ScorePerformanceRow(pp=100.0, acc=98.0),
+            ScorePerformanceRow(pp=50.0, acc=95.0),
         ],
     )
     maps_repo = _FakeMapsRepository()
@@ -1271,10 +1247,10 @@ async def test_persist_score_submission_wraps_db_writes_in_transaction() -> None
     database = _FakeDatabaseTransactions()
     scores = _FakeScoresRepository(
         best_scores=[
-            {"pp": 100.0, "acc": 98.0},
-            {"pp": 50.0, "acc": 95.0},
+            ScorePerformanceRow(pp=100.0, acc=98.0),
+            ScorePerformanceRow(pp=50.0, acc=95.0),
         ],
-        first_place_score={"id": 9, "name": "old-user"},
+        first_place_score=FirstPlaceScore(id=9, name="old-user"),
     )
     maps = _FakeMapsRepository()
     user_achievements = _FakeUserAchievements()
@@ -1314,8 +1290,8 @@ async def test_persist_score_submission_wraps_db_writes_in_transaction() -> None
     ]
     assert user_achievements.created_achievement_ids == [1]
     assert result.score_id == 123
-    assert result.previous_first_place_score == {"id": 9, "name": "old-user"}
-    assert [achievement["id"] for achievement in result.unlocked_achievements] == [1]
+    assert result.previous_first_place_score == FirstPlaceScore(id=9, name="old-user")
+    assert [achievement.id for achievement in result.unlocked_achievements] == [1]
     assert result.should_update_rank
     assert result.is_public_submission
     assert player.updated_rank_modes == []
@@ -1348,8 +1324,8 @@ async def test_persist_score_submission_restores_memory_state_on_failure() -> No
             database=database,
             scores=_FakeScoresRepository(
                 best_scores=[
-                    {"pp": 100.0, "acc": 98.0},
-                    {"pp": 50.0, "acc": 95.0},
+                    ScorePerformanceRow(pp=100.0, acc=98.0),
+                    ScorePerformanceRow(pp=50.0, acc=95.0),
                 ],
             ),
             stats=_FakeStatsRepository(),
@@ -1414,10 +1390,10 @@ async def test_submit_score_orchestrates_submission_side_effects(
     database = _FakeDatabaseTransactions()
     scores = _FakeScoresRepository(
         best_scores=[
-            {"pp": 100.0, "acc": 98.0},
-            {"pp": 50.0, "acc": 95.0},
+            ScorePerformanceRow(pp=100.0, acc=98.0),
+            ScorePerformanceRow(pp=50.0, acc=95.0),
         ],
-        first_place_score={"id": 9, "name": "old-user"},
+        first_place_score=FirstPlaceScore(id=9, name="old-user"),
     )
     stats_repo = _FakeStatsRepository()
     maps = _FakeMapsRepository()
@@ -1480,7 +1456,7 @@ async def test_submit_score_orchestrates_submission_side_effects(
     assert result.score_id == 123
     assert result.previous_stats.plays == 0
     assert result.current_stats.rank == 7
-    assert [achievement["id"] for achievement in result.unlocked_achievements] == [1]
+    assert [achievement.id for achievement in result.unlocked_achievements] == [1]
     assert player.updated_rank_modes == [GameMode.RELAX_OSU]
     assert published_stats == [player, player]
     assert player.recent_scores[GameMode.RELAX_OSU] is submitted_score
@@ -1504,7 +1480,7 @@ async def test_submit_score_rejects_duplicate_inside_submission_lock(tmp_path) -
     request = _score_submission_request(score, player=player)
     lock = _FakeScoreSubmissionLock()
     locks = _FakeScoreSubmissionLocks(lock)
-    scores = _FakeScoresRepository(duplicate_score={"id": 123})
+    scores = _FakeScoresRepository(duplicate_score=_CreatedScore(id=123))
     metrics: list[str] = []
 
     async def record_submission_integrity_failure() -> None:
@@ -2235,8 +2211,8 @@ def test_apply_weighted_performance_stats_calculates_accuracy_and_pp() -> None:
     updates = score_submission.apply_weighted_performance_stats(
         stats,
         [
-            {"pp": 100.0, "acc": 98.0},
-            {"pp": 50.0, "acc": 95.0},
+            ScorePerformanceRow(pp=100.0, acc=98.0),
+            ScorePerformanceRow(pp=50.0, acc=95.0),
         ],
     )
 

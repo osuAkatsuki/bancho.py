@@ -48,7 +48,7 @@ async def get_players(
         page_size=page_size,
     )
 
-    response = [Player.from_mapping(rec) for rec in listing.players]
+    response = [Player.model_validate(rec) for rec in listing.players]
 
     return responses.success(
         content=response,
@@ -75,7 +75,7 @@ async def get_player(
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
-    response = Player.from_mapping(data)
+    response = Player.model_validate(data)
     return responses.success(response)
 
 
@@ -124,7 +124,7 @@ async def get_player_mode_stats(
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
-    response = PlayerStats.from_mapping(data)
+    response = PlayerStats.model_validate(data)
     return responses.success(response)
 
 
@@ -145,7 +145,7 @@ async def get_player_stats(
         page_size=page_size,
     )
 
-    response = [PlayerStats.from_mapping(rec) for rec in listing.stats]
+    response = [PlayerStats.model_validate(rec) for rec in listing.stats]
     return responses.success(
         response,
         meta={

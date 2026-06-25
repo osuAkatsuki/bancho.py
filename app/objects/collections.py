@@ -18,6 +18,7 @@ from app.objects.channel import Channel
 from app.objects.match import Match
 from app.objects.player import Player
 from app.repositories.legacy import get_legacy_repositories
+from app.state.services import Geolocation
 from app.utils import make_safe_name
 
 
@@ -76,11 +77,11 @@ class Channels(list[Channel]):
         for row in await get_legacy_repositories().channels.fetch_many():
             self.append(
                 Channel(
-                    name=row["name"],
-                    topic=row["topic"],
-                    read_priv=Privileges(row["read_priv"]),
-                    write_priv=Privileges(row["write_priv"]),
-                    auto_join=row["auto_join"] == 1,
+                    name=row.name,
+                    topic=row.topic,
+                    read_priv=Privileges(row.read_priv),
+                    write_priv=Privileges(row.write_priv),
+                    auto_join=row.auto_join,
                 ),
             )
 
@@ -196,29 +197,32 @@ class Players(list[Player]):
 
         clan_id: int | None = None
         clan_priv: ClanPrivileges | None = None
-        if player["clan_id"] != 0:
-            clan_id = player["clan_id"]
-            clan_priv = ClanPrivileges(player["clan_priv"])
+        if player.clan_id != 0:
+            clan_id = player.clan_id
+            clan_priv = ClanPrivileges(player.clan_priv)
+
+        assert player.pw_bcrypt is not None
+        geoloc: Geolocation = {
+            "latitude": 0.0,
+            "longitude": 0.0,
+            "country": {
+                "acronym": player.country,
+                "numeric": app.state.services.country_codes[player.country],
+            },
+        }
 
         return Player(
-            id=player["id"],
-            name=player["name"],
-            priv=Privileges(player["priv"]),
-            pw_bcrypt=player["pw_bcrypt"].encode(),
+            id=player.id,
+            name=player.name,
+            priv=Privileges(player.priv),
+            pw_bcrypt=player.pw_bcrypt.encode(),
             token=Player.generate_token(),
             clan_id=clan_id,
             clan_priv=clan_priv,
-            geoloc={
-                "latitude": 0.0,
-                "longitude": 0.0,
-                "country": {
-                    "acronym": player["country"],
-                    "numeric": app.state.services.country_codes[player["country"]],
-                },
-            },
-            silence_end=player["silence_end"],
-            donor_end=player["donor_end"],
-            api_key=player["api_key"],
+            geoloc=geoloc,
+            silence_end=player.silence_end,
+            donor_end=player.donor_end,
+            api_key=player.api_key,
         )
 
     async def from_cache_or_sql(
@@ -273,7 +277,7 @@ async def initialize_ram_caches() -> None:
     # create bot & add it to online players
     app.state.sessions.bot = Player(
         id=1,
-        name=bot["name"],
+        name=bot.name,
         priv=Privileges.UNRESTRICTED,
         pw_bcrypt=None,
         token=Player.generate_token(),

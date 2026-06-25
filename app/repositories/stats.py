@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from typing import TypedDict
-from typing import cast
+from dataclasses import dataclass
 
 from sqlalchemy import Column
 from sqlalchemy import Index
@@ -16,6 +15,7 @@ from sqlalchemy.dialects.mysql import TINYINT
 from app._typing import UNSET
 from app._typing import _UnsetSentinel
 from app.adapters.database import Database
+from app.adapters.database import MySQLRow
 from app.constants.privileges import Privileges
 from app.repositories import Base
 from app.repositories.clans import ClansTable
@@ -75,7 +75,8 @@ READ_PARAMS = (
 )
 
 
-class Stat(TypedDict):
+@dataclass(frozen=True, slots=True)
+class Stat:
     id: int
     mode: int
     tscore: int
@@ -94,7 +95,8 @@ class Stat(TypedDict):
     a_count: int
 
 
-class PublicLeaderboardRow(TypedDict):
+@dataclass(frozen=True, slots=True)
+class PublicLeaderboardRow:
     player_id: int
     name: str
     country: str
@@ -119,6 +121,96 @@ class StatsRepository:
     def __init__(self, database: Database) -> None:
         self._database = database
 
+    def _serialize_stat(self, stat: Stat) -> MySQLRow:
+        return {
+            "id": stat.id,
+            "mode": stat.mode,
+            "tscore": stat.tscore,
+            "rscore": stat.rscore,
+            "pp": stat.pp,
+            "plays": stat.plays,
+            "playtime": stat.playtime,
+            "acc": stat.acc,
+            "max_combo": stat.max_combo,
+            "total_hits": stat.total_hits,
+            "replay_views": stat.replay_views,
+            "xh_count": stat.xh_count,
+            "x_count": stat.x_count,
+            "sh_count": stat.sh_count,
+            "s_count": stat.s_count,
+            "a_count": stat.a_count,
+        }
+
+    def _deserialize_stat(self, row: MySQLRow) -> Stat:
+        return Stat(
+            id=row["id"],
+            mode=row["mode"],
+            tscore=row["tscore"],
+            rscore=row["rscore"],
+            pp=row["pp"],
+            plays=row["plays"],
+            playtime=row["playtime"],
+            acc=row["acc"],
+            max_combo=row["max_combo"],
+            total_hits=row["total_hits"],
+            replay_views=row["replay_views"],
+            xh_count=row["xh_count"],
+            x_count=row["x_count"],
+            sh_count=row["sh_count"],
+            s_count=row["s_count"],
+            a_count=row["a_count"],
+        )
+
+    def _serialize_public_leaderboard_row(
+        self,
+        row: PublicLeaderboardRow,
+    ) -> MySQLRow:
+        return {
+            "player_id": row.player_id,
+            "name": row.name,
+            "country": row.country,
+            "tscore": row.tscore,
+            "rscore": row.rscore,
+            "pp": row.pp,
+            "plays": row.plays,
+            "playtime": row.playtime,
+            "acc": row.acc,
+            "max_combo": row.max_combo,
+            "xh_count": row.xh_count,
+            "x_count": row.x_count,
+            "sh_count": row.sh_count,
+            "s_count": row.s_count,
+            "a_count": row.a_count,
+            "clan_id": row.clan_id,
+            "clan_name": row.clan_name,
+            "clan_tag": row.clan_tag,
+        }
+
+    def _deserialize_public_leaderboard_row(
+        self,
+        row: MySQLRow,
+    ) -> PublicLeaderboardRow:
+        return PublicLeaderboardRow(
+            player_id=row["player_id"],
+            name=row["name"],
+            country=row["country"],
+            tscore=row["tscore"],
+            rscore=row["rscore"],
+            pp=row["pp"],
+            plays=row["plays"],
+            playtime=row["playtime"],
+            acc=row["acc"],
+            max_combo=row["max_combo"],
+            xh_count=row["xh_count"],
+            x_count=row["x_count"],
+            sh_count=row["sh_count"],
+            s_count=row["s_count"],
+            a_count=row["a_count"],
+            clan_id=row["clan_id"],
+            clan_name=row["clan_name"],
+            clan_tag=row["clan_tag"],
+        )
+
     async def create(self, player_id: int, mode: int) -> Stat:
         """Create a new player stats entry in the database."""
         insert_stmt = insert(StatsTable).values(id=player_id, mode=mode)
@@ -127,7 +219,7 @@ class StatsRepository:
         select_stmt = select(*READ_PARAMS).where(StatsTable.id == rec_id)
         stat = await self._database.fetch_one(select_stmt)
         assert stat is not None
-        return cast(Stat, stat)
+        return self._deserialize_stat(stat)
 
     async def create_all_modes(self, player_id: int) -> list[Stat]:
         """Create new player stats entries for each game mode in the database."""
@@ -150,7 +242,7 @@ class StatsRepository:
 
         select_stmt = select(*READ_PARAMS).where(StatsTable.id == player_id)
         stats = await self._database.fetch_all(select_stmt)
-        return cast(list[Stat], stats)
+        return [self._deserialize_stat(stat) for stat in stats]
 
     async def fetch_one(self, player_id: int, mode: int) -> Stat | None:
         """Fetch a player stats entry from the database."""
@@ -160,7 +252,7 @@ class StatsRepository:
             .where(StatsTable.mode == mode)
         )
         stat = await self._database.fetch_one(select_stmt)
-        return cast(Stat | None, stat)
+        return self._deserialize_stat(stat) if stat is not None else None
 
     async def fetch_count(
         self,
@@ -175,7 +267,7 @@ class StatsRepository:
 
         rec = await self._database.fetch_one(select_stmt)
         assert rec is not None
-        return cast(int, rec["count"])
+        return int(rec["count"])
 
     async def fetch_many(
         self,
@@ -193,7 +285,7 @@ class StatsRepository:
             select_stmt = select_stmt.limit(page_size).offset((page - 1) * page_size)
 
         stats = await self._database.fetch_all(select_stmt)
-        return cast(list[Stat], stats)
+        return [self._deserialize_stat(stat) for stat in stats]
 
     async def fetch_public_leaderboard(
         self,
@@ -251,7 +343,7 @@ class StatsRepository:
             select_stmt = select_stmt.where(UsersTable.country == country)
 
         rows = await self._database.fetch_all(select_stmt)
-        return cast(list[PublicLeaderboardRow], rows)
+        return [self._deserialize_public_leaderboard_row(row) for row in rows]
 
     async def partial_update(
         self,
@@ -315,6 +407,6 @@ class StatsRepository:
             .where(StatsTable.mode == mode)
         )
         stat = await self._database.fetch_one(select_stmt)
-        return cast(Stat | None, stat)
+        return self._deserialize_stat(stat) if stat is not None else None
 
     # TODO: delete?

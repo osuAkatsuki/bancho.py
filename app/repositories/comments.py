@@ -1,8 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from enum import StrEnum
-from typing import TypedDict
-from typing import cast
 
 from sqlalchemy import CHAR
 from sqlalchemy import Column
@@ -16,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.mysql import FLOAT
 
 from app.adapters.database import Database
+from app.adapters.database import MySQLRow
 from app.repositories import Base
 from app.repositories.users import UsersTable
 
@@ -49,7 +49,8 @@ READ_PARAMS = (
 )
 
 
-class Comment(TypedDict):
+@dataclass(frozen=True, slots=True)
+class Comment:
     id: int
     target_id: int
     target_type: TargetType
@@ -59,13 +60,73 @@ class Comment(TypedDict):
     colour: str | None
 
 
-class CommentWithUserPrivileges(Comment):
+@dataclass(frozen=True, slots=True)
+class CommentWithUserPrivileges:
+    id: int
+    target_id: int
+    target_type: TargetType
+    userid: int
+    time: float
+    comment: str
+    colour: str | None
     priv: int
 
 
 class CommentsRepository:
     def __init__(self, database: Database) -> None:
         self._database = database
+
+    def _serialize_comment(self, comment: Comment) -> MySQLRow:
+        return {
+            "id": comment.id,
+            "target_id": comment.target_id,
+            "target_type": comment.target_type,
+            "userid": comment.userid,
+            "time": comment.time,
+            "comment": comment.comment,
+            "colour": comment.colour,
+        }
+
+    def _deserialize_comment(self, row: MySQLRow) -> Comment:
+        return Comment(
+            id=row["id"],
+            target_id=row["target_id"],
+            target_type=TargetType(row["target_type"]),
+            userid=row["userid"],
+            time=row["time"],
+            comment=row["comment"],
+            colour=row["colour"],
+        )
+
+    def _serialize_comment_with_user_privileges(
+        self,
+        comment: CommentWithUserPrivileges,
+    ) -> MySQLRow:
+        return {
+            "id": comment.id,
+            "target_id": comment.target_id,
+            "target_type": comment.target_type,
+            "userid": comment.userid,
+            "time": comment.time,
+            "comment": comment.comment,
+            "colour": comment.colour,
+            "priv": comment.priv,
+        }
+
+    def _deserialize_comment_with_user_privileges(
+        self,
+        row: MySQLRow,
+    ) -> CommentWithUserPrivileges:
+        return CommentWithUserPrivileges(
+            id=row["id"],
+            target_id=row["target_id"],
+            target_type=TargetType(row["target_type"]),
+            userid=row["userid"],
+            time=row["time"],
+            comment=row["comment"],
+            colour=row["colour"],
+            priv=row["priv"],
+        )
 
     async def create(
         self,
@@ -91,7 +152,7 @@ class CommentsRepository:
         _comment = await self._database.fetch_one(select_stmt)
 
         assert _comment is not None
-        return cast(Comment, _comment)
+        return self._deserialize_comment(_comment)
 
     async def fetch_all_relevant_to_replay(
         self,
@@ -106,7 +167,7 @@ class CommentsRepository:
             - `map_id`
         """
         select_stmt = (
-            select(READ_PARAMS, UsersTable.priv)
+            select(*READ_PARAMS, UsersTable.priv)
             .join(UsersTable, CommentsTable.userid == UsersTable.id)
             .where(
                 or_(
@@ -127,4 +188,7 @@ class CommentsRepository:
         )
 
         comments = await self._database.fetch_all(select_stmt)
-        return cast(list[CommentWithUserPrivileges], comments)
+        return [
+            self._deserialize_comment_with_user_privileges(comment)
+            for comment in comments
+        ]

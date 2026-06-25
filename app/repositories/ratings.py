@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from typing import TypedDict
-from typing import cast
+from dataclasses import dataclass
 
 from sqlalchemy import Column
 from sqlalchemy import Integer
@@ -11,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.mysql import TINYINT
 
 from app.adapters.database import Database
+from app.adapters.database import MySQLRow
 from app.repositories import Base
 
 
@@ -29,7 +29,8 @@ READ_PARAMS = (
 )
 
 
-class Rating(TypedDict):
+@dataclass(frozen=True, slots=True)
+class Rating:
     userid: int
     map_md5: str
     rating: int
@@ -38,6 +39,20 @@ class Rating(TypedDict):
 class RatingsRepository:
     def __init__(self, database: Database) -> None:
         self._database = database
+
+    def _serialize_rating(self, rating: Rating) -> MySQLRow:
+        return {
+            "userid": rating.userid,
+            "map_md5": rating.map_md5,
+            "rating": rating.rating,
+        }
+
+    def _deserialize_rating(self, row: MySQLRow) -> Rating:
+        return Rating(
+            userid=row["userid"],
+            map_md5=row["map_md5"],
+            rating=row["rating"],
+        )
 
     async def create(self, userid: int, map_md5: str, rating: int) -> Rating:
         """Create a new rating."""
@@ -55,7 +70,7 @@ class RatingsRepository:
         )
         _rating = await self._database.fetch_one(select_stmt)
         assert _rating is not None
-        return cast(Rating, _rating)
+        return self._deserialize_rating(_rating)
 
     async def fetch_many(
         self,
@@ -75,7 +90,7 @@ class RatingsRepository:
             select_stmt = select_stmt.limit(page_size).offset((page - 1) * page_size)
 
         ratings = await self._database.fetch_all(select_stmt)
-        return cast(list[Rating], ratings)
+        return [self._deserialize_rating(rating) for rating in ratings]
 
     async def fetch_one(self, userid: int, map_md5: str) -> Rating | None:
         """Fetch a single rating for a given user and map."""
@@ -85,4 +100,4 @@ class RatingsRepository:
             .where(RatingsTable.map_md5 == map_md5)
         )
         rating = await self._database.fetch_one(select_stmt)
-        return cast(Rating | None, rating)
+        return self._deserialize_rating(rating) if rating is not None else None

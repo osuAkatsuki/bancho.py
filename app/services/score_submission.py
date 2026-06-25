@@ -415,7 +415,7 @@ async def persist_submitted_score(score: Score, scores: ScoresRepository) -> int
         perfect=int(score.perfect),
         online_checksum=score.client_checksum,
     )
-    score_id = int(created_score["id"])
+    score_id = int(created_score.id)
     score.id = score_id
     return score_id
 
@@ -551,11 +551,11 @@ def announce_first_place(
         ann.insert(1, f"+{score.mods!r}")
 
     if previous_first_place_score:
-        if score.player.id != previous_first_place_score["id"]:
+        if score.player.id != previous_first_place_score.id:
             ann.append(
                 f"(Previous #1: [https://{domain}/u/"
-                f"{previous_first_place_score['id']} "
-                f"{previous_first_place_score['name']}])",
+                f"{previous_first_place_score.id} "
+                f"{previous_first_place_score.name}])",
             )
 
     assert announce_channel is not None
@@ -714,14 +714,14 @@ def apply_score_stats(score: Score, stats: ModeData) -> ScoreStatsUpdates:
 
 def calculate_weighted_accuracy(best_scores: Sequence[ScorePerformanceRow]) -> float:
     # Calculate new total weighted accuracy.
-    weighted_acc = sum(row["acc"] * 0.95**i for i, row in enumerate(best_scores))
+    weighted_acc = sum(row.acc * 0.95**i for i, row in enumerate(best_scores))
     bonus_acc = 100.0 / (20 * (1 - 0.95 ** len(best_scores)))
     return (weighted_acc * bonus_acc) / 100
 
 
 def calculate_weighted_pp(best_scores: Sequence[ScorePerformanceRow]) -> int:
     # Calculate new total weighted pp.
-    weighted_pp = sum(row["pp"] * 0.95**i for i, row in enumerate(best_scores))
+    weighted_pp = sum(row.pp * 0.95**i for i, row in enumerate(best_scores))
     bonus_pp = 416.6667 * (1 - 0.9994 ** len(best_scores))
     return round(weighted_pp + bonus_pp)
 
@@ -1059,11 +1059,11 @@ class ScoreSubmissionService:
             if achievement_is_unlocked(server_achievement, player_achievements):
                 continue
 
-            achievement_condition = server_achievement["cond"]
+            achievement_condition = server_achievement.cond
             if achievement_condition(score, score.mode.as_vanilla):
                 await self.user_achievements.create(
                     score.player.id,
-                    server_achievement["id"],
+                    server_achievement.id,
                 )
                 unlocked_achievements.append(server_achievement)
 
@@ -1075,6 +1075,6 @@ def achievement_is_unlocked(
     user_achievements: Sequence[UserAchievement],
 ) -> bool:
     return any(
-        user_achievement["achid"] == achievement["id"]
+        user_achievement.achid == achievement.id
         for user_achievement in user_achievements
     )

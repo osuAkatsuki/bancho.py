@@ -119,22 +119,22 @@ def _beatmap_leaderboard_score(
     id: int,
     score: int | float,
 ) -> BeatmapLeaderboardScoreRow:
-    return {
-        "id": id,
-        "leaderboard_value": score,
-        "max_combo": 321,
-        "n50": 1,
-        "n100": 2,
-        "n300": 300,
-        "nmiss": 0,
-        "nkatu": 4,
-        "ngeki": 5,
-        "perfect": 1,
-        "mods": Mods.HIDDEN.value,
-        "time": 1_704_110_400,
-        "userid": 6,
-        "name": "test-user",
-    }
+    return BeatmapLeaderboardScoreRow(
+        id=id,
+        leaderboard_value=score,
+        max_combo=321,
+        n50=1,
+        n100=2,
+        n300=300,
+        nmiss=0,
+        nkatu=4,
+        ngeki=5,
+        perfect=1,
+        mods=Mods.HIDDEN.value,
+        time=1_704_110_400,
+        userid=6,
+        name="test-user",
+    )
 
 
 def _personal_best_leaderboard_score(
@@ -142,20 +142,20 @@ def _personal_best_leaderboard_score(
     id: int,
     score: int | float,
 ) -> PersonalBestLeaderboardScoreRow:
-    return {
-        "id": id,
-        "leaderboard_value": score,
-        "max_combo": 321,
-        "n50": 1,
-        "n100": 2,
-        "n300": 300,
-        "nmiss": 0,
-        "nkatu": 4,
-        "ngeki": 5,
-        "perfect": 1,
-        "mods": Mods.HIDDEN.value,
-        "time": 1_704_110_400,
-    }
+    return PersonalBestLeaderboardScoreRow(
+        id=id,
+        leaderboard_value=score,
+        max_combo=321,
+        n50=1,
+        n100=2,
+        n300=300,
+        nmiss=0,
+        nkatu=4,
+        ngeki=5,
+        perfect=1,
+        mods=Mods.HIDDEN.value,
+        time=1_704_110_400,
+    )
 
 
 async def test_fetch_leaderboard_scores_fetches_personal_best_rank() -> None:
@@ -187,7 +187,18 @@ async def test_fetch_leaderboard_scores_fetches_personal_best_rank() -> None:
 
     assert result.score_rows == [score_row]
     assert result.personal_best_score_row == {
-        **personal_best_score_row,
+        "id": personal_best_score_row.id,
+        "leaderboard_value": personal_best_score_row.leaderboard_value,
+        "max_combo": personal_best_score_row.max_combo,
+        "n50": personal_best_score_row.n50,
+        "n100": personal_best_score_row.n100,
+        "n300": personal_best_score_row.n300,
+        "nmiss": personal_best_score_row.nmiss,
+        "nkatu": personal_best_score_row.nkatu,
+        "ngeki": personal_best_score_row.ngeki,
+        "perfect": personal_best_score_row.perfect,
+        "mods": personal_best_score_row.mods,
+        "time": personal_best_score_row.time,
         "rank": 3,
     }
     assert scores.leaderboard_fetches == [

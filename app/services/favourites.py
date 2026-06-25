@@ -17,7 +17,7 @@ class FavouritesService:
 
     async def fetch_favourite_set_ids(self, player_id: int) -> list[int]:
         favourites = await self.favourites.fetch_all(userid=player_id)
-        return [favourite["setid"] for favourite in favourites]
+        return [favourite.setid for favourite in favourites]
 
     async def add_favourite(
         self,

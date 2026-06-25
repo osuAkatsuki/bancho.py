@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from typing import TypedDict
-from typing import cast
+from dataclasses import dataclass
 
 from sqlalchemy import Column
 from sqlalchemy import Integer
@@ -10,6 +9,7 @@ from sqlalchemy import insert
 from sqlalchemy import select
 
 from app.adapters.database import Database
+from app.adapters.database import MySQLRow
 from app.repositories import Base
 
 
@@ -28,7 +28,8 @@ READ_PARAMS = (
 )
 
 
-class Favourite(TypedDict):
+@dataclass(frozen=True, slots=True)
+class Favourite:
     userid: int
     setid: int
     created_at: int
@@ -37,6 +38,20 @@ class Favourite(TypedDict):
 class FavouritesRepository:
     def __init__(self, database: Database) -> None:
         self._database = database
+
+    def _serialize_favourite(self, favourite: Favourite) -> MySQLRow:
+        return {
+            "userid": favourite.userid,
+            "setid": favourite.setid,
+            "created_at": favourite.created_at,
+        }
+
+    def _deserialize_favourite(self, row: MySQLRow) -> Favourite:
+        return Favourite(
+            userid=row["userid"],
+            setid=row["setid"],
+            created_at=row["created_at"],
+        )
 
     async def create(
         self,
@@ -59,13 +74,13 @@ class FavouritesRepository:
         favourite = await self._database.fetch_one(select_stmt)
 
         assert favourite is not None
-        return cast(Favourite, favourite)
+        return self._deserialize_favourite(favourite)
 
     async def fetch_all(self, userid: int) -> list[Favourite]:
         """Fetch all favourites from a player."""
         select_stmt = select(*READ_PARAMS).where(FavouritesTable.userid == userid)
         favourites = await self._database.fetch_all(select_stmt)
-        return cast(list[Favourite], favourites)
+        return [self._deserialize_favourite(favourite) for favourite in favourites]
 
     async def fetch_one(self, userid: int, setid: int) -> Favourite | None:
         """Check if a mapset is already a favourite."""
@@ -75,4 +90,4 @@ class FavouritesRepository:
             .where(FavouritesTable.setid == setid)
         )
         favourite = await self._database.fetch_one(select_stmt)
-        return cast(Favourite | None, favourite)
+        return self._deserialize_favourite(favourite) if favourite is not None else None

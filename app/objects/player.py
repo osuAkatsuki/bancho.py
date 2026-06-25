@@ -950,23 +950,23 @@ class Player:
         for row in await get_legacy_repositories().stats.fetch_many(
             player_id=self.id,
         ):
-            game_mode = GameMode(row["mode"])
+            game_mode = GameMode(row.mode)
             self.stats[game_mode] = ModeData(
-                tscore=row["tscore"],
-                rscore=row["rscore"],
-                pp=row["pp"],
-                acc=row["acc"],
-                plays=row["plays"],
-                playtime=row["playtime"],
-                max_combo=row["max_combo"],
-                total_hits=row["total_hits"],
+                tscore=row.tscore,
+                rscore=row.rscore,
+                pp=row.pp,
+                acc=row.acc,
+                plays=row.plays,
+                playtime=row.playtime,
+                max_combo=row.max_combo,
+                total_hits=row.total_hits,
                 rank=await self.get_global_rank(game_mode),
                 grades={
-                    Grade.XH: row["xh_count"],
-                    Grade.X: row["x_count"],
-                    Grade.SH: row["sh_count"],
-                    Grade.S: row["s_count"],
-                    Grade.A: row["a_count"],
+                    Grade.XH: row.xh_count,
+                    Grade.X: row.x_count,
+                    Grade.SH: row.sh_count,
+                    Grade.S: row.s_count,
+                    Grade.A: row.a_count,
                 },
             )
 

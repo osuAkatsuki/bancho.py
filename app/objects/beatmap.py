@@ -311,7 +311,7 @@ class Beatmap:
 
                 if rec is not None:
                     # set found in db
-                    set_id = rec["set_id"]
+                    set_id = rec.set_id
                 else:
                     # set not found in db, try api
                     api_data = await api_get_beatmaps(h=md5)
@@ -356,7 +356,7 @@ class Beatmap:
 
             if rec is not None:
                 # set found in db
-                set_id = rec["set_id"]
+                set_id = rec.set_id
             else:
                 # set not found in db, try getting via api
                 api_data = await api_get_beatmaps(b=bid)
@@ -754,28 +754,28 @@ class BeatmapSet:
 
         for row in await maps.fetch_many(set_id=bsid):
             bmap = Beatmap(
-                md5=row["md5"],
-                id=row["id"],
-                set_id=row["set_id"],
-                artist=row["artist"],
-                title=row["title"],
-                version=row["version"],
-                creator=row["creator"],
-                last_update=row["last_update"],
-                total_length=row["total_length"],
-                max_combo=row["max_combo"],
-                status=RankedStatus(row["status"]),
-                frozen=row["frozen"],
-                plays=row["plays"],
-                passes=row["passes"],
-                mode=GameMode(row["mode"]),
-                bpm=row["bpm"],
-                cs=row["cs"],
-                od=row["od"],
-                ar=row["ar"],
-                hp=row["hp"],
-                diff=row["diff"],
-                filename=row["filename"],
+                md5=row.md5,
+                id=row.id,
+                set_id=row.set_id,
+                artist=row.artist,
+                title=row.title,
+                version=row.version,
+                creator=row.creator,
+                last_update=row.last_update,
+                total_length=row.total_length,
+                max_combo=row.max_combo,
+                status=RankedStatus(row.status),
+                frozen=row.frozen,
+                plays=row.plays,
+                passes=row.passes,
+                mode=GameMode(row.mode),
+                bpm=row.bpm,
+                cs=row.cs,
+                od=row.od,
+                ar=row.ar,
+                hp=row.hp,
+                diff=row.diff,
+                filename=row.filename,
                 map_set=bmap_set,
             )
 
@@ -785,10 +785,10 @@ class BeatmapSet:
                 bmap.filename = (
                     ("{artist} - {title} ({creator}) [{version}].osu")
                     .format(
-                        artist=row["artist"],
-                        title=row["title"],
-                        creator=row["creator"],
-                        version=row["version"],
+                        artist=row.artist,
+                        title=row.title,
+                        creator=row.creator,
+                        version=row.version,
                     )
                     .translate(IGNORED_BEATMAP_CHARS)
                 )

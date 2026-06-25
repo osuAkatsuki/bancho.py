@@ -21,28 +21,28 @@ async def test_fetch_public_leaderboard_filters_country_restricted_and_zero_sort
     users = UsersRepository(app.state.services.database)
     stats = StatsRepository(app.state.services.database)
 
-    await factories.create_player_stats(player_id=top_player["id"], pp=600, plays=10)
+    await factories.create_player_stats(player_id=top_player.id, pp=600, plays=10)
     await factories.create_player_stats(
-        player_id=lower_player["id"],
+        player_id=lower_player.id,
         pp=300,
         plays=20,
     )
     await factories.create_player_stats(
-        player_id=zero_pp_player["id"],
+        player_id=zero_pp_player.id,
         pp=0,
         plays=30,
     )
     await factories.create_player_stats(
-        player_id=restricted_player["id"],
+        player_id=restricted_player.id,
         pp=900,
         plays=40,
     )
     await factories.create_player_stats(
-        player_id=other_country_player["id"],
+        player_id=other_country_player.id,
         pp=800,
         plays=50,
     )
-    await users.partial_update(id=restricted_player["id"], priv=0)
+    await users.partial_update(id=restricted_player.id, priv=0)
 
     rows = await stats.fetch_public_leaderboard(
         sort="pp",
@@ -52,8 +52,8 @@ async def test_fetch_public_leaderboard_filters_country_restricted_and_zero_sort
         country=country,
     )
 
-    assert [row["player_id"] for row in rows] == [
-        top_player["id"],
-        lower_player["id"],
+    assert [row.player_id for row in rows] == [
+        top_player.id,
+        lower_player.id,
     ]
-    assert [row["pp"] for row in rows] == [600, 300]
+    assert [row.pp for row in rows] == [600, 300]

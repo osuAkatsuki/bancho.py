@@ -33,7 +33,7 @@ async def create_user(
 
     if preferred_mode:
         updated_user = await users.partial_update(
-            id=user["id"],
+            id=user.id,
             preferred_mode=preferred_mode,
         )
         assert updated_user is not None

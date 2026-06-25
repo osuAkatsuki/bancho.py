@@ -223,14 +223,31 @@ async def api_get_player_info(
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
-    resolved_user_id: int = user_info["id"]
-    resolved_country: str = user_info["country"]
+    resolved_user_id: int = user_info.id
+    resolved_country: str = user_info.country
 
     api_data = {}
 
     # fetch user's info if requested
     if scope in ("info", "all"):
-        api_data["info"] = dict(user_info)
+        api_data["info"] = {
+            "id": user_info.id,
+            "name": user_info.name,
+            "safe_name": user_info.safe_name,
+            "priv": user_info.priv,
+            "country": user_info.country,
+            "silence_end": user_info.silence_end,
+            "donor_end": user_info.donor_end,
+            "creation_time": user_info.creation_time,
+            "latest_activity": user_info.latest_activity,
+            "clan_id": user_info.clan_id,
+            "clan_priv": user_info.clan_priv,
+            "preferred_mode": user_info.preferred_mode,
+            "play_style": user_info.play_style,
+            "custom_badge_name": user_info.custom_badge_name,
+            "custom_badge_icon": user_info.custom_badge_icon,
+            "userpage_content": user_info.userpage_content,
+        }
 
     # fetch user's stats if requested
     if scope in ("stats", "all"):
@@ -243,38 +260,38 @@ async def api_get_player_info(
             rank = cast(
                 int | None,
                 await app.state.services.redis.zrevrank(
-                    f"bancho:leaderboard:{mode_stats['mode']}",
+                    f"bancho:leaderboard:{mode_stats.mode}",
                     str(resolved_user_id),
                 ),
             )
             country_rank = cast(
                 int | None,
                 await app.state.services.redis.zrevrank(
-                    f"bancho:leaderboard:{mode_stats['mode']}:{resolved_country}",
+                    f"bancho:leaderboard:{mode_stats.mode}:{resolved_country}",
                     str(resolved_user_id),
                 ),
             )
 
             # NOTE: this dict-like return is intentional.
             #       but quite cursed.
-            stats_key = str(mode_stats["mode"])
+            stats_key = str(mode_stats.mode)
             api_data["stats"][stats_key] = {
-                "id": mode_stats["id"],
-                "mode": mode_stats["mode"],
-                "tscore": mode_stats["tscore"],
-                "rscore": mode_stats["rscore"],
-                "pp": mode_stats["pp"],
-                "plays": mode_stats["plays"],
-                "playtime": mode_stats["playtime"],
-                "acc": mode_stats["acc"],
-                "max_combo": mode_stats["max_combo"],
-                "total_hits": mode_stats["total_hits"],
-                "replay_views": mode_stats["replay_views"],
-                "xh_count": mode_stats["xh_count"],
-                "x_count": mode_stats["x_count"],
-                "sh_count": mode_stats["sh_count"],
-                "s_count": mode_stats["s_count"],
-                "a_count": mode_stats["a_count"],
+                "id": mode_stats.id,
+                "mode": mode_stats.mode,
+                "tscore": mode_stats.tscore,
+                "rscore": mode_stats.rscore,
+                "pp": mode_stats.pp,
+                "plays": mode_stats.plays,
+                "playtime": mode_stats.playtime,
+                "acc": mode_stats.acc,
+                "max_combo": mode_stats.max_combo,
+                "total_hits": mode_stats.total_hits,
+                "replay_views": mode_stats.replay_views,
+                "xh_count": mode_stats.xh_count,
+                "x_count": mode_stats.x_count,
+                "sh_count": mode_stats.sh_count,
+                "s_count": mode_stats.s_count,
+                "a_count": mode_stats.a_count,
                 # extra fields are added to the api response
                 "rank": rank + 1 if rank is not None else 0,
                 "country_rank": country_rank + 1 if country_rank is not None else 0,
@@ -330,7 +347,7 @@ async def api_get_player_status(
                 "status": "success",
                 "player_status": {
                     "online": False,
-                    "last_seen": row["latest_activity"],
+                    "last_seen": row.latest_activity,
                 },
             },
         )
@@ -456,9 +473,9 @@ async def api_get_player_scores(
         "name": player.name,
         "clan": (
             {
-                "id": clan["id"],
-                "name": clan["name"],
-                "tag": clan["tag"],
+                "id": clan.id,
+                "name": clan.name,
+                "tag": clan.tag,
             }
             if clan is not None
             else None
@@ -713,18 +730,18 @@ async def api_get_replay(
     # generate the replay's hash
     replay_md5 = hashlib.md5(
         "{}p{}o{}o{}t{}a{}r{}e{}y{}o{}u{}{}{}".format(
-            row["n100"] + row["n300"],
-            row["n50"],
-            row["ngeki"],
-            row["nkatu"],
-            row["nmiss"],
-            row["map_md5"],
-            row["max_combo"],
-            str(row["perfect"] == 1),
-            row["username"],
-            row["score"],
+            row.n100 + row.n300,
+            row.n50,
+            row.ngeki,
+            row.nkatu,
+            row.nmiss,
+            row.map_md5,
+            row.max_combo,
+            str(row.perfect == 1),
+            row.username,
+            row.score,
             0,  # TODO: rank
-            row["mods"],
+            row.mods,
             "True",  # TODO: ??
         ).encode(),
     ).hexdigest()
@@ -733,27 +750,27 @@ async def api_get_replay(
     # pack first section of headers.
     replay_data += struct.pack(
         "<Bi",
-        GameMode(row["mode"]).as_vanilla,
+        GameMode(row.mode).as_vanilla,
         20200207,
     )  # TODO: osuver
-    replay_data += app.packets.write_string(row["map_md5"])
-    replay_data += app.packets.write_string(row["username"])
+    replay_data += app.packets.write_string(row.map_md5)
+    replay_data += app.packets.write_string(row.username)
     replay_data += app.packets.write_string(replay_md5)
     replay_data += struct.pack(
         "<hhhhhhihBi",
-        row["n300"],
-        row["n100"],
-        row["n50"],
-        row["ngeki"],
-        row["nkatu"],
-        row["nmiss"],
-        row["score"],
-        row["max_combo"],
-        row["perfect"],
-        row["mods"],
+        row.n300,
+        row.n100,
+        row.n50,
+        row.ngeki,
+        row.nkatu,
+        row.nmiss,
+        row.score,
+        row.max_combo,
+        row.perfect,
+        row.mods,
     )
     replay_data += b"\x00"  # TODO: hp graph
-    timestamp = int(row["play_time"].timestamp() * 1e7)
+    timestamp = int(row.play_time.timestamp() * 1e7)
     replay_data += struct.pack("<q", timestamp + DATETIME_OFFSET)
     # pack the raw replay data into the buffer
     replay_data += struct.pack("<i", len(raw_replay_data))
@@ -769,10 +786,10 @@ async def api_get_replay(
         headers={
             "Content-Description": "File Transfer",
             "Content-Disposition": (
-                'attachment; filename="{username} - '
-                "{artist} - {title} [{version}] "
-                '({play_time:%Y-%m-%d}).osr"'
-            ).format(**row),
+                f'attachment; filename="{row.username} - '
+                f"{row.artist} - {row.title} [{row.version}] "
+                f'({row.play_time:%Y-%m-%d}).osr"'
+            ),
         },
     )
 
@@ -885,25 +902,25 @@ async def api_get_clan(
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
-    clan_members = await clans_service.fetch_clan_members(clan["id"])
+    clan_members = await clans_service.fetch_clan_members(clan.id)
 
     owner = await players_service.fetch_player_session(
-        user_id=clan["owner"],
+        user_id=clan.owner,
         username=None,
     )
     assert owner is not None
 
     return ORJSONResponse(
         {
-            "id": clan["id"],
-            "name": clan["name"],
-            "tag": clan["tag"],
+            "id": clan.id,
+            "name": clan.name,
+            "tag": clan.tag,
             "members": [
                 {
-                    "id": member["id"],
-                    "name": member["name"],
-                    "country": member["country"],
-                    "rank": ("Member", "Officer", "Owner")[member["clan_priv"] - 1],
+                    "id": member.id,
+                    "name": member.name,
+                    "country": member.country,
+                    "rank": ("Member", "Officer", "Owner")[member.clan_priv - 1],
                 }
                 for member in clan_members
             ],
@@ -945,12 +962,12 @@ async def api_get_pool(
 
     tourney_pool_maps: dict[tuple[int, int], Beatmap] = {}
     for pool_map in await tourney_pools_service.fetch_tourney_pool_maps(pool_id):
-        bmap = await Beatmap.from_bid(pool_map["map_id"])
+        bmap = await Beatmap.from_bid(pool_map.map_id)
         if bmap is not None:
-            tourney_pool_maps[(pool_map["mods"], pool_map["slot"])] = bmap
+            tourney_pool_maps[(pool_map.mods, pool_map.slot)] = bmap
 
     pool_creator = players_service.fetch_online_player(
-        user_id=tourney_pool["created_by"],
+        user_id=tourney_pool.created_by,
         username=None,
     )
 
@@ -974,18 +991,18 @@ async def api_get_pool(
 
     return ORJSONResponse(
         {
-            "id": tourney_pool["id"],
-            "name": tourney_pool["name"],
-            "created_at": tourney_pool["created_at"],
+            "id": tourney_pool.id,
+            "name": tourney_pool.name,
+            "created_at": tourney_pool.created_at,
             "created_by": {
                 "id": pool_creator.id,
                 "name": pool_creator.name,
                 "country": pool_creator.geoloc["country"]["acronym"],
                 "clan": (
                     {
-                        "id": pool_creator_clan["id"],
-                        "name": pool_creator_clan["name"],
-                        "tag": pool_creator_clan["tag"],
+                        "id": pool_creator_clan.id,
+                        "name": pool_creator_clan.name,
+                        "tag": pool_creator_clan.tag,
                         "members": len(pool_creator_clan_members),
                     }
                     if pool_creator_clan is not None
