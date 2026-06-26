@@ -39,13 +39,6 @@ class FavouritesRepository:
     def __init__(self, database: Database) -> None:
         self._database = database
 
-    def _serialize_favourite(self, favourite: Favourite) -> MySQLRow:
-        return {
-            "userid": favourite.userid,
-            "setid": favourite.setid,
-            "created_at": favourite.created_at,
-        }
-
     def _deserialize_favourite(self, row: MySQLRow) -> Favourite:
         return Favourite(
             userid=row["userid"],

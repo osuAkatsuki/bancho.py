@@ -50,15 +50,6 @@ class MapRequestsRepository:
     def __init__(self, database: Database) -> None:
         self._database = database
 
-    def _serialize_map_request(self, map_request: MapRequest) -> MySQLRow:
-        return {
-            "id": map_request.id,
-            "map_id": map_request.map_id,
-            "player_id": map_request.player_id,
-            "datetime": map_request.datetime,
-            "active": map_request.active,
-        }
-
     def _deserialize_map_request(self, row: MySQLRow) -> MapRequest:
         return MapRequest(
             id=row["id"],

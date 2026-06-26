@@ -66,16 +66,6 @@ class MailRepository:
     def __init__(self, database: Database) -> None:
         self._database = database
 
-    def _serialize_mail(self, mail: Mail) -> MySQLRow:
-        return {
-            "id": mail.id,
-            "from_id": mail.from_id,
-            "to_id": mail.to_id,
-            "msg": mail.msg,
-            "time": mail.time,
-            "read": mail.read,
-        }
-
     def _deserialize_mail(self, row: MySQLRow) -> Mail:
         return Mail(
             id=row["id"],
@@ -85,18 +75,6 @@ class MailRepository:
             time=row["time"],
             read=bool(row["read"]),
         )
-
-    def _serialize_mail_with_usernames(self, mail: MailWithUsernames) -> MySQLRow:
-        return {
-            "id": mail.id,
-            "from_id": mail.from_id,
-            "to_id": mail.to_id,
-            "msg": mail.msg,
-            "time": mail.time,
-            "read": mail.read,
-            "from_name": mail.from_name,
-            "to_name": mail.to_name,
-        }
 
     def _deserialize_mail_with_usernames(self, row: MySQLRow) -> MailWithUsernames:
         return MailWithUsernames(

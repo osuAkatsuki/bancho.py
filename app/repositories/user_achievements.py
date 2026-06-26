@@ -43,15 +43,6 @@ class UserAchievementsRepository:
     def __init__(self, database: Database) -> None:
         self._database = database
 
-    def _serialize_user_achievement(
-        self,
-        user_achievement: UserAchievement,
-    ) -> MySQLRow:
-        return {
-            "userid": user_achievement.userid,
-            "achid": user_achievement.achid,
-        }
-
     def _deserialize_user_achievement(self, row: MySQLRow) -> UserAchievement:
         return UserAchievement(
             userid=row["userid"],

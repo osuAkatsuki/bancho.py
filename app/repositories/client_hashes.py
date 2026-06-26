@@ -72,17 +72,6 @@ class ClientHashesRepository:
     def __init__(self, database: Database) -> None:
         self._database = database
 
-    def _serialize_client_hash(self, client_hash: ClientHash) -> MySQLRow:
-        return {
-            "userid": client_hash.userid,
-            "osupath": client_hash.osupath,
-            "adapters": client_hash.adapters,
-            "uninstall_id": client_hash.uninstall_id,
-            "disk_serial": client_hash.disk_serial,
-            "latest_time": client_hash.latest_time,
-            "occurrences": client_hash.occurrences,
-        }
-
     def _deserialize_client_hash(self, row: MySQLRow) -> ClientHash:
         return ClientHash(
             userid=row["userid"],
@@ -93,22 +82,6 @@ class ClientHashesRepository:
             latest_time=row["latest_time"],
             occurrences=row["occurrences"],
         )
-
-    def _serialize_client_hash_with_player(
-        self,
-        client_hash: ClientHashWithPlayer,
-    ) -> MySQLRow:
-        return {
-            "userid": client_hash.userid,
-            "osupath": client_hash.osupath,
-            "adapters": client_hash.adapters,
-            "uninstall_id": client_hash.uninstall_id,
-            "disk_serial": client_hash.disk_serial,
-            "latest_time": client_hash.latest_time,
-            "occurrences": client_hash.occurrences,
-            "name": client_hash.name,
-            "priv": client_hash.priv,
-        }
 
     def _deserialize_client_hash_with_player(
         self,

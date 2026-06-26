@@ -62,15 +62,6 @@ class AchievementsRepository:
     def __init__(self, database: Database) -> None:
         self._database = database
 
-    def _serialize_achievement(self, achievement: Achievement) -> MySQLRow:
-        return {
-            "id": achievement.id,
-            "file": achievement.file,
-            "name": achievement.name,
-            "desc": achievement.desc,
-            "cond": achievement.cond,
-        }
-
     def _deserialize_achievement(self, row: MySQLRow) -> Achievement:
         return Achievement(
             id=row["id"],

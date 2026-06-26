@@ -51,16 +51,6 @@ class LogsRepository:
     def __init__(self, database: Database) -> None:
         self._database = database
 
-    def _serialize_log(self, log: Log) -> MySQLRow:
-        return {
-            "id": log.id,
-            "from": log._from,
-            "to": log.to,
-            "action": log.action,
-            "msg": log.msg,
-            "time": log.time,
-        }
-
     def _deserialize_log(self, row: MySQLRow) -> Log:
         return Log(
             id=row["id"],

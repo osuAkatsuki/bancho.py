@@ -60,16 +60,6 @@ class ChannelsRepository:
     def __init__(self, database: Database) -> None:
         self._database = database
 
-    def _serialize_channel(self, channel: Channel) -> MySQLRow:
-        return {
-            "id": channel.id,
-            "name": channel.name,
-            "topic": channel.topic,
-            "read_priv": channel.read_priv,
-            "write_priv": channel.write_priv,
-            "auto_join": channel.auto_join,
-        }
-
     def _deserialize_channel(self, row: MySQLRow) -> Channel:
         return Channel(
             id=row["id"],

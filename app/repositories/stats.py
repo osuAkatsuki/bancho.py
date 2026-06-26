@@ -121,26 +121,6 @@ class StatsRepository:
     def __init__(self, database: Database) -> None:
         self._database = database
 
-    def _serialize_stat(self, stat: Stat) -> MySQLRow:
-        return {
-            "id": stat.id,
-            "mode": stat.mode,
-            "tscore": stat.tscore,
-            "rscore": stat.rscore,
-            "pp": stat.pp,
-            "plays": stat.plays,
-            "playtime": stat.playtime,
-            "acc": stat.acc,
-            "max_combo": stat.max_combo,
-            "total_hits": stat.total_hits,
-            "replay_views": stat.replay_views,
-            "xh_count": stat.xh_count,
-            "x_count": stat.x_count,
-            "sh_count": stat.sh_count,
-            "s_count": stat.s_count,
-            "a_count": stat.a_count,
-        }
-
     def _deserialize_stat(self, row: MySQLRow) -> Stat:
         return Stat(
             id=row["id"],
@@ -160,31 +140,6 @@ class StatsRepository:
             s_count=row["s_count"],
             a_count=row["a_count"],
         )
-
-    def _serialize_public_leaderboard_row(
-        self,
-        row: PublicLeaderboardRow,
-    ) -> MySQLRow:
-        return {
-            "player_id": row.player_id,
-            "name": row.name,
-            "country": row.country,
-            "tscore": row.tscore,
-            "rscore": row.rscore,
-            "pp": row.pp,
-            "plays": row.plays,
-            "playtime": row.playtime,
-            "acc": row.acc,
-            "max_combo": row.max_combo,
-            "xh_count": row.xh_count,
-            "x_count": row.x_count,
-            "sh_count": row.sh_count,
-            "s_count": row.s_count,
-            "a_count": row.a_count,
-            "clan_id": row.clan_id,
-            "clan_name": row.clan_name,
-            "clan_tag": row.clan_tag,
-        }
 
     def _deserialize_public_leaderboard_row(
         self,

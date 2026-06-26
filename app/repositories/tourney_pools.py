@@ -49,14 +49,6 @@ class TourneyPoolsRepository:
     def __init__(self, database: Database) -> None:
         self._database = database
 
-    def _serialize_tourney_pool(self, tourney_pool: TourneyPool) -> MySQLRow:
-        return {
-            "id": tourney_pool.id,
-            "name": tourney_pool.name,
-            "created_at": tourney_pool.created_at,
-            "created_by": tourney_pool.created_by,
-        }
-
     def _deserialize_tourney_pool(self, row: MySQLRow) -> TourneyPool:
         return TourneyPool(
             id=row["id"],

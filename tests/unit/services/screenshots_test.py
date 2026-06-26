@@ -12,7 +12,7 @@ async def _record_strange_occurrence(obj: object) -> None:
 async def test_screenshot_service_rejects_invalid_file_type(tmp_path) -> None:
     service = screenshots.ScreenshotService(
         screenshots_path=tmp_path,
-        token_urlsafe=lambda size: "token",
+        token_urlsafe=lambda _size: "token",
         log_strange_occurrence=_record_strange_occurrence,
     )
 
@@ -29,7 +29,7 @@ async def test_screenshot_service_rejects_invalid_file_type(tmp_path) -> None:
 async def test_screenshot_service_writes_png_file(tmp_path) -> None:
     service = screenshots.ScreenshotService(
         screenshots_path=tmp_path,
-        token_urlsafe=lambda size: "token",
+        token_urlsafe=lambda _size: "token",
         log_strange_occurrence=_record_strange_occurrence,
     )
     png_data = b"\x89PNG\r\n\x1a\n" + b"image bytes" + b"\x49END\xae\x42\x60\x82"

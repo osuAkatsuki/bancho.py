@@ -40,13 +40,6 @@ class RatingsRepository:
     def __init__(self, database: Database) -> None:
         self._database = database
 
-    def _serialize_rating(self, rating: Rating) -> MySQLRow:
-        return {
-            "userid": rating.userid,
-            "map_md5": rating.map_md5,
-            "rating": rating.rating,
-        }
-
     def _deserialize_rating(self, row: MySQLRow) -> Rating:
         return Rating(
             userid=row["userid"],

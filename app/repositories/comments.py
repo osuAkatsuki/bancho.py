@@ -76,17 +76,6 @@ class CommentsRepository:
     def __init__(self, database: Database) -> None:
         self._database = database
 
-    def _serialize_comment(self, comment: Comment) -> MySQLRow:
-        return {
-            "id": comment.id,
-            "target_id": comment.target_id,
-            "target_type": comment.target_type,
-            "userid": comment.userid,
-            "time": comment.time,
-            "comment": comment.comment,
-            "colour": comment.colour,
-        }
-
     def _deserialize_comment(self, row: MySQLRow) -> Comment:
         return Comment(
             id=row["id"],
@@ -97,21 +86,6 @@ class CommentsRepository:
             comment=row["comment"],
             colour=row["colour"],
         )
-
-    def _serialize_comment_with_user_privileges(
-        self,
-        comment: CommentWithUserPrivileges,
-    ) -> MySQLRow:
-        return {
-            "id": comment.id,
-            "target_id": comment.target_id,
-            "target_type": comment.target_type,
-            "userid": comment.userid,
-            "time": comment.time,
-            "comment": comment.comment,
-            "colour": comment.colour,
-            "priv": comment.priv,
-        }
 
     def _deserialize_comment_with_user_privileges(
         self,

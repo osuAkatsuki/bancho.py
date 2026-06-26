@@ -184,7 +184,7 @@ async def bancho_handler(
     request: Request,
     *,
     osu_token: str | None = Header(None),
-    user_agent: Literal["osu!"] = Header(...),
+    _user_agent: Literal["osu!"] = Header(..., alias="User-Agent"),
     bancho_login_service: Annotated[
         BanchoLoginService,
         Depends(api_dependencies.get_bancho_login_service),

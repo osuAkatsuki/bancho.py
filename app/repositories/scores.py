@@ -263,32 +263,6 @@ class ScoresRepository:
     def __init__(self, database: Database) -> None:
         self._database = database
 
-    def _serialize_score(self, score: Score) -> MySQLRow:
-        return {
-            "id": score.id,
-            "map_md5": score.map_md5,
-            "score": score.score,
-            "pp": score.pp,
-            "acc": score.acc,
-            "max_combo": score.max_combo,
-            "mods": score.mods,
-            "n300": score.n300,
-            "n100": score.n100,
-            "n50": score.n50,
-            "nmiss": score.nmiss,
-            "ngeki": score.ngeki,
-            "nkatu": score.nkatu,
-            "grade": score.grade,
-            "status": score.status,
-            "mode": score.mode,
-            "play_time": score.play_time,
-            "time_elapsed": score.time_elapsed,
-            "client_flags": score.client_flags,
-            "userid": score.userid,
-            "perfect": score.perfect,
-            "online_checksum": score.online_checksum,
-        }
-
     def _deserialize_score(self, row: MySQLRow) -> Score:
         return Score(
             id=row["id"],
@@ -315,26 +289,11 @@ class ScoresRepository:
             online_checksum=row["online_checksum"],
         )
 
-    def _serialize_first_place_score(self, score: FirstPlaceScore) -> MySQLRow:
-        return {
-            "id": score.id,
-            "name": score.name,
-        }
-
     def _deserialize_first_place_score(self, row: MySQLRow) -> FirstPlaceScore:
         return FirstPlaceScore(
             id=row["id"],
             name=row["name"],
         )
-
-    def _serialize_score_performance_row(
-        self,
-        row: ScorePerformanceRow,
-    ) -> MySQLRow:
-        return {
-            "pp": row.pp,
-            "acc": row.acc,
-        }
 
     def _deserialize_score_performance_row(
         self,
@@ -344,27 +303,6 @@ class ScoresRepository:
             pp=row["pp"],
             acc=row["acc"],
         )
-
-    def _serialize_beatmap_leaderboard_score_row(
-        self,
-        row: BeatmapLeaderboardScoreRow,
-    ) -> MySQLRow:
-        return {
-            "id": row.id,
-            "leaderboard_value": row.leaderboard_value,
-            "max_combo": row.max_combo,
-            "n50": row.n50,
-            "n100": row.n100,
-            "n300": row.n300,
-            "nmiss": row.nmiss,
-            "nkatu": row.nkatu,
-            "ngeki": row.ngeki,
-            "perfect": row.perfect,
-            "mods": row.mods,
-            "time": row.time,
-            "userid": row.userid,
-            "name": row.name,
-        }
 
     def _deserialize_beatmap_leaderboard_score_row(
         self,
@@ -387,25 +325,6 @@ class ScoresRepository:
             name=row["name"],
         )
 
-    def _serialize_personal_best_leaderboard_score_row(
-        self,
-        row: PersonalBestLeaderboardScoreRow,
-    ) -> MySQLRow:
-        return {
-            "id": row.id,
-            "leaderboard_value": row.leaderboard_value,
-            "max_combo": row.max_combo,
-            "n50": row.n50,
-            "n100": row.n100,
-            "n300": row.n300,
-            "nmiss": row.nmiss,
-            "nkatu": row.nkatu,
-            "ngeki": row.ngeki,
-            "perfect": row.perfect,
-            "mods": row.mods,
-            "time": row.time,
-        }
-
     def _deserialize_personal_best_leaderboard_score_row(
         self,
         row: MySQLRow,
@@ -424,29 +343,6 @@ class ScoresRepository:
             mods=row["mods"],
             time=row["time"],
         )
-
-    def _serialize_public_player_score(self, row: PublicPlayerScore) -> MySQLRow:
-        return {
-            "id": row.id,
-            "map_md5": row.map_md5,
-            "score": row.score,
-            "pp": row.pp,
-            "acc": row.acc,
-            "max_combo": row.max_combo,
-            "mods": row.mods,
-            "n300": row.n300,
-            "n100": row.n100,
-            "n50": row.n50,
-            "nmiss": row.nmiss,
-            "ngeki": row.ngeki,
-            "nkatu": row.nkatu,
-            "grade": row.grade,
-            "status": row.status,
-            "mode": row.mode,
-            "play_time": row.play_time,
-            "time_elapsed": row.time_elapsed,
-            "perfect": row.perfect,
-        }
 
     def _deserialize_public_player_score(self, row: MySQLRow) -> PublicPlayerScore:
         return PublicPlayerScore(
@@ -471,22 +367,6 @@ class ScoresRepository:
             perfect=row["perfect"],
         )
 
-    def _serialize_public_most_played_map(
-        self,
-        row: PublicMostPlayedMap,
-    ) -> MySQLRow:
-        return {
-            "md5": row.md5,
-            "id": row.id,
-            "set_id": row.set_id,
-            "status": row.status,
-            "artist": row.artist,
-            "title": row.title,
-            "version": row.version,
-            "creator": row.creator,
-            "plays": row.plays,
-        }
-
     def _deserialize_public_most_played_map(
         self,
         row: MySQLRow,
@@ -502,34 +382,6 @@ class ScoresRepository:
             creator=row["creator"],
             plays=row["plays"],
         )
-
-    def _serialize_public_map_score(self, row: PublicMapScore) -> MySQLRow:
-        return {
-            "map_md5": row.map_md5,
-            "score": row.score,
-            "pp": row.pp,
-            "acc": row.acc,
-            "max_combo": row.max_combo,
-            "mods": row.mods,
-            "n300": row.n300,
-            "n100": row.n100,
-            "n50": row.n50,
-            "nmiss": row.nmiss,
-            "ngeki": row.ngeki,
-            "nkatu": row.nkatu,
-            "grade": row.grade,
-            "status": row.status,
-            "mode": row.mode,
-            "play_time": row.play_time,
-            "time_elapsed": row.time_elapsed,
-            "userid": row.userid,
-            "perfect": row.perfect,
-            "player_name": row.player_name,
-            "player_country": row.player_country,
-            "clan_id": row.clan_id,
-            "clan_name": row.clan_name,
-            "clan_tag": row.clan_tag,
-        }
 
     def _deserialize_public_map_score(self, row: MySQLRow) -> PublicMapScore:
         return PublicMapScore(
@@ -558,27 +410,6 @@ class ScoresRepository:
             clan_name=row["clan_name"],
             clan_tag=row["clan_tag"],
         )
-
-    def _serialize_replay_header(self, row: ReplayHeader) -> MySQLRow:
-        return {
-            "username": row.username,
-            "map_md5": row.map_md5,
-            "artist": row.artist,
-            "title": row.title,
-            "version": row.version,
-            "mode": row.mode,
-            "n300": row.n300,
-            "n100": row.n100,
-            "n50": row.n50,
-            "ngeki": row.ngeki,
-            "nkatu": row.nkatu,
-            "nmiss": row.nmiss,
-            "score": row.score,
-            "max_combo": row.max_combo,
-            "perfect": row.perfect,
-            "mods": row.mods,
-            "play_time": row.play_time,
-        }
 
     def _deserialize_replay_header(self, row: MySQLRow) -> ReplayHeader:
         return ReplayHeader(

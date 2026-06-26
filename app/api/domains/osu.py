@@ -848,14 +848,14 @@ async def getScores(
     username: str = Query(..., alias="us"),
     password_md5: str = Query(..., alias="ha"),
     requesting_from_editor_song_select: bool = Query(..., alias="s"),
-    leaderboard_version: int = Query(..., alias="vv"),
+    _leaderboard_version: int = Query(..., alias="vv"),
     leaderboard_type: int = Query(..., alias="v", ge=0, le=4),
     map_md5: str = Query(..., alias="c", min_length=32, max_length=32),
     map_filename: str = Query(..., alias="f"),
     mode_arg: int = Query(..., alias="m", ge=0, le=3),
     map_set_id: int = Query(..., alias="i", ge=-1, le=2_147_483_647),
     mods_arg: int = Query(..., alias="mods", ge=0, le=2_147_483_647),
-    map_package_hash: str = Query(..., alias="h"),  # TODO: further validation
+    _map_package_hash: str = Query(..., alias="h"),  # TODO: further validation
     aqn_files_found: bool = Query(..., alias="a"),
     bancho_authentication: Annotated[
         BanchoAuthenticationService,
@@ -1022,10 +1022,10 @@ async def banchoConnect(
     #       before a player has been granted a session
     # TODO: authenticate this endpoint when the client reliably has a session.
     osu_ver: str = Query(..., alias="v"),
-    active_endpoint: str | None = Query(None, alias="fail"),
-    net_framework_vers: str | None = Query(None, alias="fx"),  # delimited by |
+    _active_endpoint: str | None = Query(None, alias="fail"),
+    _net_framework_vers: str | None = Query(None, alias="fx"),  # delimited by |
     client_hash: str | None = Query(None, alias="ch"),
-    retrying: bool | None = Query(None, alias="retry"),  # '0' or '1'
+    _retrying: bool | None = Query(None, alias="retry"),  # '0' or '1'
 ) -> Response:
     return Response(b"")
 
@@ -1152,8 +1152,8 @@ async def register_account(
     check: int = Form(...),
     # XXX: require/validate these headers; they are used later
     # on in the registration process for resolving geolocation
-    forwarded_ip: str = Header(..., alias="X-Forwarded-For"),
-    real_ip: str = Header(..., alias="X-Real-IP"),
+    _forwarded_ip: str = Header(..., alias="X-Forwarded-For"),
+    _real_ip: str = Header(..., alias="X-Real-IP"),
     account_registration_service: Annotated[
         AccountRegistrationService,
         Depends(api_dependencies.get_account_registration_service),

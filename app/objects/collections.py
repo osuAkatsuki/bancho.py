@@ -5,8 +5,6 @@ from collections.abc import Iterator
 from collections.abc import Sequence
 from typing import Any
 
-import databases.core
-
 import app.settings
 import app.state
 import app.utils

@@ -59,15 +59,6 @@ class ClansRepository:
     def __init__(self, database: Database) -> None:
         self._database = database
 
-    def _serialize_clan(self, clan: Clan) -> MySQLRow:
-        return {
-            "id": clan.id,
-            "name": clan.name,
-            "tag": clan.tag,
-            "owner": clan.owner,
-            "created_at": clan.created_at,
-        }
-
     def _deserialize_clan(self, row: MySQLRow) -> Clan:
         return Clan(
             id=row["id"],

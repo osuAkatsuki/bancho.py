@@ -48,17 +48,6 @@ class TourneyPoolMapsRepository:
     def __init__(self, database: Database) -> None:
         self._database = database
 
-    def _serialize_tourney_pool_map(
-        self,
-        tourney_pool_map: TourneyPoolMap,
-    ) -> MySQLRow:
-        return {
-            "map_id": tourney_pool_map.map_id,
-            "pool_id": tourney_pool_map.pool_id,
-            "mods": tourney_pool_map.mods,
-            "slot": tourney_pool_map.slot,
-        }
-
     def _deserialize_tourney_pool_map(self, row: MySQLRow) -> TourneyPoolMap:
         return TourneyPoolMap(
             map_id=row["map_id"],

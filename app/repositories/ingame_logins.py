@@ -53,16 +53,6 @@ class IngameLoginsRepository:
     def __init__(self, database: Database) -> None:
         self._database = database
 
-    def _serialize_ingame_login(self, ingame_login: IngameLogin) -> MySQLRow:
-        return {
-            "id": ingame_login.id,
-            "userid": ingame_login.userid,
-            "ip": ingame_login.ip,
-            "osu_ver": ingame_login.osu_ver,
-            "osu_stream": ingame_login.osu_stream,
-            "datetime": ingame_login.datetime,
-        }
-
     def _deserialize_ingame_login(self, row: MySQLRow) -> IngameLogin:
         return IngameLogin(
             id=row["id"],
