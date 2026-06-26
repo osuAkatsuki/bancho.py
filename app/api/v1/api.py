@@ -28,9 +28,11 @@ from app.objects.beatmap import Beatmap
 from app.objects.beatmap import ensure_osu_file_is_available
 from app.repositories.users import User
 from app.services.clans import ClansService
+from app.services.performance import PerformanceResult
 from app.services.performance import PerformanceService
 from app.services.performance import ScoreParams
 from app.services.players import PlayersService
+from app.services.scores import PlayerScoreWithBeatmap
 from app.services.scores import ScoresService
 from app.services.tourney_pools import TourneyPoolsService
 
@@ -136,9 +138,8 @@ async def api_calculate_pp(
         scores,
     )
 
-    # "Inject" the accuracy into the list of results
     final_results = [
-        performance_result | {"accuracy": score.acc}
+        format_performance_result(performance_result, accuracy=score.acc)
         for performance_result, score in zip(results, scores)
     ]
 
@@ -151,6 +152,37 @@ async def api_calculate_pp(
         ),
         status_code=status.HTTP_200_OK,  # a list via the acclist parameter or a single score via n100 and n50
     )
+
+
+def format_performance_result(
+    performance_result: PerformanceResult,
+    *,
+    accuracy: float | None,
+) -> dict[str, object]:
+    return {
+        "performance": {
+            "pp": performance_result.performance.pp,
+            "pp_acc": performance_result.performance.pp_acc,
+            "pp_aim": performance_result.performance.pp_aim,
+            "pp_speed": performance_result.performance.pp_speed,
+            "pp_flashlight": performance_result.performance.pp_flashlight,
+            "effective_miss_count": performance_result.performance.effective_miss_count,
+            "pp_difficulty": performance_result.performance.pp_difficulty,
+        },
+        "difficulty": {
+            "stars": performance_result.difficulty.stars,
+            "aim": performance_result.difficulty.aim,
+            "speed": performance_result.difficulty.speed,
+            "flashlight": performance_result.difficulty.flashlight,
+            "slider_factor": performance_result.difficulty.slider_factor,
+            "speed_note_count": performance_result.difficulty.speed_note_count,
+            "stamina": performance_result.difficulty.stamina,
+            "color": performance_result.difficulty.color,
+            "rhythm": performance_result.difficulty.rhythm,
+            "peak": performance_result.difficulty.peak,
+        },
+        "accuracy": accuracy,
+    }
 
 
 @router.get("/search_players")
@@ -453,16 +485,19 @@ async def api_get_player_scores(
     else:
         mods = None
 
-    rows = await scores_service.fetch_player_scores(
-        player_id=player.id,
-        mode=mode,
-        mods=mods,
-        strong_mods_equality=strong_equality,
-        scope=scope,
-        limit=limit,
-        include_loved=include_loved,
-        include_failed=include_failed,
-    )
+    rows = [
+        format_player_score_with_beatmap(row)
+        for row in await scores_service.fetch_player_scores(
+            player_id=player.id,
+            mode=mode,
+            mods=mods,
+            strong_mods_equality=strong_equality,
+            scope=scope,
+            limit=limit,
+            include_loved=include_loved,
+            include_failed=include_failed,
+        )
+    ]
 
     clan = None
     if player.clan_id:
@@ -489,6 +524,33 @@ async def api_get_player_scores(
             "player": player_info,
         },
     )
+
+
+def format_player_score_with_beatmap(
+    player_score: PlayerScoreWithBeatmap,
+) -> dict[str, object]:
+    score = player_score.score
+    return {
+        "id": score.id,
+        "score": score.score,
+        "pp": score.pp,
+        "acc": score.acc,
+        "max_combo": score.max_combo,
+        "mods": score.mods,
+        "n300": score.n300,
+        "n100": score.n100,
+        "n50": score.n50,
+        "nmiss": score.nmiss,
+        "ngeki": score.ngeki,
+        "nkatu": score.nkatu,
+        "grade": score.grade,
+        "status": score.status,
+        "mode": score.mode,
+        "play_time": score.play_time,
+        "time_elapsed": score.time_elapsed,
+        "perfect": score.perfect,
+        "beatmap": player_score.beatmap.as_dict if player_score.beatmap else None,
+    }
 
 
 @router.get("/get_player_most_played")

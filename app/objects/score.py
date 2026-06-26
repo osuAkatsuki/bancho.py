@@ -316,7 +316,7 @@ class Score:
             scores=[score_args],
         )
 
-        return result[0]["performance"]["pp"], result[0]["difficulty"]["stars"]
+        return result[0].performance.pp, result[0].difficulty.stars
 
     async def calculate_status(self) -> None:
         """Calculate the submission status of a submitted score."""

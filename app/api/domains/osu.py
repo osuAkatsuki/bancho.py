@@ -24,6 +24,7 @@ from fastapi.responses import ORJSONResponse
 from fastapi.responses import RedirectResponse
 from fastapi.responses import Response
 from fastapi.routing import APIRouter
+from pydantic import ValidationError
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
 import app.settings
@@ -163,9 +164,18 @@ def bancho_to_osuapi_status(bancho_status: int) -> int:
     }[bancho_status]
 
 
+def parse_beatmap_info_request_body(
+    raw_body: bytes,
+) -> models.OsuBeatmapRequestForm | None:
+    try:
+        return models.OsuBeatmapRequestForm.model_validate_json(raw_body)
+    except ValidationError:
+        return None
+
+
 @router.post("/web/osu-getbeatmapinfo.php")
 async def osuGetBeatmapInfo(
-    form_data: models.OsuBeatmapRequestForm,
+    request: Request,
     *,
     username: str = Query(..., alias="u"),
     password_md5: str = Query(..., alias="h"),
@@ -184,6 +194,10 @@ async def osuGetBeatmapInfo(
     )
     if player is None:
         return Response(status_code=status.HTTP_401_UNAUTHORIZED)
+
+    form_data = parse_beatmap_info_request_body(await request.body())
+    if form_data is None:
+        return Response(status_code=status.HTTP_400_BAD_REQUEST)
 
     num_requests = len(form_data.Filenames) + len(form_data.Ids)
     log(f"{player} requested info for {num_requests} maps.", Ansi.LCYAN)
@@ -818,14 +832,24 @@ def format_scores_response(leaderboard: BeatmapLeaderboardResult) -> bytes:
     if leaderboard.personal_best_score_row is not None:
         assert leaderboard.personal_best_display_name is not None
         assert leaderboard.personal_best_user_id is not None
+        personal_best_score = leaderboard.personal_best_score_row
         response_lines.append(
             SCORE_LISTING_FMTSTR.format(
-                **leaderboard.personal_best_score_row,
+                id=personal_best_score.id,
                 name=leaderboard.personal_best_display_name,
+                max_combo=personal_best_score.max_combo,
+                n50=personal_best_score.n50,
+                n100=personal_best_score.n100,
+                n300=personal_best_score.n300,
+                nmiss=personal_best_score.nmiss,
+                nkatu=personal_best_score.nkatu,
+                ngeki=personal_best_score.ngeki,
+                perfect=personal_best_score.perfect,
+                mods=personal_best_score.mods,
                 userid=leaderboard.personal_best_user_id,
-                score=int(
-                    round(leaderboard.personal_best_score_row["leaderboard_value"]),
-                ),
+                rank=personal_best_score.rank,
+                time=personal_best_score.time,
+                score=int(round(personal_best_score.leaderboard_value)),
                 has_replay="1",
             ),
         )

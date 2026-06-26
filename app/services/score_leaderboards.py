@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TypedDict
 
 from app.constants.leaderboard_types import LeaderboardType
 from app.constants.mods import Mods
@@ -12,7 +11,8 @@ from app.repositories.scores import PersonalBestLeaderboardScoreRow
 from app.repositories.scores import ScoresRepository
 
 
-class PersonalBestLeaderboardScoreListing(TypedDict):
+@dataclass(frozen=True)
+class PersonalBestLeaderboardScoreListing:
     id: int
     leaderboard_value: int | float
     max_combo: int
@@ -97,21 +97,21 @@ class ScoreLeaderboardsService:
                 scoring_metric=scoring_metric,
                 score=personal_best_score_row.leaderboard_value,
             )
-            ranked_personal_best_score_row = {
-                "id": personal_best_score_row.id,
-                "leaderboard_value": personal_best_score_row.leaderboard_value,
-                "max_combo": personal_best_score_row.max_combo,
-                "n50": personal_best_score_row.n50,
-                "n100": personal_best_score_row.n100,
-                "n300": personal_best_score_row.n300,
-                "nmiss": personal_best_score_row.nmiss,
-                "nkatu": personal_best_score_row.nkatu,
-                "ngeki": personal_best_score_row.ngeki,
-                "perfect": personal_best_score_row.perfect,
-                "mods": personal_best_score_row.mods,
-                "time": personal_best_score_row.time,
-                "rank": rank,
-            }
+            ranked_personal_best_score_row = PersonalBestLeaderboardScoreListing(
+                id=personal_best_score_row.id,
+                leaderboard_value=personal_best_score_row.leaderboard_value,
+                max_combo=personal_best_score_row.max_combo,
+                n50=personal_best_score_row.n50,
+                n100=personal_best_score_row.n100,
+                n300=personal_best_score_row.n300,
+                nmiss=personal_best_score_row.nmiss,
+                nkatu=personal_best_score_row.nkatu,
+                ngeki=personal_best_score_row.ngeki,
+                perfect=personal_best_score_row.perfect,
+                mods=personal_best_score_row.mods,
+                time=personal_best_score_row.time,
+                rank=rank,
+            )
 
         return LeaderboardScores(
             score_rows=score_rows,

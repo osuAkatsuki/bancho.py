@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 from datetime import datetime
-from types import SimpleNamespace
 
 import app.services.scores as scores
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
-from app.repositories.scores import PublicMapScore
-from app.repositories.scores import PublicMostPlayedMap
-from app.repositories.scores import PublicPlayerScore
+from app.objects.beatmap import Beatmap
+from app.objects.beatmap import BeatmapSet
+from app.repositories.scores import MapScoreListingRow
+from app.repositories.scores import MostPlayedMapRow
+from app.repositories.scores import PlayerScoreListingRow
 from app.repositories.scores import ReplayHeader
 from app.repositories.scores import Score
 
@@ -66,7 +67,7 @@ class _FakeScoresRepository:
             online_checksum="checksum",
         )
 
-    async def fetch_public_player_scores(
+    async def fetch_player_score_listing_rows(
         self,
         *,
         user_id: int,
@@ -77,7 +78,7 @@ class _FakeScoresRepository:
         limit: int,
         include_loved: bool,
         include_failed: bool,
-    ) -> list[PublicPlayerScore]:
+    ) -> list[PlayerScoreListingRow]:
         self.player_score_calls.append(
             {
                 "user_id": user_id,
@@ -91,7 +92,7 @@ class _FakeScoresRepository:
             },
         )
         return [
-            PublicPlayerScore(
+            PlayerScoreListingRow(
                 id=1,
                 map_md5="known-map",
                 score=1_000_000,
@@ -112,7 +113,7 @@ class _FakeScoresRepository:
                 time_elapsed=60_000,
                 perfect=1,
             ),
-            PublicPlayerScore(
+            PlayerScoreListingRow(
                 id=2,
                 map_md5="missing-map",
                 score=500_000,
@@ -135,7 +136,7 @@ class _FakeScoresRepository:
             ),
         ]
 
-    async def fetch_public_map_scores(
+    async def fetch_map_score_listing_rows(
         self,
         *,
         map_md5: str,
@@ -144,7 +145,7 @@ class _FakeScoresRepository:
         strong_mods_equality: bool,
         scope: str,
         limit: int,
-    ) -> list[PublicMapScore]:
+    ) -> list[MapScoreListingRow]:
         self.map_score_calls.append(
             {
                 "map_md5": map_md5,
@@ -156,7 +157,7 @@ class _FakeScoresRepository:
             },
         )
         return [
-            PublicMapScore(
+            MapScoreListingRow(
                 map_md5=map_md5,
                 score=123,
                 pp=12.3,
@@ -184,15 +185,15 @@ class _FakeScoresRepository:
             ),
         ]
 
-    async def fetch_public_player_most_played_maps(
+    async def fetch_most_played_map_rows(
         self,
         *,
         user_id: int,
         mode: int,
         limit: int,
-    ) -> list[PublicMostPlayedMap]:
+    ) -> list[MostPlayedMapRow]:
         return [
-            PublicMostPlayedMap(
+            MostPlayedMapRow(
                 md5="map-md5",
                 id=1,
                 set_id=2,
@@ -230,15 +231,20 @@ class _FakeScoresRepository:
 class _FakeBeatmapFetcher:
     def __init__(self) -> None:
         self.md5s: list[str] = []
+        self.known_beatmap = Beatmap(
+            map_set=BeatmapSet(id=1, last_osuapi_check=datetime(2024, 1, 1)),
+            md5="known-map",
+            id=1,
+        )
 
     async def __call__(
         self,
         md5: str,
         set_id: int = -1,
-    ) -> object | None:
+    ) -> Beatmap | None:
         self.md5s.append(md5)
         if md5 == "known-map":
-            return SimpleNamespace(as_dict={"md5": md5, "id": 1})
+            return self.known_beatmap
 
         return None
 
@@ -255,7 +261,7 @@ def _service() -> (
     )
 
 
-async def test_scores_service_attaches_beatmaps_to_player_scores() -> None:
+async def test_scores_service_attaches_beatmaps_to_player_score_rows() -> None:
     service, scores_repo, beatmap_fetcher = _service()
 
     rows = await service.fetch_player_scores(
@@ -270,48 +276,54 @@ async def test_scores_service_attaches_beatmaps_to_player_scores() -> None:
     )
 
     assert rows == [
-        {
-            "id": 1,
-            "score": 1_000_000,
-            "pp": 123.45,
-            "acc": 98.76,
-            "max_combo": 321,
-            "mods": Mods.HIDDEN.value,
-            "n300": 300,
-            "n100": 5,
-            "n50": 1,
-            "nmiss": 0,
-            "ngeki": 0,
-            "nkatu": 0,
-            "grade": "A",
-            "status": 2,
-            "mode": 4,
-            "play_time": datetime(2024, 1, 1),
-            "time_elapsed": 60_000,
-            "perfect": 1,
-            "beatmap": {"md5": "known-map", "id": 1},
-        },
-        {
-            "id": 2,
-            "score": 500_000,
-            "pp": 50.0,
-            "acc": 90.0,
-            "max_combo": 123,
-            "mods": 0,
-            "n300": 250,
-            "n100": 25,
-            "n50": 5,
-            "nmiss": 2,
-            "ngeki": 0,
-            "nkatu": 0,
-            "grade": "B",
-            "status": 2,
-            "mode": 4,
-            "play_time": datetime(2024, 1, 2),
-            "time_elapsed": 60_000,
-            "perfect": 0,
-            "beatmap": None,
-        },
+        scores.PlayerScoreWithBeatmap(
+            score=PlayerScoreListingRow(
+                id=1,
+                map_md5="known-map",
+                score=1_000_000,
+                pp=123.45,
+                acc=98.76,
+                max_combo=321,
+                mods=Mods.HIDDEN.value,
+                n300=300,
+                n100=5,
+                n50=1,
+                nmiss=0,
+                ngeki=0,
+                nkatu=0,
+                grade="A",
+                status=2,
+                mode=4,
+                play_time=datetime(2024, 1, 1),
+                time_elapsed=60_000,
+                perfect=1,
+            ),
+            beatmap=beatmap_fetcher.known_beatmap,
+        ),
+        scores.PlayerScoreWithBeatmap(
+            score=PlayerScoreListingRow(
+                id=2,
+                map_md5="missing-map",
+                score=500_000,
+                pp=50.0,
+                acc=90.0,
+                max_combo=123,
+                mods=0,
+                n300=250,
+                n100=25,
+                n50=5,
+                nmiss=2,
+                ngeki=0,
+                nkatu=0,
+                grade="B",
+                status=2,
+                mode=4,
+                play_time=datetime(2024, 1, 2),
+                time_elapsed=60_000,
+                perfect=0,
+            ),
+            beatmap=None,
+        ),
     ]
     assert scores_repo.player_score_calls == [
         {
@@ -328,7 +340,7 @@ async def test_scores_service_attaches_beatmaps_to_player_scores() -> None:
     assert beatmap_fetcher.md5s == ["known-map", "missing-map"]
 
 
-async def test_scores_service_fetches_public_map_scores() -> None:
+async def test_scores_service_fetches_map_score_listing_rows() -> None:
     service, scores_repo, _ = _service()
 
     rows = await service.fetch_map_scores(
@@ -341,7 +353,7 @@ async def test_scores_service_fetches_public_map_scores() -> None:
     )
 
     assert rows == [
-        PublicMapScore(
+        MapScoreListingRow(
             map_md5="map-md5",
             score=123,
             pp=12.3,

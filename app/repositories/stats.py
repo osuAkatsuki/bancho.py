@@ -96,7 +96,7 @@ class Stat:
 
 
 @dataclass(frozen=True, slots=True)
-class PublicLeaderboardRow:
+class LeaderboardStatsRow:
     player_id: int
     name: str
     country: str
@@ -141,11 +141,11 @@ class StatsRepository:
             a_count=row["a_count"],
         )
 
-    def _deserialize_public_leaderboard_row(
+    def _deserialize_leaderboard_stats_row(
         self,
         row: MySQLRow,
-    ) -> PublicLeaderboardRow:
-        return PublicLeaderboardRow(
+    ) -> LeaderboardStatsRow:
+        return LeaderboardStatsRow(
             player_id=row["player_id"],
             name=row["name"],
             country=row["country"],
@@ -242,7 +242,7 @@ class StatsRepository:
         stats = await self._database.fetch_all(select_stmt)
         return [self._deserialize_stat(stat) for stat in stats]
 
-    async def fetch_public_leaderboard(
+    async def fetch_leaderboard_stats_rows(
         self,
         *,
         sort: str,
@@ -250,7 +250,7 @@ class StatsRepository:
         limit: int,
         offset: int,
         country: str | None,
-    ) -> list[PublicLeaderboardRow]:
+    ) -> list[LeaderboardStatsRow]:
         sort_columns = {
             "tscore": StatsTable.tscore,
             "rscore": StatsTable.rscore,
@@ -298,7 +298,7 @@ class StatsRepository:
             select_stmt = select_stmt.where(UsersTable.country == country)
 
         rows = await self._database.fetch_all(select_stmt)
-        return [self._deserialize_public_leaderboard_row(row) for row in rows]
+        return [self._deserialize_leaderboard_stats_row(row) for row in rows]
 
     async def partial_update(
         self,

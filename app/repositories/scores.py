@@ -175,7 +175,7 @@ class PersonalBestLeaderboardScoreRow:
 
 
 @dataclass(frozen=True, slots=True)
-class PublicPlayerScore:
+class PlayerScoreListingRow:
     id: int
     map_md5: str
     score: int
@@ -198,7 +198,7 @@ class PublicPlayerScore:
 
 
 @dataclass(frozen=True, slots=True)
-class PublicMostPlayedMap:
+class MostPlayedMapRow:
     md5: str
     id: int
     set_id: int
@@ -211,7 +211,7 @@ class PublicMostPlayedMap:
 
 
 @dataclass(frozen=True, slots=True)
-class PublicMapScore:
+class MapScoreListingRow:
     map_md5: str
     score: int
     pp: float
@@ -344,8 +344,11 @@ class ScoresRepository:
             time=row["time"],
         )
 
-    def _deserialize_public_player_score(self, row: MySQLRow) -> PublicPlayerScore:
-        return PublicPlayerScore(
+    def _deserialize_player_score_listing_row(
+        self,
+        row: MySQLRow,
+    ) -> PlayerScoreListingRow:
+        return PlayerScoreListingRow(
             id=row["id"],
             map_md5=row["map_md5"],
             score=row["score"],
@@ -367,11 +370,11 @@ class ScoresRepository:
             perfect=row["perfect"],
         )
 
-    def _deserialize_public_most_played_map(
+    def _deserialize_most_played_map_row(
         self,
         row: MySQLRow,
-    ) -> PublicMostPlayedMap:
-        return PublicMostPlayedMap(
+    ) -> MostPlayedMapRow:
+        return MostPlayedMapRow(
             md5=row["md5"],
             id=row["id"],
             set_id=row["set_id"],
@@ -383,8 +386,8 @@ class ScoresRepository:
             plays=row["plays"],
         )
 
-    def _deserialize_public_map_score(self, row: MySQLRow) -> PublicMapScore:
-        return PublicMapScore(
+    def _deserialize_map_score_listing_row(self, row: MySQLRow) -> MapScoreListingRow:
+        return MapScoreListingRow(
             map_md5=row["map_md5"],
             score=row["score"],
             pp=row["pp"],
@@ -709,7 +712,7 @@ class ScoresRepository:
         assert higher_scores is not None
         return int(higher_scores["count"]) + 1
 
-    async def fetch_public_player_scores(
+    async def fetch_player_score_listing_rows(
         self,
         *,
         user_id: int,
@@ -720,7 +723,7 @@ class ScoresRepository:
         limit: int,
         include_loved: bool,
         include_failed: bool,
-    ) -> list[PublicPlayerScore]:
+    ) -> list[PlayerScoreListingRow]:
         select_stmt = (
             select(
                 ScoresTable.id,
@@ -780,15 +783,15 @@ class ScoresRepository:
         select_stmt = select_stmt.order_by(sort_column.desc()).limit(limit)
 
         scores = await self._database.fetch_all(select_stmt)
-        return [self._deserialize_public_player_score(score) for score in scores]
+        return [self._deserialize_player_score_listing_row(score) for score in scores]
 
-    async def fetch_public_player_most_played_maps(
+    async def fetch_most_played_map_rows(
         self,
         *,
         user_id: int,
         mode: int,
         limit: int,
-    ) -> list[PublicMostPlayedMap]:
+    ) -> list[MostPlayedMapRow]:
         select_stmt = (
             select(
                 MapsTable.md5,
@@ -813,9 +816,9 @@ class ScoresRepository:
         )
 
         maps = await self._database.fetch_all(select_stmt)
-        return [self._deserialize_public_most_played_map(map) for map in maps]
+        return [self._deserialize_most_played_map_row(map) for map in maps]
 
-    async def fetch_public_map_scores(
+    async def fetch_map_score_listing_rows(
         self,
         *,
         map_md5: str,
@@ -824,7 +827,7 @@ class ScoresRepository:
         strong_mods_equality: bool,
         scope: str,
         limit: int,
-    ) -> list[PublicMapScore]:
+    ) -> list[MapScoreListingRow]:
         select_stmt = (
             select(
                 ScoresTable.map_md5,
@@ -879,7 +882,7 @@ class ScoresRepository:
         select_stmt = select_stmt.order_by(sort_column.desc()).limit(limit)
 
         scores = await self._database.fetch_all(select_stmt)
-        return [self._deserialize_public_map_score(score) for score in scores]
+        return [self._deserialize_map_score_listing_row(score) for score in scores]
 
     async def fetch_replay_header(self, score_id: int) -> ReplayHeader | None:
         select_stmt = (

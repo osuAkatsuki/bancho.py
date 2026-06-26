@@ -3,7 +3,6 @@ from __future__ import annotations
 import math
 from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import TypedDict
 
 from akatsuki_pp_py import Beatmap
 from akatsuki_pp_py import Calculator
@@ -29,7 +28,8 @@ class ScoreParams:
     nmiss: int | None = None
 
 
-class PerformanceRating(TypedDict):
+@dataclass(frozen=True)
+class PerformanceRating:
     pp: float
     pp_acc: float | None
     pp_aim: float | None
@@ -39,7 +39,8 @@ class PerformanceRating(TypedDict):
     pp_difficulty: float | None
 
 
-class DifficultyRating(TypedDict):
+@dataclass(frozen=True)
+class DifficultyRating:
     stars: float
     aim: float | None
     speed: float | None
@@ -52,7 +53,8 @@ class DifficultyRating(TypedDict):
     peak: float | None
 
 
-class PerformanceResult(TypedDict):
+@dataclass(frozen=True)
+class PerformanceResult:
     performance: PerformanceRating
     difficulty: DifficultyRating
 
@@ -113,29 +115,29 @@ class PerformanceService:
                 pp = round(pp, 3)
 
             results.append(
-                {
-                    "performance": {
-                        "pp": pp,
-                        "pp_acc": result.pp_acc,
-                        "pp_aim": result.pp_aim,
-                        "pp_speed": result.pp_speed,
-                        "pp_flashlight": result.pp_flashlight,
-                        "effective_miss_count": result.effective_miss_count,
-                        "pp_difficulty": result.pp_difficulty,
-                    },
-                    "difficulty": {
-                        "stars": result.difficulty.stars,
-                        "aim": result.difficulty.aim,
-                        "speed": result.difficulty.speed,
-                        "flashlight": result.difficulty.flashlight,
-                        "slider_factor": result.difficulty.slider_factor,
-                        "speed_note_count": result.difficulty.speed_note_count,
-                        "stamina": result.difficulty.stamina,
-                        "color": result.difficulty.color,
-                        "rhythm": result.difficulty.rhythm,
-                        "peak": result.difficulty.peak,
-                    },
-                },
+                PerformanceResult(
+                    performance=PerformanceRating(
+                        pp=pp,
+                        pp_acc=result.pp_acc,
+                        pp_aim=result.pp_aim,
+                        pp_speed=result.pp_speed,
+                        pp_flashlight=result.pp_flashlight,
+                        effective_miss_count=result.effective_miss_count,
+                        pp_difficulty=result.pp_difficulty,
+                    ),
+                    difficulty=DifficultyRating(
+                        stars=result.difficulty.stars,
+                        aim=result.difficulty.aim,
+                        speed=result.difficulty.speed,
+                        flashlight=result.difficulty.flashlight,
+                        slider_factor=result.difficulty.slider_factor,
+                        speed_note_count=result.difficulty.speed_note_count,
+                        stamina=result.difficulty.stamina,
+                        color=result.difficulty.color,
+                        rhythm=result.difficulty.rhythm,
+                        peak=result.difficulty.peak,
+                    ),
+                ),
             )
 
         return results

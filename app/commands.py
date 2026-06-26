@@ -524,8 +524,8 @@ async def _with(ctx: Context) -> str | None:
 
     return "{msg}: {pp:.2f}pp ({stars:.2f}*)".format(
         msg=" ".join(msg_fields),
-        pp=result[0]["performance"]["pp"],
-        stars=result[0]["difficulty"]["stars"],  # (first score result)
+        pp=result[0].performance.pp,
+        stars=result[0].difficulty.stars,  # (first score result)
     )
 
 

@@ -8,6 +8,7 @@ from starlette.datastructures import FormData
 from starlette.datastructures import UploadFile
 
 import app.services.beatmap_leaderboards as beatmap_leaderboards
+import app.services.score_leaderboards as score_leaderboards
 import app.services.score_submission as score_submission
 from app.api.domains import osu
 from app.constants.beatmap_statuses import RankedStatus
@@ -304,21 +305,21 @@ def test_format_scores_response_formats_personal_best_and_leaderboard_rows() -> 
                     name="leaderboard-user",
                 ),
             ],
-            personal_best_score_row={
-                "id": 11,
-                "leaderboard_value": 543.2,
-                "max_combo": 123,
-                "n50": 1,
-                "n100": 2,
-                "n300": 300,
-                "nmiss": 0,
-                "nkatu": 4,
-                "ngeki": 5,
-                "perfect": 1,
-                "mods": Mods.HIDDEN.value,
-                "time": 1_704_110_400,
-                "rank": 4,
-            },
+            personal_best_score_row=score_leaderboards.PersonalBestLeaderboardScoreListing(
+                id=11,
+                leaderboard_value=543.2,
+                max_combo=123,
+                n50=1,
+                n100=2,
+                n300=300,
+                nmiss=0,
+                nkatu=4,
+                ngeki=5,
+                perfect=1,
+                mods=Mods.HIDDEN.value,
+                time=1_704_110_400,
+                rank=4,
+            ),
             personal_best_user_id=6,
             personal_best_display_name="[AK] cmyui",
         ),
@@ -330,3 +331,24 @@ def test_format_scores_response_formats_personal_best_and_leaderboard_rows() -> 
         b"11|[AK] cmyui|543|123|1|2|300|0|4|5|1|8|6|4|1704110400|1\n"
         b"10|leaderboard-user|988|321|1|2|300|0|4|5|1|8|7|1|1704110400|1"
     )
+
+
+def test_parse_beatmap_info_request_body_accepts_osu_stable_json_body() -> None:
+    parsed = osu.parse_beatmap_info_request_body(
+        b'{"Filenames":["Artist - Title [Hard].osu"],"Ids":[42]}',
+    )
+
+    assert parsed is not None
+    assert parsed.Filenames == ["Artist - Title [Hard].osu"]
+    assert parsed.Ids == [42]
+
+
+@pytest.mark.parametrize(
+    "raw_body",
+    [
+        b"not-json",
+        b'{"Filenames":["Artist - Title [Hard].osu"]}',
+    ],
+)
+def test_parse_beatmap_info_request_body_rejects_invalid_body(raw_body: bytes) -> None:
+    assert osu.parse_beatmap_info_request_body(raw_body) is None

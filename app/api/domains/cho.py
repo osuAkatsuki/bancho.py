@@ -52,6 +52,7 @@ from app.objects.match import MatchTeamTypes
 from app.objects.match import MatchWinConditions
 from app.objects.match import Slot
 from app.objects.match import SlotStatus
+from app.objects.player import WINE_ADAPTER_SENTINEL
 from app.objects.player import Action
 from app.objects.player import ClientDetails
 from app.objects.player import OsuStream
@@ -599,9 +600,13 @@ async def get_allowed_client_versions(osu_stream: OsuStream) -> set[date] | None
 
 
 def parse_adapters_string(adapters_string: str) -> tuple[list[str], bool]:
-    running_under_wine = adapters_string == "runningunderwine"
-    adapters = adapters_string[:-1].split(".")
-    return adapters, running_under_wine
+    if adapters_string == WINE_ADAPTER_SENTINEL:
+        return [WINE_ADAPTER_SENTINEL], True
+
+    if not adapters_string.endswith("."):
+        raise ValueError("adapter list is missing trailing delimiter")
+
+    return adapters_string[:-1].split("."), False
 
 
 async def handle_osu_login_request(
@@ -662,7 +667,17 @@ async def handle_osu_login_request(
                 ),
             }
 
-    adapters, running_under_wine = parse_adapters_string(login_data["adapters_str"])
+    try:
+        adapters, running_under_wine = parse_adapters_string(login_data["adapters_str"])
+    except ValueError:
+        return {
+            "osu_token": "invalid-adapters",
+            "response_body": (
+                app.packets.login_reply(LoginFailureReason.AUTHENTICATION_FAILED)
+                + app.packets.notification("Please restart your osu! and try again.")
+            ),
+        }
+
     if not (running_under_wine or any(adapters)):
         return {
             "osu_token": "empty-adapters",
@@ -1274,7 +1289,7 @@ class SendPrivateMessage(BasePacket):
                             )
 
                             resp_msg = " | ".join(
-                                f"{acc}%: {result['performance']['pp']:,.2f}pp"
+                                f"{acc}%: {result.performance.pp:,.2f}pp"
                                 for acc, result in zip(
                                     app.settings.PP_CACHED_ACCURACIES,
                                     results,

@@ -358,7 +358,7 @@ async def test_fetch_beatmap_leaderboard_scores_applies_mods_friends_and_country
     ]
 
 
-async def test_fetch_public_player_best_scores_filters_best_ranked_and_loved_maps() -> (
+async def test_fetch_player_best_score_listing_rows_filters_best_ranked_and_loved_maps() -> (
     None
 ):
     ranked_map = await factories.create_map()
@@ -402,7 +402,7 @@ async def test_fetch_public_player_best_scores_filters_best_ranked_and_loved_map
         status=SubmissionStatus.BEST.value,
     )
 
-    rows_without_loved = await scores.fetch_public_player_scores(
+    rows_without_loved = await scores.fetch_player_score_listing_rows(
         user_id=player.id,
         mode=0,
         mods=None,
@@ -412,7 +412,7 @@ async def test_fetch_public_player_best_scores_filters_best_ranked_and_loved_map
         include_loved=False,
         include_failed=True,
     )
-    rows_with_loved = await scores.fetch_public_player_scores(
+    rows_with_loved = await scores.fetch_player_score_listing_rows(
         user_id=player.id,
         mode=0,
         mods=None,
@@ -430,7 +430,7 @@ async def test_fetch_public_player_best_scores_filters_best_ranked_and_loved_map
     ]
 
 
-async def test_fetch_public_player_recent_scores_filters_failed_and_mods() -> None:
+async def test_fetch_player_recent_score_listing_rows_filters_failed_and_mods() -> None:
     beatmap = await factories.create_map()
     player = await factories.create_user()
     scores = ScoresRepository(app.state.services.database)
@@ -460,7 +460,7 @@ async def test_fetch_public_player_recent_scores_filters_failed_and_mods() -> No
         status=SubmissionStatus.FAILED.value,
     )
 
-    rows_without_failed = await scores.fetch_public_player_scores(
+    rows_without_failed = await scores.fetch_player_score_listing_rows(
         user_id=player.id,
         mode=0,
         mods=None,
@@ -470,7 +470,7 @@ async def test_fetch_public_player_recent_scores_filters_failed_and_mods() -> No
         include_loved=False,
         include_failed=False,
     )
-    weak_mod_rows = await scores.fetch_public_player_scores(
+    weak_mod_rows = await scores.fetch_player_score_listing_rows(
         user_id=player.id,
         mode=0,
         mods=80,
@@ -480,7 +480,7 @@ async def test_fetch_public_player_recent_scores_filters_failed_and_mods() -> No
         include_loved=False,
         include_failed=True,
     )
-    strong_mod_rows = await scores.fetch_public_player_scores(
+    strong_mod_rows = await scores.fetch_player_score_listing_rows(
         user_id=player.id,
         mode=0,
         mods=80,
@@ -508,7 +508,7 @@ async def test_fetch_public_player_recent_scores_filters_failed_and_mods() -> No
     }
 
 
-async def test_fetch_public_player_most_played_maps_groups_by_map() -> None:
+async def test_fetch_most_played_map_rows_groups_by_map() -> None:
     most_played_map = await factories.create_map()
     other_map = await factories.create_map()
     player = await factories.create_user()
@@ -527,7 +527,7 @@ async def test_fetch_public_player_most_played_maps_groups_by_map() -> None:
         map_md5=other_map.md5,
     )
 
-    rows = await scores.fetch_public_player_most_played_maps(
+    rows = await scores.fetch_most_played_map_rows(
         user_id=player.id,
         mode=0,
         limit=10,
@@ -539,7 +539,7 @@ async def test_fetch_public_player_most_played_maps_groups_by_map() -> None:
     ]
 
 
-async def test_fetch_public_map_scores_filters_restricted_and_sorts_by_mode_metric() -> (
+async def test_fetch_map_score_listing_rows_filters_restricted_and_sorts_by_mode_metric() -> (
     None
 ):
     beatmap = await factories.create_map()
@@ -591,7 +591,7 @@ async def test_fetch_public_map_scores_filters_restricted_and_sorts_by_mode_metr
         status=SubmissionStatus.BEST.value,
     )
 
-    vanilla_rows = await scores.fetch_public_map_scores(
+    vanilla_rows = await scores.fetch_map_score_listing_rows(
         map_md5=beatmap.md5,
         mode=0,
         mods=None,
@@ -599,7 +599,7 @@ async def test_fetch_public_map_scores_filters_restricted_and_sorts_by_mode_metr
         scope="best",
         limit=10,
     )
-    relax_rows = await scores.fetch_public_map_scores(
+    relax_rows = await scores.fetch_map_score_listing_rows(
         map_md5=beatmap.md5,
         mode=4,
         mods=None,

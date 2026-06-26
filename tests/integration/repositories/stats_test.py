@@ -8,7 +8,7 @@ from app.repositories.users import UsersRepository
 from tests import factories
 
 
-async def test_fetch_public_leaderboard_filters_country_restricted_and_zero_sort() -> (
+async def test_fetch_leaderboard_stats_rows_filters_country_restricted_and_zero_sort() -> (
     None
 ):
     country = secrets.token_hex(1)
@@ -44,7 +44,7 @@ async def test_fetch_public_leaderboard_filters_country_restricted_and_zero_sort
     )
     await users.partial_update(id=restricted_player.id, priv=0)
 
-    rows = await stats.fetch_public_leaderboard(
+    rows = await stats.fetch_leaderboard_stats_rows(
         sort="pp",
         mode=0,
         limit=10,

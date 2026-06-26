@@ -47,7 +47,7 @@ class _FakeStatsRepository:
     async def fetch_count(self, player_id: int | None = None) -> int:
         return 1 if player_id is not None else 0
 
-    async def fetch_public_leaderboard(
+    async def fetch_leaderboard_stats_rows(
         self,
         *,
         sort: str,

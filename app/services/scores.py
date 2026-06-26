@@ -2,48 +2,27 @@ from __future__ import annotations
 
 from collections.abc import Awaitable
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Protocol
-from typing import TypedDict
 
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
-from app.repositories.scores import PublicMapScore
-from app.repositories.scores import PublicMostPlayedMap
+from app.objects.beatmap import Beatmap
+from app.repositories.scores import MapScoreListingRow
+from app.repositories.scores import MostPlayedMapRow
+from app.repositories.scores import PlayerScoreListingRow
 from app.repositories.scores import ReplayHeader
 from app.repositories.scores import Score
 from app.repositories.scores import ScoresRepository
-
-
-class Beatmap(Protocol):
-    @property
-    def as_dict(self) -> dict[str, object]: ...
 
 
 class BeatmapFetcher(Protocol):
     def __call__(self, md5: str, set_id: int = -1) -> Awaitable[Beatmap | None]: ...
 
 
-class PlayerScoreWithBeatmap(TypedDict):
-    id: int
-    score: int
-    pp: float
-    acc: float
-    max_combo: int
-    mods: int
-    n300: int
-    n100: int
-    n50: int
-    nmiss: int
-    ngeki: int
-    nkatu: int
-    grade: str
-    status: int
-    mode: int
-    play_time: datetime
-    time_elapsed: int
-    perfect: int
-    beatmap: dict[str, object] | None
+@dataclass(frozen=True)
+class PlayerScoreWithBeatmap:
+    score: PlayerScoreListingRow
+    beatmap: Beatmap | None
 
 
 @dataclass(frozen=True)
@@ -103,7 +82,7 @@ class ScoresService:
         include_failed: bool,
     ) -> list[PlayerScoreWithBeatmap]:
         rows: list[PlayerScoreWithBeatmap] = []
-        for row in await self.scores.fetch_public_player_scores(
+        for row in await self.scores.fetch_player_score_listing_rows(
             user_id=player_id,
             mode=int(mode),
             mods=int(mods) if mods is not None else None,
@@ -115,27 +94,10 @@ class ScoresService:
         ):
             beatmap = await self.fetch_beatmap(row.map_md5)
             rows.append(
-                {
-                    "id": row.id,
-                    "score": row.score,
-                    "pp": row.pp,
-                    "acc": row.acc,
-                    "max_combo": row.max_combo,
-                    "mods": row.mods,
-                    "n300": row.n300,
-                    "n100": row.n100,
-                    "n50": row.n50,
-                    "nmiss": row.nmiss,
-                    "ngeki": row.ngeki,
-                    "nkatu": row.nkatu,
-                    "grade": row.grade,
-                    "status": row.status,
-                    "mode": row.mode,
-                    "play_time": row.play_time,
-                    "time_elapsed": row.time_elapsed,
-                    "perfect": row.perfect,
-                    "beatmap": beatmap.as_dict if beatmap else None,
-                },
+                PlayerScoreWithBeatmap(
+                    score=row,
+                    beatmap=beatmap,
+                ),
             )
 
         return rows
@@ -146,8 +108,8 @@ class ScoresService:
         player_id: int,
         mode: GameMode,
         limit: int,
-    ) -> list[PublicMostPlayedMap]:
-        return await self.scores.fetch_public_player_most_played_maps(
+    ) -> list[MostPlayedMapRow]:
+        return await self.scores.fetch_most_played_map_rows(
             user_id=player_id,
             mode=int(mode),
             limit=limit,
@@ -162,8 +124,8 @@ class ScoresService:
         strong_mods_equality: bool,
         scope: str,
         limit: int,
-    ) -> list[PublicMapScore]:
-        return await self.scores.fetch_public_map_scores(
+    ) -> list[MapScoreListingRow]:
+        return await self.scores.fetch_map_score_listing_rows(
             map_md5=map_md5,
             mode=int(mode),
             mods=int(mods) if mods is not None else None,

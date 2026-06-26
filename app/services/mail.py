@@ -4,8 +4,6 @@ from dataclasses import dataclass
 from typing import Protocol
 from urllib.parse import unquote
 
-from app.logging import Ansi
-from app.logging import log
 from app.objects.player import Player
 from app.repositories.mail import MailRepository
 
@@ -31,10 +29,6 @@ class MailReadService:
     ) -> None:
         target_name = unquote(channel)  # TODO: unquote needed?
         if not target_name:
-            log(
-                f"User {player} attempted to mark a channel as read without a target.",
-                Ansi.LYELLOW,
-            )
             return
 
         target = await self.players.from_cache_or_sql(name=target_name)

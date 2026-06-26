@@ -169,7 +169,6 @@ class ScoreSubmissionErrorCode(StrEnum):
 @dataclass(frozen=True)
 class ScoreSubmissionError:
     code: ScoreSubmissionErrorCode
-    user_message: str | None = None
 
 
 @dataclass(frozen=True)
@@ -901,7 +900,6 @@ class ScoreSubmissionService:
         if beatmap is None:
             return ScoreSubmissionError(
                 code=ScoreSubmissionErrorCode.BEATMAP_NOT_FOUND,
-                user_message="Beatmap not found.",
             )
 
         username = score_submission_username(request)
@@ -912,7 +910,6 @@ class ScoreSubmissionService:
         if player is None:
             return ScoreSubmissionError(
                 code=ScoreSubmissionErrorCode.PLAYER_NOT_FOUND,
-                user_message="Player could not be authenticated.",
             )
 
         score = build_score_from_submission_request(
@@ -966,7 +963,6 @@ class ScoreSubmissionService:
             if await score_submission_is_duplicate(score, scores=self.scores):
                 return ScoreSubmissionError(
                     code=ScoreSubmissionErrorCode.DUPLICATE_SUBMISSION,
-                    user_message="Score has already been submitted.",
                 )
 
             await calculate_score_submission_status(
@@ -1001,7 +997,6 @@ class ScoreSubmissionService:
             except DuplicateScoreError:
                 return ScoreSubmissionError(
                     code=ScoreSubmissionErrorCode.DUPLICATE_SUBMISSION,
-                    user_message="Score has already been submitted.",
                 )
 
         write_replay_file(

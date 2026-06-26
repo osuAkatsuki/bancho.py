@@ -1510,7 +1510,6 @@ async def test_submit_score_rejects_duplicate_inside_submission_lock(tmp_path) -
 
     assert result == score_submission.ScoreSubmissionError(
         code=score_submission.ScoreSubmissionErrorCode.DUPLICATE_SUBMISSION,
-        user_message="Score has already been submitted.",
     )
     assert lock.calls == ["lock_enter", "lock_exit"]
     assert locks.online_checksums == [request.score_data[2]]
@@ -1574,7 +1573,6 @@ async def test_submit_score_maps_duplicate_insert_to_duplicate_submission(
 
     assert result == score_submission.ScoreSubmissionError(
         code=score_submission.ScoreSubmissionErrorCode.DUPLICATE_SUBMISSION,
-        user_message="Score has already been submitted.",
     )
     assert lock.calls == ["lock_enter", "lock_exit"]
     assert locks.online_checksums == [request.score_data[2]]
@@ -1622,7 +1620,6 @@ async def test_submit_score_returns_error_when_beatmap_is_missing(tmp_path) -> N
 
     assert result == score_submission.ScoreSubmissionError(
         code=score_submission.ScoreSubmissionErrorCode.BEATMAP_NOT_FOUND,
-        user_message="Beatmap not found.",
     )
     assert beatmap_fetcher.calls == ["1cf5b2c2edfafd055536d2cefcb89c0e"]
     assert player_authenticator.calls == []
@@ -1666,7 +1663,6 @@ async def test_submit_score_returns_error_when_player_authentication_fails(
 
     assert result == score_submission.ScoreSubmissionError(
         code=score_submission.ScoreSubmissionErrorCode.PLAYER_NOT_FOUND,
-        user_message="Player could not be authenticated.",
     )
     assert player_authenticator.calls == [("test-user", "password-md5")]
     assert request.replay_file.read_count == 0

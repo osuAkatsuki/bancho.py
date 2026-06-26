@@ -6,7 +6,7 @@ from typing import Protocol
 
 from app.constants.gamemodes import GameMode
 from app.objects.player import Player
-from app.repositories.stats import PublicLeaderboardRow
+from app.repositories.stats import LeaderboardStatsRow
 from app.repositories.stats import Stat
 from app.repositories.stats import StatsRepository
 from app.repositories.users import SearchUser
@@ -194,8 +194,8 @@ class PlayersService:
         limit: int,
         offset: int,
         country: str | None,
-    ) -> list[PublicLeaderboardRow]:
-        return await self.stats.fetch_public_leaderboard(
+    ) -> list[LeaderboardStatsRow]:
+        return await self.stats.fetch_leaderboard_stats_rows(
             sort=sort,
             mode=int(mode),
             limit=limit,

@@ -119,6 +119,9 @@ class OsuStream(StrEnum):
     DEV = "dev"
 
 
+WINE_ADAPTER_SENTINEL = "runningunderwine"
+
+
 class OsuVersion:
     # b20200201.2cuttingedge
     # date = 2020/02/01
@@ -157,9 +160,13 @@ class ClientDetails:
 
     @cached_property
     def client_hash(self) -> str:
+        adapters_string = ".".join(self.adapters)
+        if adapters_string != WINE_ADAPTER_SENTINEL:
+            # Normal clients send adapter lists with a trailing ".".
+            adapters_string += "."
+
         return (
-            # NOTE the extra '.' and ':' appended to ends
-            f"{self.osu_path_md5}:{'.'.join(self.adapters)}."
+            f"{self.osu_path_md5}:{adapters_string}"
             f":{self.adapters_md5}:{self.uninstall_md5}:{self.disk_signature_md5}:"
         )
 
