@@ -7,6 +7,9 @@ import pytest
 from starlette.datastructures import FormData
 from starlette.datastructures import UploadFile
 
+import app.services.beatmap_leaderboards as beatmap_leaderboards
+import app.services.score_leaderboards as score_leaderboards
+import app.services.score_submission as score_submission
 from app.api.domains import osu
 from app.constants.beatmap_statuses import RankedStatus
 from app.constants.gamemodes import GameMode
@@ -15,7 +18,7 @@ from app.objects.player import ModeData
 from app.objects.score import Grade
 from app.objects.score import Score
 from app.repositories.achievements import Achievement
-from app.usecases import score_submission
+from app.repositories.scores import BeatmapLeaderboardScoreRow
 
 
 def _score() -> Score:
@@ -136,20 +139,20 @@ def test_build_submission_charts_formats_osu_client_response() -> None:
     score = _score()
     previous_stats, current_stats = _stats()
     achievements: list[Achievement] = [
-        {
-            "id": 1,
-            "file": "osu-skill-pass-4",
-            "name": "Insanity Approaches",
-            "desc": "You're not twitching, you're just ready.",
-            "cond": lambda score, mode_vn: True,
-        },
-        {
-            "id": 2,
-            "file": "all-intro-hidden",
-            "name": "Blindsight",
-            "desc": "I can see just perfectly",
-            "cond": lambda score, mode_vn: True,
-        },
+        Achievement(
+            id=1,
+            file="osu-skill-pass-4",
+            name="Insanity Approaches",
+            desc="You're not twitching, you're just ready.",
+            cond=lambda score, mode_vn: True,
+        ),
+        Achievement(
+            id=2,
+            file="all-intro-hidden",
+            name="Blindsight",
+            desc="I can see just perfectly",
+            cond=lambda score, mode_vn: True,
+        ),
     ]
 
     response = osu.build_submission_charts(
@@ -232,13 +235,13 @@ def test_build_score_submission_response_formats_unlocked_achievements() -> None
     score = _score()
     previous_stats, current_stats = _stats()
     achievements: list[Achievement] = [
-        {
-            "id": 1,
-            "file": "osu-skill-pass-4",
-            "name": "Insanity Approaches",
-            "desc": "You're not twitching, you're just ready.",
-            "cond": lambda score, mode_vn: True,
-        },
+        Achievement(
+            id=1,
+            file="osu-skill-pass-4",
+            name="Insanity Approaches",
+            desc="You're not twitching, you're just ready.",
+            cond=lambda score, mode_vn: True,
+        ),
     ]
 
     response = osu.build_score_submission_response(
@@ -273,3 +276,79 @@ def test_build_score_submission_error_response_maps_domain_errors_to_osu_protoco
     error = score_submission.ScoreSubmissionError(code=error_code)
 
     assert osu.build_score_submission_error_response(error) == expected_response
+
+
+def test_format_scores_response_formats_personal_best_and_leaderboard_rows() -> None:
+    response = osu.format_scores_response(
+        beatmap_leaderboards.BeatmapLeaderboardResult(
+            code=beatmap_leaderboards.BeatmapLeaderboardResultCode.FOUND,
+            ranked_status=RankedStatus.Ranked,
+            beatmap_id=321,
+            beatmap_set_id=654,
+            beatmap_name="Artist - Title [Hard]",
+            beatmap_rating=9.5,
+            score_rows=[
+                BeatmapLeaderboardScoreRow(
+                    id=10,
+                    leaderboard_value=987.6,
+                    max_combo=321,
+                    n50=1,
+                    n100=2,
+                    n300=300,
+                    nmiss=0,
+                    nkatu=4,
+                    ngeki=5,
+                    perfect=1,
+                    mods=Mods.HIDDEN.value,
+                    time=1_704_110_400,
+                    userid=7,
+                    name="leaderboard-user",
+                ),
+            ],
+            personal_best_score_row=score_leaderboards.PersonalBestLeaderboardScoreListing(
+                id=11,
+                leaderboard_value=543.2,
+                max_combo=123,
+                n50=1,
+                n100=2,
+                n300=300,
+                nmiss=0,
+                nkatu=4,
+                ngeki=5,
+                perfect=1,
+                mods=Mods.HIDDEN.value,
+                time=1_704_110_400,
+                rank=4,
+            ),
+            personal_best_user_id=6,
+            personal_best_display_name="[AK] cmyui",
+        ),
+    )
+
+    assert response == (
+        b"2|false|321|654|1|0|\n"
+        b"0\nArtist - Title [Hard]\n9.5\n"
+        b"11|[AK] cmyui|543|123|1|2|300|0|4|5|1|8|6|4|1704110400|1\n"
+        b"10|leaderboard-user|988|321|1|2|300|0|4|5|1|8|7|1|1704110400|1"
+    )
+
+
+def test_parse_beatmap_info_request_body_accepts_osu_stable_json_body() -> None:
+    parsed = osu.parse_beatmap_info_request_body(
+        b'{"Filenames":["Artist - Title [Hard].osu"],"Ids":[42]}',
+    )
+
+    assert parsed is not None
+    assert parsed.Filenames == ["Artist - Title [Hard].osu"]
+    assert parsed.Ids == [42]
+
+
+@pytest.mark.parametrize(
+    "raw_body",
+    [
+        b"not-json",
+        b'{"Filenames":["Artist - Title [Hard].osu"]}',
+    ],
+)
+def test_parse_beatmap_info_request_body_rejects_invalid_body(raw_body: bytes) -> None:
+    assert osu.parse_beatmap_info_request_body(raw_body) is None

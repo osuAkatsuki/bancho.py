@@ -13,8 +13,6 @@ from typing import TYPE_CHECKING
 from typing import TypedDict
 from typing import cast
 
-import databases.core
-
 import app.packets
 import app.settings
 import app.state
@@ -34,11 +32,7 @@ from app.objects.match import Slot
 from app.objects.match import SlotStatus
 from app.objects.score import Grade
 from app.objects.score import Score
-from app.repositories import clans as clans_repo
-from app.repositories import logs as logs_repo
-from app.repositories import stats as stats_repo
-from app.repositories import users as users_repo
-from app.state.services import Geolocation
+from app.repositories.legacy import get_legacy_repositories
 from app.utils import escape_enum
 from app.utils import make_safe_name
 from app.utils import pymysql_encode
@@ -47,6 +41,7 @@ if TYPE_CHECKING:
     from app.constants.privileges import ClanPrivileges
     from app.objects.beatmap import Beatmap
     from app.objects.score import Score
+    from app.state.services import Geolocation
 
 
 @unique
@@ -124,6 +119,9 @@ class OsuStream(StrEnum):
     DEV = "dev"
 
 
+WINE_ADAPTER_SENTINEL = "runningunderwine"
+
+
 class OsuVersion:
     # b20200201.2cuttingedge
     # date = 2020/02/01
@@ -162,9 +160,13 @@ class ClientDetails:
 
     @cached_property
     def client_hash(self) -> str:
+        adapters_string = ".".join(self.adapters)
+        if adapters_string != WINE_ADAPTER_SENTINEL:
+            # Normal clients send adapter lists with a trailing ".".
+            adapters_string += "."
+
         return (
-            # NOTE the extra '.' and ':' appended to ends
-            f"{self.osu_path_md5}:{'.'.join(self.adapters)}."
+            f"{self.osu_path_md5}:{adapters_string}"
             f":{self.adapters_md5}:{self.uninstall_md5}:{self.disk_signature_md5}:"
         )
 
@@ -412,7 +414,7 @@ class Player:
         if "bancho_priv" in vars(self):
             del self.bancho_priv  # wipe cached_property
 
-        await users_repo.partial_update(
+        await get_legacy_repositories().users.partial_update(
             id=self.id,
             priv=self.priv,
         )
@@ -424,7 +426,7 @@ class Player:
         if "bancho_priv" in vars(self):
             del self.bancho_priv  # wipe cached_property
 
-        await users_repo.partial_update(
+        await get_legacy_repositories().users.partial_update(
             id=self.id,
             priv=self.priv,
         )
@@ -441,7 +443,7 @@ class Player:
         if "bancho_priv" in vars(self):
             del self.bancho_priv  # wipe cached_property
 
-        await users_repo.partial_update(
+        await get_legacy_repositories().users.partial_update(
             id=self.id,
             priv=self.priv,
         )
@@ -455,7 +457,7 @@ class Player:
         """Restrict `self` for `reason`, and log to sql."""
         await self.remove_privs(Privileges.UNRESTRICTED)
 
-        await logs_repo.create(
+        await get_legacy_repositories().logs.create(
             _from=admin.id,
             to=self.id,
             action="restrict",
@@ -489,7 +491,7 @@ class Player:
         """Restrict `self` for `reason`, and log to sql."""
         await self.add_privs(Privileges.UNRESTRICTED)
 
-        await logs_repo.create(
+        await get_legacy_repositories().logs.create(
             _from=admin.id,
             to=self.id,
             action="unrestrict",
@@ -527,12 +529,12 @@ class Player:
         """Silence `self` for `duration` seconds, and log to sql."""
         self.silence_end = int(time.time() + duration)
 
-        await users_repo.partial_update(
+        await get_legacy_repositories().users.partial_update(
             id=self.id,
             silence_end=self.silence_end,
         )
 
-        await logs_repo.create(
+        await get_legacy_repositories().logs.create(
             _from=admin.id,
             to=self.id,
             action="silence",
@@ -555,12 +557,12 @@ class Player:
         """Unsilence `self`, and log to sql."""
         self.silence_end = int(time.time())
 
-        await users_repo.partial_update(
+        await get_legacy_repositories().users.partial_update(
             id=self.id,
             silence_end=self.silence_end,
         )
 
-        await logs_repo.create(
+        await get_legacy_repositories().logs.create(
             _from=admin.id,
             to=self.id,
             action="unsilence",
@@ -950,30 +952,32 @@ class Player:
 
     async def stats_from_sql_full(self) -> None:
         """Retrieve `self`'s stats (all modes) from sql."""
-        for row in await stats_repo.fetch_many(player_id=self.id):
-            game_mode = GameMode(row["mode"])
+        for row in await get_legacy_repositories().stats.fetch_many(
+            player_id=self.id,
+        ):
+            game_mode = GameMode(row.mode)
             self.stats[game_mode] = ModeData(
-                tscore=row["tscore"],
-                rscore=row["rscore"],
-                pp=row["pp"],
-                acc=row["acc"],
-                plays=row["plays"],
-                playtime=row["playtime"],
-                max_combo=row["max_combo"],
-                total_hits=row["total_hits"],
+                tscore=row.tscore,
+                rscore=row.rscore,
+                pp=row.pp,
+                acc=row.acc,
+                plays=row.plays,
+                playtime=row.playtime,
+                max_combo=row.max_combo,
+                total_hits=row.total_hits,
                 rank=await self.get_global_rank(game_mode),
                 grades={
-                    Grade.XH: row["xh_count"],
-                    Grade.X: row["x_count"],
-                    Grade.SH: row["sh_count"],
-                    Grade.S: row["s_count"],
-                    Grade.A: row["a_count"],
+                    Grade.XH: row.xh_count,
+                    Grade.X: row.x_count,
+                    Grade.SH: row.sh_count,
+                    Grade.S: row.s_count,
+                    Grade.A: row.a_count,
                 },
             )
 
     def update_latest_activity_soon(self) -> None:
         """Update the player's latest activity in the database."""
-        task = users_repo.partial_update(
+        task = get_legacy_repositories().users.partial_update(
             id=self.id,
             latest_activity=int(time.time()),
         )

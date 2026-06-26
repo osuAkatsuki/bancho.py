@@ -5,8 +5,6 @@ from collections.abc import Iterator
 from collections.abc import Sequence
 from typing import Any
 
-import databases.core
-
 import app.settings
 import app.state
 import app.utils
@@ -17,9 +15,8 @@ from app.logging import log
 from app.objects.channel import Channel
 from app.objects.match import Match
 from app.objects.player import Player
-from app.repositories import channels as channels_repo
-from app.repositories import clans as clans_repo
-from app.repositories import users as users_repo
+from app.repositories.legacy import get_legacy_repositories
+from app.state.services import Geolocation
 from app.utils import make_safe_name
 
 
@@ -75,14 +72,14 @@ class Channels(list[Channel]):
     async def prepare(self) -> None:
         """Fetch data from sql & return; preparing to run the server."""
         log("Fetching channels from sql.", Ansi.LCYAN)
-        for row in await channels_repo.fetch_many():
+        for row in await get_legacy_repositories().channels.fetch_many():
             self.append(
                 Channel(
-                    name=row["name"],
-                    topic=row["topic"],
-                    read_priv=Privileges(row["read_priv"]),
-                    write_priv=Privileges(row["write_priv"]),
-                    auto_join=row["auto_join"] == 1,
+                    name=row.name,
+                    topic=row.topic,
+                    read_priv=Privileges(row.read_priv),
+                    write_priv=Privileges(row.write_priv),
+                    auto_join=row.auto_join,
                 ),
             )
 
@@ -188,7 +185,7 @@ class Players(list[Player]):
     ) -> Player | None:
         """Get a player by token, id, or name from sql."""
         # try to get from sql.
-        player = await users_repo.fetch_one(
+        player = await get_legacy_repositories().users.fetch_one(
             id=id,
             name=name,
             fetch_all_fields=True,
@@ -198,29 +195,32 @@ class Players(list[Player]):
 
         clan_id: int | None = None
         clan_priv: ClanPrivileges | None = None
-        if player["clan_id"] != 0:
-            clan_id = player["clan_id"]
-            clan_priv = ClanPrivileges(player["clan_priv"])
+        if player.clan_id != 0:
+            clan_id = player.clan_id
+            clan_priv = ClanPrivileges(player.clan_priv)
+
+        assert player.pw_bcrypt is not None
+        geoloc: Geolocation = {
+            "latitude": 0.0,
+            "longitude": 0.0,
+            "country": {
+                "acronym": player.country,
+                "numeric": app.state.services.country_codes[player.country],
+            },
+        }
 
         return Player(
-            id=player["id"],
-            name=player["name"],
-            priv=Privileges(player["priv"]),
-            pw_bcrypt=player["pw_bcrypt"].encode(),
+            id=player.id,
+            name=player.name,
+            priv=Privileges(player.priv),
+            pw_bcrypt=player.pw_bcrypt.encode(),
             token=Player.generate_token(),
             clan_id=clan_id,
             clan_priv=clan_priv,
-            geoloc={
-                "latitude": 0.0,
-                "longitude": 0.0,
-                "country": {
-                    "acronym": player["country"],
-                    "numeric": app.state.services.country_codes[player["country"]],
-                },
-            },
-            silence_end=player["silence_end"],
-            donor_end=player["donor_end"],
-            api_key=player["api_key"],
+            geoloc=geoloc,
+            silence_end=player.silence_end,
+            donor_end=player.donor_end,
+            api_key=player.api_key,
         )
 
     async def from_cache_or_sql(
@@ -234,29 +234,6 @@ class Players(list[Player]):
             return player
         player = await self.get_sql(id=id, name=name)
         if player is not None:
-            return player
-
-        return None
-
-    async def from_login(
-        self,
-        name: str,
-        pw_md5: str,
-        sql: bool = False,
-    ) -> Player | None:
-        """Return a player with a given name & pw_md5, from cache or sql."""
-        player = self.get(name=name)
-        if not player:
-            if not sql:
-                return None
-
-            player = await self.get_sql(name=name)
-            if not player:
-                return None
-
-        assert player.pw_bcrypt is not None
-
-        if app.state.cache.bcrypt[player.pw_bcrypt] == pw_md5.encode():
             return player
 
         return None
@@ -291,14 +268,14 @@ async def initialize_ram_caches() -> None:
     # fetch channels, clans and pools from db
     await app.state.sessions.channels.prepare()
 
-    bot = await users_repo.fetch_one(id=1)
+    bot = await get_legacy_repositories().users.fetch_one(id=1)
     if bot is None:
         raise RuntimeError("Bot account not found in database.")
 
     # create bot & add it to online players
     app.state.sessions.bot = Player(
         id=1,
-        name=bot["name"],
+        name=bot.name,
         priv=Privileges.UNRESTRICTED,
         pw_bcrypt=None,
         token=Player.generate_token(),

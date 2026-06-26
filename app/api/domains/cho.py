@@ -12,13 +12,14 @@ from collections.abc import Mapping
 from datetime import date
 from datetime import datetime
 from pathlib import Path
+from typing import Annotated
 from typing import Literal
 from typing import TypedDict
 from zoneinfo import ZoneInfo
 
-import bcrypt
 from fastapi import APIRouter
 from fastapi import Response
+from fastapi.param_functions import Depends
 from fastapi.param_functions import Header
 from fastapi.requests import Request
 from fastapi.responses import HTMLResponse
@@ -26,10 +27,10 @@ from fastapi.responses import HTMLResponse
 import app.packets
 import app.settings
 import app.state
-import app.usecases.performance
 import app.utils
 from app import commands
 from app._typing import IPAddress
+from app.api import dependencies as api_dependencies
 from app.constants import regexes
 from app.constants.gamemodes import GameMode
 from app.constants.mods import SPEED_CHANGING_MODS
@@ -51,6 +52,7 @@ from app.objects.match import MatchTeamTypes
 from app.objects.match import MatchWinConditions
 from app.objects.match import Slot
 from app.objects.match import SlotStatus
+from app.objects.player import WINE_ADAPTER_SENTINEL
 from app.objects.player import Action
 from app.objects.player import ClientDetails
 from app.objects.player import OsuStream
@@ -61,12 +63,11 @@ from app.packets import BanchoPacketReader
 from app.packets import BasePacket
 from app.packets import ClientPackets
 from app.packets import LoginFailureReason
-from app.repositories import client_hashes as client_hashes_repo
-from app.repositories import ingame_logins as logins_repo
-from app.repositories import mail as mail_repo
-from app.repositories import users as users_repo
+from app.repositories.legacy import get_legacy_repositories
+from app.services.bancho import BanchoLoginService
+from app.services.performance import PerformanceService
+from app.services.performance import ScoreParams
 from app.state import services
-from app.usecases.performance import ScoreParams
 
 OSU_API_V2_CHANGELOG_URL = "https://osu.ppy.sh/api/v2/changelog"
 
@@ -182,8 +183,13 @@ matches:
 @router.post("/")
 async def bancho_handler(
     request: Request,
+    *,
     osu_token: str | None = Header(None),
-    user_agent: Literal["osu!"] = Header(...),
+    _user_agent: Literal["osu!"] = Header(..., alias="User-Agent"),
+    bancho_login_service: Annotated[
+        BanchoLoginService,
+        Depends(api_dependencies.get_bancho_login_service),
+    ],
 ) -> Response:
     ip = app.state.services.ip_resolver.get_ip(request.headers)
 
@@ -193,6 +199,7 @@ async def bancho_handler(
             request.headers,
             await request.body(),
             ip,
+            bancho_login_service,
         )
 
         return Response(
@@ -593,41 +600,20 @@ async def get_allowed_client_versions(osu_stream: OsuStream) -> set[date] | None
 
 
 def parse_adapters_string(adapters_string: str) -> tuple[list[str], bool]:
-    running_under_wine = adapters_string == "runningunderwine"
-    adapters = adapters_string[:-1].split(".")
-    return adapters, running_under_wine
+    if adapters_string == WINE_ADAPTER_SENTINEL:
+        return [WINE_ADAPTER_SENTINEL], True
 
+    if not adapters_string.endswith("."):
+        raise ValueError("adapter list is missing trailing delimiter")
 
-async def authenticate(
-    username: str,
-    untrusted_password: bytes,
-) -> users_repo.User | None:
-    user_info = await users_repo.fetch_one(
-        name=username,
-        fetch_all_fields=True,
-    )
-    if user_info is None:
-        return None
-
-    trusted_hashword = user_info["pw_bcrypt"].encode()
-
-    # in-memory bcrypt lookup cache for performance
-    if trusted_hashword in app.state.cache.bcrypt:  # ~0.01 ms
-        if untrusted_password != app.state.cache.bcrypt[trusted_hashword]:
-            return None
-    else:  # ~200ms
-        if not bcrypt.checkpw(untrusted_password, trusted_hashword):
-            return None
-
-        app.state.cache.bcrypt[trusted_hashword] = untrusted_password
-
-    return user_info
+    return adapters_string[:-1].split("."), False
 
 
 async def handle_osu_login_request(
     headers: Mapping[str, str],
     body: bytes,
     ip: IPAddress,
+    bancho_login_service: BanchoLoginService,
 ) -> LoginResponse:
     """\
     Login has no specific packet, but happens when the osu!
@@ -681,7 +667,17 @@ async def handle_osu_login_request(
                 ),
             }
 
-    adapters, running_under_wine = parse_adapters_string(login_data["adapters_str"])
+    try:
+        adapters, running_under_wine = parse_adapters_string(login_data["adapters_str"])
+    except ValueError:
+        return {
+            "osu_token": "invalid-adapters",
+            "response_body": (
+                app.packets.login_reply(LoginFailureReason.AUTHENTICATION_FAILED)
+                + app.packets.notification("Please restart your osu! and try again.")
+            ),
+        }
+
     if not (running_under_wine or any(adapters)):
         return {
             "osu_token": "empty-adapters",
@@ -713,7 +709,10 @@ async def handle_osu_login_request(
             player.logout()
             del player
 
-    user_info = await authenticate(login_data["username"], login_data["password_md5"])
+    user_info = await bancho_login_service.authenticate(
+        login_data["username"],
+        login_data["password_md5"],
+    )
     if user_info is None:
         return {
             "osu_token": "incorrect-credentials",
@@ -724,8 +723,7 @@ async def handle_osu_login_request(
         }
 
     if osu_version.stream is OsuStream.TOURNEY and not (
-        user_info["priv"] & Privileges.DONATOR
-        and user_info["priv"] & Privileges.UNRESTRICTED
+        user_info.priv & Privileges.DONATOR and user_info.priv & Privileges.UNRESTRICTED
     ):
         # trying to use tourney client with insufficient privileges.
         return {
@@ -737,19 +735,19 @@ async def handle_osu_login_request(
 
     """ login credentials verified """
 
-    await logins_repo.create(
-        user_id=user_info["id"],
+    await bancho_login_service.record_login(
+        user_id=user_info.id,
         ip=str(ip),
-        osu_ver=osu_version.date,
+        osu_version=osu_version.date,
         osu_stream=osu_version.stream,
     )
 
-    await client_hashes_repo.create(
-        userid=user_info["id"],
-        osupath=login_data["osu_path_md5"],
-        adapters=login_data["adapters_md5"],
-        uninstall_id=login_data["uninstall_md5"],
-        disk_serial=login_data["disk_signature_md5"],
+    await bancho_login_service.record_client_hashes(
+        user_id=user_info.id,
+        osu_path_md5=login_data["osu_path_md5"],
+        adapters_md5=login_data["adapters_md5"],
+        uninstall_md5=login_data["uninstall_md5"],
+        disk_signature_md5=login_data["disk_signature_md5"],
     )
 
     # TODO: store adapters individually
@@ -765,17 +763,17 @@ async def handle_osu_login_request(
     else:
         disk_signature_md5 = None
 
-    hw_matches = await client_hashes_repo.fetch_any_hardware_matches_for_user(
-        userid=user_info["id"],
+    hw_matches = await bancho_login_service.fetch_hardware_matches(
+        user_id=user_info.id,
         running_under_wine=running_under_wine,
-        adapters=login_data["adapters_md5"],
-        uninstall_id=login_data["uninstall_md5"],
-        disk_serial=disk_signature_md5,
+        adapters_md5=login_data["adapters_md5"],
+        uninstall_md5=login_data["uninstall_md5"],
+        disk_signature_md5=disk_signature_md5,
     )
 
     if hw_matches:
         # we have other accounts with matching hashes
-        if user_info["priv"] & Privileges.VERIFIED:
+        if user_info.priv & Privileges.VERIFIED:
             # this is a normal, registered & verified player.
             # TODO: this user may be multi-accounting; there may be
             # some desirable behavior to implement here in the future.
@@ -785,9 +783,7 @@ async def handle_osu_login_request(
             # time connecting in-game and submitting their hwid set.
             # we will not allow any banned matches; if there are any,
             # then ask the user to contact staff and resolve manually.
-            if not all(
-                [hw_match["priv"] & Privileges.UNRESTRICTED for hw_match in hw_matches],
-            ):
+            if bancho_login_service.has_restricted_hardware_match(hw_matches):
                 return {
                     "osu_token": "contact-staff",
                     "response_body": (
@@ -805,11 +801,11 @@ async def handle_osu_login_request(
     # get clan & clan priv if we're in a clan
     clan_id: int | None = None
     clan_priv: ClanPrivileges | None = None
-    if user_info["clan_id"] != 0:
-        clan_id = user_info["clan_id"]
-        clan_priv = ClanPrivileges(user_info["clan_priv"])
+    if user_info.clan_id != 0:
+        clan_id = user_info.clan_id
+        clan_priv = ClanPrivileges(user_info.clan_priv)
 
-    db_country = user_info["country"]
+    db_country = user_info.country
 
     geoloc = await app.state.services.fetch_geoloc(ip, headers)
 
@@ -829,8 +825,8 @@ async def handle_osu_login_request(
         # country wasn't stored on registration.
         log(f"Fixing {login_data['username']}'s country.", Ansi.LGREEN)
 
-        await users_repo.partial_update(
-            id=user_info["id"],
+        await bancho_login_service.update_country(
+            user_id=user_info.id,
             country=geoloc["country"]["acronym"],
         )
 
@@ -844,23 +840,24 @@ async def handle_osu_login_request(
         ip=ip,
     )
 
+    assert user_info.pw_bcrypt is not None
     player = Player(
-        id=user_info["id"],
-        name=user_info["name"],
-        priv=Privileges(user_info["priv"]),
-        pw_bcrypt=user_info["pw_bcrypt"].encode(),
+        id=user_info.id,
+        name=user_info.name,
+        priv=Privileges(user_info.priv),
+        pw_bcrypt=user_info.pw_bcrypt.encode(),
         token=Player.generate_token(),
         clan_id=clan_id,
         clan_priv=clan_priv,
         geoloc=geoloc,
         utc_offset=login_data["utc_offset"],
         pm_private=login_data["pm_private"],
-        silence_end=user_info["silence_end"],
-        donor_end=user_info["donor_end"],
+        silence_end=user_info.silence_end,
+        donor_end=user_info.donor_end,
         client_details=client_details,
         login_time=login_time,
         is_tourney_client=osu_version.stream == "tourney",
-        api_key=user_info["api_key"],
+        api_key=user_info.api_key,
     )
 
     data = bytearray(app.packets.protocol_version(19))
@@ -944,10 +941,7 @@ async def handle_osu_login_request(
 
         # the player may have been sent mail while offline,
         # enqueue any messages from their respective authors.
-        mail_rows = await mail_repo.fetch_all_mail_to_user(
-            user_id=player.id,
-            read=False,
-        )
+        mail_rows = await bancho_login_service.fetch_unread_mail(player.id)
 
         sent_to: set[int] = set()
 
@@ -955,21 +949,21 @@ async def handle_osu_login_request(
             # Add "Unread messages" header as the first message
             # for any given sender, to make it clear that the
             # messages are coming from the mail system.
-            if msg["from_id"] not in sent_to:
+            if msg.from_id not in sent_to:
                 data += app.packets.send_message(
-                    sender=msg["from_name"],
+                    sender=msg.from_name,
                     msg="Unread messages",
-                    recipient=msg["to_name"],
-                    sender_id=msg["from_id"],
+                    recipient=msg.to_name,
+                    sender_id=msg.from_id,
                 )
-                sent_to.add(msg["from_id"])
+                sent_to.add(msg.from_id)
 
-            msg_time = datetime.fromtimestamp(msg["time"])
+            msg_time = datetime.fromtimestamp(msg.time)
             data += app.packets.send_message(
-                sender=msg["from_name"],
-                msg=f'[{msg_time:%a %b %d @ %H:%M%p}] {msg["msg"]}',
-                recipient=msg["to_name"],
-                sender_id=msg["from_id"],
+                sender=msg.from_name,
+                msg=f"[{msg_time:%a %b %d @ %H:%M%p}] {msg.msg}",
+                recipient=msg.to_name,
+                sender_id=msg.from_id,
             )
 
         if not player.priv & Privileges.VERIFIED:
@@ -1212,7 +1206,7 @@ class SendPrivateMessage(BasePacket):
                 )
 
             # insert mail into db, marked as unread.
-            await mail_repo.create(
+            await get_legacy_repositories().mail.create(
                 from_id=player.id,
                 to_id=target.id,
                 msg=msg,
@@ -1289,13 +1283,13 @@ class SendPrivateMessage(BasePacket):
                                 for acc in app.settings.PP_CACHED_ACCURACIES
                             ]
 
-                            results = app.usecases.performance.calculate_performances(
+                            results = PerformanceService().calculate_performances(
                                 osu_file_path=str(BEATMAPS_PATH / f"{bmap.id}.osu"),
                                 scores=scores,
                             )
 
                             resp_msg = " | ".join(
-                                f"{acc}%: {result['performance']['pp']:,.2f}pp"
+                                f"{acc}%: {result.performance.pp:,.2f}pp"
                                 for acc, result in zip(
                                     app.settings.PP_CACHED_ACCURACIES,
                                     results,

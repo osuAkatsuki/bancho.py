@@ -3,12 +3,12 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import TypedDict
 
+import app.services.score_leaderboards as score_leaderboards
 from app.constants.leaderboard_types import LeaderboardType
 from app.constants.mods import Mods
 from app.constants.scoring_metrics import ScoringMetric
 from app.repositories.scores import BeatmapLeaderboardScoreRow
 from app.repositories.scores import PersonalBestLeaderboardScoreRow
-from app.usecases import score_leaderboards
 
 
 class _LeaderboardFetch(TypedDict):
@@ -119,22 +119,22 @@ def _beatmap_leaderboard_score(
     id: int,
     score: int | float,
 ) -> BeatmapLeaderboardScoreRow:
-    return {
-        "id": id,
-        "leaderboard_value": score,
-        "max_combo": 321,
-        "n50": 1,
-        "n100": 2,
-        "n300": 300,
-        "nmiss": 0,
-        "nkatu": 4,
-        "ngeki": 5,
-        "perfect": 1,
-        "mods": Mods.HIDDEN.value,
-        "time": 1_704_110_400,
-        "userid": 6,
-        "name": "test-user",
-    }
+    return BeatmapLeaderboardScoreRow(
+        id=id,
+        leaderboard_value=score,
+        max_combo=321,
+        n50=1,
+        n100=2,
+        n300=300,
+        nmiss=0,
+        nkatu=4,
+        ngeki=5,
+        perfect=1,
+        mods=Mods.HIDDEN.value,
+        time=1_704_110_400,
+        userid=6,
+        name="test-user",
+    )
 
 
 def _personal_best_leaderboard_score(
@@ -142,20 +142,20 @@ def _personal_best_leaderboard_score(
     id: int,
     score: int | float,
 ) -> PersonalBestLeaderboardScoreRow:
-    return {
-        "id": id,
-        "leaderboard_value": score,
-        "max_combo": 321,
-        "n50": 1,
-        "n100": 2,
-        "n300": 300,
-        "nmiss": 0,
-        "nkatu": 4,
-        "ngeki": 5,
-        "perfect": 1,
-        "mods": Mods.HIDDEN.value,
-        "time": 1_704_110_400,
-    }
+    return PersonalBestLeaderboardScoreRow(
+        id=id,
+        leaderboard_value=score,
+        max_combo=321,
+        n50=1,
+        n100=2,
+        n300=300,
+        nmiss=0,
+        nkatu=4,
+        ngeki=5,
+        perfect=1,
+        mods=Mods.HIDDEN.value,
+        time=1_704_110_400,
+    )
 
 
 async def test_fetch_leaderboard_scores_fetches_personal_best_rank() -> None:
@@ -175,21 +175,34 @@ async def test_fetch_leaderboard_scores_fetches_personal_best_rank() -> None:
         personal_best_rank=3,
     )
 
-    result = await score_leaderboards.fetch_leaderboard_scores(
+    service = score_leaderboards.ScoreLeaderboardsService(scores=scores)
+    result = await service.fetch_leaderboard_scores(
         leaderboard_type=LeaderboardType.Top,
         map_md5="map-md5",
         mode=0,
         mods=Mods.HIDDEN,
         player=player,
         scoring_metric="score",
-        scores=scores,
     )
 
     assert result.score_rows == [score_row]
-    assert result.personal_best_score_row == {
-        **personal_best_score_row,
-        "rank": 3,
-    }
+    assert result.personal_best_score_row == (
+        score_leaderboards.PersonalBestLeaderboardScoreListing(
+            id=personal_best_score_row.id,
+            leaderboard_value=personal_best_score_row.leaderboard_value,
+            max_combo=personal_best_score_row.max_combo,
+            n50=personal_best_score_row.n50,
+            n100=personal_best_score_row.n100,
+            n300=personal_best_score_row.n300,
+            nmiss=personal_best_score_row.nmiss,
+            nkatu=personal_best_score_row.nkatu,
+            ngeki=personal_best_score_row.ngeki,
+            perfect=personal_best_score_row.perfect,
+            mods=personal_best_score_row.mods,
+            time=personal_best_score_row.time,
+            rank=3,
+        )
+    )
     assert scores.leaderboard_fetches == [
         {
             "map_md5": "map-md5",
@@ -228,14 +241,14 @@ async def test_fetch_leaderboard_scores_skips_personal_best_when_empty() -> None
     )
     scores = _FakeScoresRepository(score_rows=[])
 
-    result = await score_leaderboards.fetch_leaderboard_scores(
+    service = score_leaderboards.ScoreLeaderboardsService(scores=scores)
+    result = await service.fetch_leaderboard_scores(
         leaderboard_type=LeaderboardType.Top,
         map_md5="map-md5",
         mode=0,
         mods=Mods.HIDDEN,
         player=player,
         scoring_metric="score",
-        scores=scores,
     )
 
     assert result.score_rows == []
@@ -254,14 +267,14 @@ async def test_fetch_leaderboard_scores_applies_mods_filter() -> None:
         score_rows=[_beatmap_leaderboard_score(id=10, score=123.45)],
     )
 
-    await score_leaderboards.fetch_leaderboard_scores(
+    service = score_leaderboards.ScoreLeaderboardsService(scores=scores)
+    await service.fetch_leaderboard_scores(
         leaderboard_type=LeaderboardType.Mods,
         map_md5="map-md5",
         mode=4,
         mods=Mods.HIDDEN | Mods.RELAX,
         player=player,
         scoring_metric="pp",
-        scores=scores,
     )
 
     assert scores.leaderboard_fetches[0]["mods"] == (Mods.HIDDEN | Mods.RELAX).value
@@ -279,14 +292,14 @@ async def test_fetch_leaderboard_scores_applies_friends_filter() -> None:
         score_rows=[_beatmap_leaderboard_score(id=10, score=123.45)],
     )
 
-    await score_leaderboards.fetch_leaderboard_scores(
+    service = score_leaderboards.ScoreLeaderboardsService(scores=scores)
+    await service.fetch_leaderboard_scores(
         leaderboard_type=LeaderboardType.Friends,
         map_md5="map-md5",
         mode=4,
         mods=Mods.HIDDEN | Mods.RELAX,
         player=player,
         scoring_metric="pp",
-        scores=scores,
     )
 
     assert scores.leaderboard_fetches[0]["mods"] is None
@@ -304,14 +317,14 @@ async def test_fetch_leaderboard_scores_applies_country_filter() -> None:
         score_rows=[_beatmap_leaderboard_score(id=10, score=123.45)],
     )
 
-    await score_leaderboards.fetch_leaderboard_scores(
+    service = score_leaderboards.ScoreLeaderboardsService(scores=scores)
+    await service.fetch_leaderboard_scores(
         leaderboard_type=LeaderboardType.Country,
         map_md5="map-md5",
         mode=4,
         mods=Mods.HIDDEN | Mods.RELAX,
         player=player,
         scoring_metric="pp",
-        scores=scores,
     )
 
     assert scores.leaderboard_fetches[0]["mods"] is None

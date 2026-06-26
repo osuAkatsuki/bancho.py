@@ -9,15 +9,15 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import app.state
-import app.usecases.performance
 import app.utils
 from app.constants.clientflags import ClientFlags
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
 from app.constants.score_statuses import SubmissionStatus
 from app.objects.beatmap import Beatmap
-from app.repositories import scores as scores_repo
-from app.usecases.performance import ScoreParams
+from app.repositories.legacy import get_legacy_repositories
+from app.services.performance import PerformanceService
+from app.services.performance import ScoreParams
 
 if TYPE_CHECKING:
     from app.objects.player import Player
@@ -147,39 +147,41 @@ class Score:
     @classmethod
     async def from_sql(cls, score_id: int) -> Score | None:
         """Create a score object from sql using its scoreid."""
-        rec = await scores_repo.fetch_one(score_id)
+        rec = await get_legacy_repositories().scores.fetch_one(
+            score_id,
+        )
 
         if rec is None:
             return None
 
         s = cls()
 
-        s.id = rec["id"]
-        s.bmap = await Beatmap.from_md5(rec["map_md5"])
-        s.player = await app.state.sessions.players.from_cache_or_sql(id=rec["userid"])
+        s.id = rec.id
+        s.bmap = await Beatmap.from_md5(rec.map_md5)
+        s.player = await app.state.sessions.players.from_cache_or_sql(id=rec.userid)
 
         s.sr = 0.0  # TODO
 
-        s.pp = rec["pp"]
-        s.score = rec["score"]
-        s.max_combo = rec["max_combo"]
-        s.mods = Mods(rec["mods"])
-        s.acc = rec["acc"]
-        s.n300 = rec["n300"]
-        s.n100 = rec["n100"]
-        s.n50 = rec["n50"]
-        s.nmiss = rec["nmiss"]
-        s.ngeki = rec["ngeki"]
-        s.nkatu = rec["nkatu"]
-        s.grade = Grade.from_str(rec["grade"])
-        s.perfect = rec["perfect"] == 1
-        s.status = SubmissionStatus(rec["status"])
+        s.pp = rec.pp
+        s.score = rec.score
+        s.max_combo = rec.max_combo
+        s.mods = Mods(rec.mods)
+        s.acc = rec.acc
+        s.n300 = rec.n300
+        s.n100 = rec.n100
+        s.n50 = rec.n50
+        s.nmiss = rec.nmiss
+        s.ngeki = rec.ngeki
+        s.nkatu = rec.nkatu
+        s.grade = Grade.from_str(rec.grade)
+        s.perfect = rec.perfect == 1
+        s.status = SubmissionStatus(rec.status)
         s.passed = s.status != SubmissionStatus.FAILED
-        s.mode = GameMode(rec["mode"])
-        s.server_time = rec["play_time"]
-        s.time_elapsed = rec["time_elapsed"]
-        s.client_flags = ClientFlags(rec["client_flags"])
-        s.client_checksum = rec["online_checksum"]
+        s.mode = GameMode(rec.mode)
+        s.server_time = rec.play_time
+        s.time_elapsed = rec.time_elapsed
+        s.client_flags = ClientFlags(rec.client_flags)
+        s.client_checksum = rec.online_checksum
 
         if s.bmap:
             s.rank = await s.calculate_placement()
@@ -309,19 +311,19 @@ class Score:
             nmiss=self.nmiss,
         )
 
-        result = app.usecases.performance.calculate_performances(
+        result = PerformanceService().calculate_performances(
             osu_file_path=str(BEATMAPS_PATH / f"{beatmap_id}.osu"),
             scores=[score_args],
         )
 
-        return result[0]["performance"]["pp"], result[0]["difficulty"]["stars"]
+        return result[0].performance.pp, result[0].difficulty.stars
 
     async def calculate_status(self) -> None:
         """Calculate the submission status of a submitted score."""
         assert self.player is not None
         assert self.bmap is not None
 
-        recs = await scores_repo.fetch_many(
+        recs = await get_legacy_repositories().scores.fetch_many(
             user_id=self.player.id,
             map_md5=self.bmap.md5,
             mode=self.mode,
@@ -333,13 +335,13 @@ class Score:
 
             # we have a score on the map.
             # save it as our previous best score.
-            self.prev_best = await Score.from_sql(rec["id"])
+            self.prev_best = await Score.from_sql(rec.id)
             assert self.prev_best is not None
 
             # if our new score is better, update
             # both of our score's submission statuses.
             # NOTE: this will be updated in sql later on in submission
-            if self.pp > rec["pp"]:
+            if self.pp > rec.pp:
                 self.status = SubmissionStatus.BEST
                 self.prev_best.status = SubmissionStatus.SUBMITTED
             else:
@@ -421,7 +423,7 @@ class Score:
         assert self.player is not None
 
         # TODO: apparently cached stats don't store replay views?
-        #       need to refactor that to be able to use stats_repo here
+        #       need to refactor that to be able to use StatsRepository here
         await app.state.services.database.execute(
             f"UPDATE stats "
             "SET replay_views = replay_views + 1 "

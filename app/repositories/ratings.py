@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from typing import TypedDict
-from typing import cast
+from dataclasses import dataclass
 
 from sqlalchemy import Column
 from sqlalchemy import Integer
@@ -10,7 +9,8 @@ from sqlalchemy import insert
 from sqlalchemy import select
 from sqlalchemy.dialects.mysql import TINYINT
 
-import app.state.services
+from app.adapters.database import Database
+from app.adapters.database import MySQLRow
 from app.repositories import Base
 
 
@@ -29,57 +29,68 @@ READ_PARAMS = (
 )
 
 
-class Rating(TypedDict):
+@dataclass(frozen=True, slots=True)
+class Rating:
     userid: int
     map_md5: str
     rating: int
 
 
-async def create(userid: int, map_md5: str, rating: int) -> Rating:
-    """Create a new rating."""
-    insert_stmt = insert(RatingsTable).values(
-        userid=userid,
-        map_md5=map_md5,
-        rating=rating,
-    )
-    await app.state.services.database.execute(insert_stmt)
+class RatingsRepository:
+    def __init__(self, database: Database) -> None:
+        self._database = database
 
-    select_stmt = (
-        select(*READ_PARAMS)
-        .where(RatingsTable.userid == userid)
-        .where(RatingsTable.map_md5 == map_md5)
-    )
-    _rating = await app.state.services.database.fetch_one(select_stmt)
-    assert _rating is not None
-    return cast(Rating, _rating)
+    def _deserialize_rating(self, row: MySQLRow) -> Rating:
+        return Rating(
+            userid=row["userid"],
+            map_md5=row["map_md5"],
+            rating=row["rating"],
+        )
 
+    async def create(self, userid: int, map_md5: str, rating: int) -> Rating:
+        """Create a new rating."""
+        insert_stmt = insert(RatingsTable).values(
+            userid=userid,
+            map_md5=map_md5,
+            rating=rating,
+        )
+        await self._database.execute(insert_stmt)
 
-async def fetch_many(
-    userid: int | None = None,
-    map_md5: str | None = None,
-    page: int | None = 1,
-    page_size: int | None = 50,
-) -> list[Rating]:
-    """Fetch multiple ratings, optionally with filter params and pagination."""
-    select_stmt = select(*READ_PARAMS)
-    if userid is not None:
-        select_stmt = select_stmt.where(RatingsTable.userid == userid)
-    if map_md5 is not None:
-        select_stmt = select_stmt.where(RatingsTable.map_md5 == map_md5)
+        select_stmt = (
+            select(*READ_PARAMS)
+            .where(RatingsTable.userid == userid)
+            .where(RatingsTable.map_md5 == map_md5)
+        )
+        _rating = await self._database.fetch_one(select_stmt)
+        assert _rating is not None
+        return self._deserialize_rating(_rating)
 
-    if page is not None and page_size is not None:
-        select_stmt = select_stmt.limit(page_size).offset((page - 1) * page_size)
+    async def fetch_many(
+        self,
+        userid: int | None = None,
+        map_md5: str | None = None,
+        page: int | None = 1,
+        page_size: int | None = 50,
+    ) -> list[Rating]:
+        """Fetch multiple ratings, optionally with filter params and pagination."""
+        select_stmt = select(*READ_PARAMS)
+        if userid is not None:
+            select_stmt = select_stmt.where(RatingsTable.userid == userid)
+        if map_md5 is not None:
+            select_stmt = select_stmt.where(RatingsTable.map_md5 == map_md5)
 
-    ratings = await app.state.services.database.fetch_all(select_stmt)
-    return cast(list[Rating], ratings)
+        if page is not None and page_size is not None:
+            select_stmt = select_stmt.limit(page_size).offset((page - 1) * page_size)
 
+        ratings = await self._database.fetch_all(select_stmt)
+        return [self._deserialize_rating(rating) for rating in ratings]
 
-async def fetch_one(userid: int, map_md5: str) -> Rating | None:
-    """Fetch a single rating for a given user and map."""
-    select_stmt = (
-        select(*READ_PARAMS)
-        .where(RatingsTable.userid == userid)
-        .where(RatingsTable.map_md5 == map_md5)
-    )
-    rating = await app.state.services.database.fetch_one(select_stmt)
-    return cast(Rating | None, rating)
+    async def fetch_one(self, userid: int, map_md5: str) -> Rating | None:
+        """Fetch a single rating for a given user and map."""
+        select_stmt = (
+            select(*READ_PARAMS)
+            .where(RatingsTable.userid == userid)
+            .where(RatingsTable.map_md5 == map_md5)
+        )
+        rating = await self._database.fetch_one(select_stmt)
+        return self._deserialize_rating(rating) if rating is not None else None

@@ -2,25 +2,28 @@
 
 from __future__ import annotations
 
+from typing import Annotated
+
 from fastapi import APIRouter
+from fastapi import Depends
 from fastapi import status
 from fastapi.param_functions import Query
 
-import app.state.sessions
+from app.api import dependencies as api_dependencies
 from app.api.v2.common import responses
 from app.api.v2.common.responses import Failure
 from app.api.v2.common.responses import Success
 from app.api.v2.models.players import Player
 from app.api.v2.models.players import PlayerStats
 from app.api.v2.models.players import PlayerStatus
-from app.repositories import stats as stats_repo
-from app.repositories import users as users_repo
+from app.services.players import PlayersService
 
 router = APIRouter()
 
 
 @router.get("/players")
 async def get_players(
+    *,
     priv: int | None = None,
     country: str | None = None,
     clan_id: int | None = None,
@@ -29,8 +32,12 @@ async def get_players(
     play_style: int | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
+    players_service: Annotated[
+        PlayersService,
+        Depends(api_dependencies.get_players_service),
+    ],
 ) -> Success[list[Player]] | Failure:
-    players = await users_repo.fetch_many(
+    listing = await players_service.fetch_players(
         priv=priv,
         country=country,
         clan_id=clan_id,
@@ -40,21 +47,13 @@ async def get_players(
         page=page,
         page_size=page_size,
     )
-    total_players = await users_repo.fetch_count(
-        priv=priv,
-        country=country,
-        clan_id=clan_id,
-        clan_priv=clan_priv,
-        preferred_mode=preferred_mode,
-        play_style=play_style,
-    )
 
-    response = [Player.from_mapping(rec) for rec in players]
+    response = [Player.model_validate(rec) for rec in listing.players]
 
     return responses.success(
         content=response,
         meta={
-            "total": total_players,
+            "total": listing.total_players,
             "page": page,
             "page_size": page_size,
         },
@@ -62,35 +61,46 @@ async def get_players(
 
 
 @router.get("/players/{player_id}")
-async def get_player(player_id: int) -> Success[Player] | Failure:
-    data = await users_repo.fetch_one(id=player_id)
+async def get_player(
+    player_id: int,
+    players_service: Annotated[
+        PlayersService,
+        Depends(api_dependencies.get_players_service),
+    ],
+) -> Success[Player] | Failure:
+    data = await players_service.fetch_player(player_id)
     if data is None:
         return responses.failure(
             message="Player not found.",
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
-    response = Player.from_mapping(data)
+    response = Player.model_validate(data)
     return responses.success(response)
 
 
 @router.get("/players/{player_id}/status")
-async def get_player_status(player_id: int) -> Success[PlayerStatus] | Failure:
-    player = app.state.sessions.players.get(id=player_id)
-
-    if not player:
+async def get_player_status(
+    player_id: int,
+    players_service: Annotated[
+        PlayersService,
+        Depends(api_dependencies.get_players_service),
+    ],
+) -> Success[PlayerStatus] | Failure:
+    status_data = players_service.fetch_player_status(player_id)
+    if status_data is None:
         return responses.failure(
             message="Player status not found.",
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
     response = PlayerStatus(
-        login_time=int(player.login_time),
-        action=int(player.status.action),
-        info_text=player.status.info_text,
-        mode=int(player.status.mode),
-        mods=int(player.status.mods),
-        beatmap_id=player.status.map_id,
+        login_time=status_data.login_time,
+        action=status_data.action,
+        info_text=status_data.info_text,
+        mode=status_data.mode,
+        mods=status_data.mods,
+        beatmap_id=status_data.beatmap_id,
     )
     return responses.success(response)
 
@@ -99,38 +109,47 @@ async def get_player_status(player_id: int) -> Success[PlayerStatus] | Failure:
 async def get_player_mode_stats(
     player_id: int,
     mode: int,
+    players_service: Annotated[
+        PlayersService,
+        Depends(api_dependencies.get_players_service),
+    ],
 ) -> Success[PlayerStats] | Failure:
-    data = await stats_repo.fetch_one(player_id, mode)
+    data = await players_service.fetch_player_mode_stats(
+        player_id=player_id,
+        mode=mode,
+    )
     if data is None:
         return responses.failure(
             message="Player stats not found.",
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
-    response = PlayerStats.from_mapping(data)
+    response = PlayerStats.model_validate(data)
     return responses.success(response)
 
 
 @router.get("/players/{player_id}/stats")
 async def get_player_stats(
     player_id: int,
+    *,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
+    players_service: Annotated[
+        PlayersService,
+        Depends(api_dependencies.get_players_service),
+    ],
 ) -> Success[list[PlayerStats]] | Failure:
-    data = await stats_repo.fetch_many(
+    listing = await players_service.fetch_player_stats(
         player_id=player_id,
         page=page,
         page_size=page_size,
     )
-    total_stats = await stats_repo.fetch_count(
-        player_id=player_id,
-    )
 
-    response = [PlayerStats.from_mapping(rec) for rec in data]
+    response = [PlayerStats.model_validate(rec) for rec in listing.stats]
     return responses.success(
         response,
         meta={
-            "total": total_stats,
+            "total": listing.total_stats,
             "page": page,
             "page_size": page_size,
         },

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from typing import TypedDict
-from typing import cast
+from dataclasses import dataclass
 
 from sqlalchemy import Column
 from sqlalchemy import Index
@@ -13,9 +12,11 @@ from sqlalchemy import select
 from sqlalchemy import update
 from sqlalchemy.dialects.mysql import TINYINT
 
-import app.state.services
 from app._typing import UNSET
 from app._typing import _UnsetSentinel
+from app.adapters.database import Database
+from app.adapters.database import MySQLRow
+from app.constants.privileges import Privileges
 from app.repositories import Base
 from app.utils import make_safe_name
 
@@ -75,12 +76,14 @@ READ_PARAMS = (
 )
 
 
-class User(TypedDict):
+@dataclass(frozen=True, slots=True)
+class User:
     id: int
     name: str
     safe_name: str
+    email: str | None
     priv: int
-    pw_bcrypt: str
+    pw_bcrypt: str | None
     country: str
     silence_end: int
     donor_end: int
@@ -96,175 +99,235 @@ class User(TypedDict):
     api_key: str | None
 
 
-async def create(
-    name: str,
-    email: str,
-    pw_bcrypt: bytes,
-    country: str,
-) -> User:
-    """Create a new user in the database."""
-    insert_stmt = insert(UsersTable).values(
-        name=name,
-        safe_name=make_safe_name(name),
-        email=email,
-        pw_bcrypt=pw_bcrypt,
-        country=country,
-        creation_time=func.unix_timestamp(),
-        latest_activity=func.unix_timestamp(),
-    )
-    rec_id = await app.state.services.database.execute(insert_stmt)
-
-    select_stmt = select(*READ_PARAMS).where(UsersTable.id == rec_id)
-    user = await app.state.services.database.fetch_one(select_stmt)
-    assert user is not None
-    return cast(User, user)
+@dataclass(frozen=True, slots=True)
+class SearchUser:
+    id: int
+    name: str
 
 
-async def fetch_one(
-    id: int | None = None,
-    name: str | None = None,
-    email: str | None = None,
-    fetch_all_fields: bool = False,  # TODO: probably remove this if possible
-) -> User | None:
-    """Fetch a single user from the database."""
-    if id is None and name is None and email is None:
-        raise ValueError("Must provide at least one parameter.")
+class UsersRepository:
+    def __init__(self, database: Database) -> None:
+        self._database = database
 
-    if fetch_all_fields:
-        select_stmt = select(UsersTable)
-    else:
+    def _deserialize_user(self, row: MySQLRow) -> User:
+        return User(
+            id=row["id"],
+            name=row["name"],
+            safe_name=row["safe_name"],
+            email=row.get("email"),
+            priv=row["priv"],
+            pw_bcrypt=row.get("pw_bcrypt"),
+            country=row["country"],
+            silence_end=row["silence_end"],
+            donor_end=row["donor_end"],
+            creation_time=row["creation_time"],
+            latest_activity=row["latest_activity"],
+            clan_id=row["clan_id"],
+            clan_priv=row["clan_priv"],
+            preferred_mode=row["preferred_mode"],
+            play_style=row["play_style"],
+            custom_badge_name=row["custom_badge_name"],
+            custom_badge_icon=row["custom_badge_icon"],
+            userpage_content=row["userpage_content"],
+            api_key=row.get("api_key"),
+        )
+
+    def _deserialize_search_user(self, row: MySQLRow) -> SearchUser:
+        return SearchUser(
+            id=row["id"],
+            name=row["name"],
+        )
+
+    async def create(
+        self,
+        name: str,
+        email: str,
+        pw_bcrypt: bytes,
+        country: str,
+    ) -> User:
+        """Create a new user in the database."""
+        insert_stmt = insert(UsersTable).values(
+            name=name,
+            safe_name=make_safe_name(name),
+            email=email,
+            pw_bcrypt=pw_bcrypt,
+            country=country,
+            creation_time=func.unix_timestamp(),
+            latest_activity=func.unix_timestamp(),
+        )
+        rec_id = await self._database.execute(insert_stmt)
+
+        select_stmt = select(*READ_PARAMS).where(UsersTable.id == rec_id)
+        user = await self._database.fetch_one(select_stmt)
+        assert user is not None
+        return self._deserialize_user(user)
+
+    async def fetch_one(
+        self,
+        id: int | None = None,
+        name: str | None = None,
+        email: str | None = None,
+        fetch_all_fields: bool = False,  # TODO: probably remove this if possible
+    ) -> User | None:
+        """Fetch a single user from the database."""
+        if id is None and name is None and email is None:
+            raise ValueError("Must provide at least one parameter.")
+
+        if fetch_all_fields:
+            select_stmt = select(UsersTable)
+        else:
+            select_stmt = select(*READ_PARAMS)
+
+        if id is not None:
+            select_stmt = select_stmt.where(UsersTable.id == id)
+        if name is not None:
+            select_stmt = select_stmt.where(
+                UsersTable.safe_name == make_safe_name(name),
+            )
+        if email is not None:
+            select_stmt = select_stmt.where(UsersTable.email == email)
+
+        user = await self._database.fetch_one(select_stmt)
+        return self._deserialize_user(user) if user is not None else None
+
+    async def fetch_count(
+        self,
+        priv: int | None = None,
+        country: str | None = None,
+        clan_id: int | None = None,
+        clan_priv: int | None = None,
+        preferred_mode: int | None = None,
+        play_style: int | None = None,
+    ) -> int:
+        """Fetch the number of users in the database."""
+        select_stmt = select(func.count().label("count")).select_from(UsersTable)
+        if priv is not None:
+            select_stmt = select_stmt.where(UsersTable.priv == priv)
+        if country is not None:
+            select_stmt = select_stmt.where(UsersTable.country == country)
+        if clan_id is not None:
+            select_stmt = select_stmt.where(UsersTable.clan_id == clan_id)
+        if clan_priv is not None:
+            select_stmt = select_stmt.where(UsersTable.clan_priv == clan_priv)
+        if preferred_mode is not None:
+            select_stmt = select_stmt.where(UsersTable.preferred_mode == preferred_mode)
+        if play_style is not None:
+            select_stmt = select_stmt.where(UsersTable.play_style == play_style)
+
+        rec = await self._database.fetch_one(select_stmt)
+        assert rec is not None
+        return int(rec["count"])
+
+    async def search_public(self, name: str | None = None) -> list[SearchUser]:
+        select_stmt = (
+            select(UsersTable.id, UsersTable.name)
+            .where(
+                UsersTable.priv.bitwise_and(
+                    Privileges.UNRESTRICTED.value | Privileges.VERIFIED.value,
+                )
+                == (Privileges.UNRESTRICTED.value | Privileges.VERIFIED.value),
+            )
+            .order_by(UsersTable.id.asc())
+        )
+
+        if name is not None:
+            select_stmt = select_stmt.where(UsersTable.name.like(f"%{name}%"))
+
+        users = await self._database.fetch_all(select_stmt)
+        return [self._deserialize_search_user(user) for user in users]
+
+    async def fetch_many(
+        self,
+        priv: int | None = None,
+        country: str | None = None,
+        clan_id: int | None = None,
+        clan_priv: int | None = None,
+        preferred_mode: int | None = None,
+        play_style: int | None = None,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> list[User]:
+        """Fetch multiple users from the database."""
         select_stmt = select(*READ_PARAMS)
+        if priv is not None:
+            select_stmt = select_stmt.where(UsersTable.priv == priv)
+        if country is not None:
+            select_stmt = select_stmt.where(UsersTable.country == country)
+        if clan_id is not None:
+            select_stmt = select_stmt.where(UsersTable.clan_id == clan_id)
+        if clan_priv is not None:
+            select_stmt = select_stmt.where(UsersTable.clan_priv == clan_priv)
+        if preferred_mode is not None:
+            select_stmt = select_stmt.where(UsersTable.preferred_mode == preferred_mode)
+        if play_style is not None:
+            select_stmt = select_stmt.where(UsersTable.play_style == play_style)
 
-    if id is not None:
-        select_stmt = select_stmt.where(UsersTable.id == id)
-    if name is not None:
-        select_stmt = select_stmt.where(UsersTable.safe_name == make_safe_name(name))
-    if email is not None:
-        select_stmt = select_stmt.where(UsersTable.email == email)
+        if page is not None and page_size is not None:
+            select_stmt = select_stmt.limit(page_size).offset((page - 1) * page_size)
 
-    user = await app.state.services.database.fetch_one(select_stmt)
-    return cast(User | None, user)
+        users = await self._database.fetch_all(select_stmt)
+        return [self._deserialize_user(user) for user in users]
 
+    async def partial_update(
+        self,
+        id: int,
+        name: str | _UnsetSentinel = UNSET,
+        email: str | _UnsetSentinel = UNSET,
+        priv: int | _UnsetSentinel = UNSET,
+        country: str | _UnsetSentinel = UNSET,
+        silence_end: int | _UnsetSentinel = UNSET,
+        donor_end: int | _UnsetSentinel = UNSET,
+        creation_time: int | _UnsetSentinel = UNSET,
+        latest_activity: int | _UnsetSentinel = UNSET,
+        clan_id: int | _UnsetSentinel = UNSET,
+        clan_priv: int | _UnsetSentinel = UNSET,
+        preferred_mode: int | _UnsetSentinel = UNSET,
+        play_style: int | _UnsetSentinel = UNSET,
+        custom_badge_name: str | None | _UnsetSentinel = UNSET,
+        custom_badge_icon: str | None | _UnsetSentinel = UNSET,
+        userpage_content: str | None | _UnsetSentinel = UNSET,
+        api_key: str | None | _UnsetSentinel = UNSET,
+    ) -> User | None:
+        """Update a user in the database."""
+        update_stmt = update(UsersTable).where(UsersTable.id == id)
+        if not isinstance(name, _UnsetSentinel):
+            update_stmt = update_stmt.values(name=name, safe_name=make_safe_name(name))
+        if not isinstance(email, _UnsetSentinel):
+            update_stmt = update_stmt.values(email=email)
+        if not isinstance(priv, _UnsetSentinel):
+            update_stmt = update_stmt.values(priv=priv)
+        if not isinstance(country, _UnsetSentinel):
+            update_stmt = update_stmt.values(country=country)
+        if not isinstance(silence_end, _UnsetSentinel):
+            update_stmt = update_stmt.values(silence_end=silence_end)
+        if not isinstance(donor_end, _UnsetSentinel):
+            update_stmt = update_stmt.values(donor_end=donor_end)
+        if not isinstance(creation_time, _UnsetSentinel):
+            update_stmt = update_stmt.values(creation_time=creation_time)
+        if not isinstance(latest_activity, _UnsetSentinel):
+            update_stmt = update_stmt.values(latest_activity=latest_activity)
+        if not isinstance(clan_id, _UnsetSentinel):
+            update_stmt = update_stmt.values(clan_id=clan_id)
+        if not isinstance(clan_priv, _UnsetSentinel):
+            update_stmt = update_stmt.values(clan_priv=clan_priv)
+        if not isinstance(preferred_mode, _UnsetSentinel):
+            update_stmt = update_stmt.values(preferred_mode=preferred_mode)
+        if not isinstance(play_style, _UnsetSentinel):
+            update_stmt = update_stmt.values(play_style=play_style)
+        if not isinstance(custom_badge_name, _UnsetSentinel):
+            update_stmt = update_stmt.values(custom_badge_name=custom_badge_name)
+        if not isinstance(custom_badge_icon, _UnsetSentinel):
+            update_stmt = update_stmt.values(custom_badge_icon=custom_badge_icon)
+        if not isinstance(userpage_content, _UnsetSentinel):
+            update_stmt = update_stmt.values(userpage_content=userpage_content)
+        if not isinstance(api_key, _UnsetSentinel):
+            update_stmt = update_stmt.values(api_key=api_key)
 
-async def fetch_count(
-    priv: int | None = None,
-    country: str | None = None,
-    clan_id: int | None = None,
-    clan_priv: int | None = None,
-    preferred_mode: int | None = None,
-    play_style: int | None = None,
-) -> int:
-    """Fetch the number of users in the database."""
-    select_stmt = select(func.count().label("count")).select_from(UsersTable)
-    if priv is not None:
-        select_stmt = select_stmt.where(UsersTable.priv == priv)
-    if country is not None:
-        select_stmt = select_stmt.where(UsersTable.country == country)
-    if clan_id is not None:
-        select_stmt = select_stmt.where(UsersTable.clan_id == clan_id)
-    if clan_priv is not None:
-        select_stmt = select_stmt.where(UsersTable.clan_priv == clan_priv)
-    if preferred_mode is not None:
-        select_stmt = select_stmt.where(UsersTable.preferred_mode == preferred_mode)
-    if play_style is not None:
-        select_stmt = select_stmt.where(UsersTable.play_style == play_style)
+        await self._database.execute(update_stmt)
 
-    rec = await app.state.services.database.fetch_one(select_stmt)
-    assert rec is not None
-    return cast(int, rec["count"])
-
-
-async def fetch_many(
-    priv: int | None = None,
-    country: str | None = None,
-    clan_id: int | None = None,
-    clan_priv: int | None = None,
-    preferred_mode: int | None = None,
-    play_style: int | None = None,
-    page: int | None = None,
-    page_size: int | None = None,
-) -> list[User]:
-    """Fetch multiple users from the database."""
-    select_stmt = select(*READ_PARAMS)
-    if priv is not None:
-        select_stmt = select_stmt.where(UsersTable.priv == priv)
-    if country is not None:
-        select_stmt = select_stmt.where(UsersTable.country == country)
-    if clan_id is not None:
-        select_stmt = select_stmt.where(UsersTable.clan_id == clan_id)
-    if clan_priv is not None:
-        select_stmt = select_stmt.where(UsersTable.clan_priv == clan_priv)
-    if preferred_mode is not None:
-        select_stmt = select_stmt.where(UsersTable.preferred_mode == preferred_mode)
-    if play_style is not None:
-        select_stmt = select_stmt.where(UsersTable.play_style == play_style)
-
-    if page is not None and page_size is not None:
-        select_stmt = select_stmt.limit(page_size).offset((page - 1) * page_size)
-
-    users = await app.state.services.database.fetch_all(select_stmt)
-    return cast(list[User], users)
-
-
-async def partial_update(
-    id: int,
-    name: str | _UnsetSentinel = UNSET,
-    email: str | _UnsetSentinel = UNSET,
-    priv: int | _UnsetSentinel = UNSET,
-    country: str | _UnsetSentinel = UNSET,
-    silence_end: int | _UnsetSentinel = UNSET,
-    donor_end: int | _UnsetSentinel = UNSET,
-    creation_time: _UnsetSentinel | _UnsetSentinel = UNSET,
-    latest_activity: int | _UnsetSentinel = UNSET,
-    clan_id: int | _UnsetSentinel = UNSET,
-    clan_priv: int | _UnsetSentinel = UNSET,
-    preferred_mode: int | _UnsetSentinel = UNSET,
-    play_style: int | _UnsetSentinel = UNSET,
-    custom_badge_name: str | None | _UnsetSentinel = UNSET,
-    custom_badge_icon: str | None | _UnsetSentinel = UNSET,
-    userpage_content: str | None | _UnsetSentinel = UNSET,
-    api_key: str | None | _UnsetSentinel = UNSET,
-) -> User | None:
-    """Update a user in the database."""
-    update_stmt = update(UsersTable).where(UsersTable.id == id)
-    if not isinstance(name, _UnsetSentinel):
-        update_stmt = update_stmt.values(name=name, safe_name=make_safe_name(name))
-    if not isinstance(email, _UnsetSentinel):
-        update_stmt = update_stmt.values(email=email)
-    if not isinstance(priv, _UnsetSentinel):
-        update_stmt = update_stmt.values(priv=priv)
-    if not isinstance(country, _UnsetSentinel):
-        update_stmt = update_stmt.values(country=country)
-    if not isinstance(silence_end, _UnsetSentinel):
-        update_stmt = update_stmt.values(silence_end=silence_end)
-    if not isinstance(donor_end, _UnsetSentinel):
-        update_stmt = update_stmt.values(donor_end=donor_end)
-    if not isinstance(creation_time, _UnsetSentinel):
-        update_stmt = update_stmt.values(creation_time=creation_time)
-    if not isinstance(latest_activity, _UnsetSentinel):
-        update_stmt = update_stmt.values(latest_activity=latest_activity)
-    if not isinstance(clan_id, _UnsetSentinel):
-        update_stmt = update_stmt.values(clan_id=clan_id)
-    if not isinstance(clan_priv, _UnsetSentinel):
-        update_stmt = update_stmt.values(clan_priv=clan_priv)
-    if not isinstance(preferred_mode, _UnsetSentinel):
-        update_stmt = update_stmt.values(preferred_mode=preferred_mode)
-    if not isinstance(play_style, _UnsetSentinel):
-        update_stmt = update_stmt.values(play_style=play_style)
-    if not isinstance(custom_badge_name, _UnsetSentinel):
-        update_stmt = update_stmt.values(custom_badge_name=custom_badge_name)
-    if not isinstance(custom_badge_icon, _UnsetSentinel):
-        update_stmt = update_stmt.values(custom_badge_icon=custom_badge_icon)
-    if not isinstance(userpage_content, _UnsetSentinel):
-        update_stmt = update_stmt.values(userpage_content=userpage_content)
-    if not isinstance(api_key, _UnsetSentinel):
-        update_stmt = update_stmt.values(api_key=api_key)
-
-    await app.state.services.database.execute(update_stmt)
-
-    select_stmt = select(*READ_PARAMS).where(UsersTable.id == id)
-    user = await app.state.services.database.fetch_one(select_stmt)
-    return cast(User | None, user)
+        select_stmt = select(*READ_PARAMS).where(UsersTable.id == id)
+        user = await self._database.fetch_one(select_stmt)
+        return self._deserialize_user(user) if user is not None else None
 
 
 # TODO: delete?

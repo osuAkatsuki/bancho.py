@@ -3,20 +3,28 @@ from __future__ import annotations
 import secrets
 from datetime import datetime
 
-from app.repositories import clans as clans_repo
-from app.repositories import maps as maps_repo
-from app.repositories import scores as scores_repo
-from app.repositories import stats as stats_repo
-from app.repositories import users as users_repo
+import app.state.services
+from app.repositories.clans import Clan
+from app.repositories.clans import ClansRepository
+from app.repositories.maps import Map
+from app.repositories.maps import MapServer
+from app.repositories.maps import MapsRepository
+from app.repositories.scores import Score
+from app.repositories.scores import ScoresRepository
+from app.repositories.stats import Stat
+from app.repositories.stats import StatsRepository
+from app.repositories.users import User
+from app.repositories.users import UsersRepository
 
 
 async def create_user(
     *,
     country: str = "ca",
     preferred_mode: int = 0,
-) -> users_repo.User:
+) -> User:
     suffix = secrets.token_hex(4)
-    user = await users_repo.create(
+    users = UsersRepository(app.state.services.database)
+    user = await users.create(
         name=f"test-{suffix}",
         email=f"test-{suffix}@akatsuki.pw",
         pw_bcrypt=b"not-a-real-password-hash",
@@ -24,8 +32,8 @@ async def create_user(
     )
 
     if preferred_mode:
-        updated_user = await users_repo.partial_update(
-            id=user["id"],
+        updated_user = await users.partial_update(
+            id=user.id,
             preferred_mode=preferred_mode,
         )
         assert updated_user is not None
@@ -40,10 +48,11 @@ async def create_player_stats(
     mode: int = 0,
     pp: int = 123,
     plays: int = 7,
-) -> stats_repo.Stat:
-    await stats_repo.create_all_modes(player_id)
+) -> Stat:
+    stats = StatsRepository(app.state.services.database)
+    await stats.create_all_modes(player_id)
 
-    stat = await stats_repo.partial_update(
+    stat = await stats.partial_update(
         player_id=player_id,
         mode=mode,
         pp=pp,
@@ -56,9 +65,9 @@ async def create_player_stats(
     return stat
 
 
-async def create_clan(*, owner_id: int) -> clans_repo.Clan:
+async def create_clan(*, owner_id: int) -> Clan:
     suffix = secrets.token_hex(3)
-    return await clans_repo.create(
+    return await ClansRepository(app.state.services.database).create(
         name=f"Clan {suffix}",
         tag=suffix.upper(),
         owner=owner_id,
@@ -69,15 +78,15 @@ async def create_map(
     *,
     set_id: int | None = None,
     mode: int = 0,
-) -> maps_repo.Map:
+) -> Map:
     map_id = secrets.randbelow(1_000_000) + 1_000_000
     if set_id is None:
         set_id = secrets.randbelow(1_000_000) + 2_000_000
 
     suffix = secrets.token_hex(4)
-    return await maps_repo.create(
+    return await MapsRepository(app.state.services.database).create(
         id=map_id,
-        server=maps_repo.MapServer.OSU,
+        server=MapServer.OSU,
         set_id=set_id,
         status=2,
         md5=secrets.token_hex(16),
@@ -111,8 +120,8 @@ async def create_score(
     mods: int = 64,
     status: int = 2,
     mode: int = 0,
-) -> scores_repo.Score:
-    return await scores_repo.create(
+) -> Score:
+    return await ScoresRepository(app.state.services.database).create(
         map_md5=map_md5,
         score=score,
         pp=pp,

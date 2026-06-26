@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
-from typing import TypedDict
-from typing import cast
 
-import app.state.services
 from app._typing import UNSET
 from app._typing import _UnsetSentinel
+from app.adapters.database import Database
+from app.adapters.database import MySQLRow
 from app.repositories import Base
 
 if TYPE_CHECKING:
@@ -49,7 +49,8 @@ READ_PARAMS = (
 )
 
 
-class Achievement(TypedDict):
+@dataclass(frozen=True, slots=True)
+class Achievement:
     id: int
     file: str
     name: str
@@ -57,117 +58,125 @@ class Achievement(TypedDict):
     cond: Callable[[Score, int], bool]
 
 
-async def create(
-    file: str,
-    name: str,
-    desc: str,
-    cond: str,
-) -> Achievement:
-    """Create a new achievement."""
-    insert_stmt = insert(AchievementsTable).values(
-        file=file,
-        name=name,
-        desc=desc,
-        cond=cond,
-    )
-    rec_id = await app.state.services.database.execute(insert_stmt)
+class AchievementsRepository:
+    def __init__(self, database: Database) -> None:
+        self._database = database
 
-    select_stmt = select(*READ_PARAMS).where(AchievementsTable.id == rec_id)
-    achievement = await app.state.services.database.fetch_one(select_stmt)
-    assert achievement is not None
+    def _deserialize_achievement(self, row: MySQLRow) -> Achievement:
+        return Achievement(
+            id=row["id"],
+            file=row["file"],
+            name=row["name"],
+            desc=row["desc"],
+            cond=eval(f'lambda score, mode_vn: {row["cond"]}'),
+        )
 
-    achievement["cond"] = eval(f'lambda score, mode_vn: {achievement["cond"]}')
-    return cast(Achievement, achievement)
+    async def create(
+        self,
+        file: str,
+        name: str,
+        desc: str,
+        cond: str,
+    ) -> Achievement:
+        """Create a new achievement."""
+        insert_stmt = insert(AchievementsTable).values(
+            file=file,
+            name=name,
+            desc=desc,
+            cond=cond,
+        )
+        rec_id = await self._database.execute(insert_stmt)
 
+        select_stmt = select(*READ_PARAMS).where(AchievementsTable.id == rec_id)
+        achievement = await self._database.fetch_one(select_stmt)
+        assert achievement is not None
 
-async def fetch_one(
-    id: int | None = None,
-    name: str | None = None,
-) -> Achievement | None:
-    """Fetch a single achievement."""
-    if id is None and name is None:
-        raise ValueError("Must provide at least one parameter.")
+        return self._deserialize_achievement(achievement)
 
-    select_stmt = select(*READ_PARAMS)
+    async def fetch_one(
+        self,
+        id: int | None = None,
+        name: str | None = None,
+    ) -> Achievement | None:
+        """Fetch a single achievement."""
+        if id is None and name is None:
+            raise ValueError("Must provide at least one parameter.")
 
-    if id is not None:
-        select_stmt = select_stmt.where(AchievementsTable.id == id)
-    if name is not None:
-        select_stmt = select_stmt.where(AchievementsTable.name == name)
+        select_stmt = select(*READ_PARAMS)
 
-    achievement = await app.state.services.database.fetch_one(select_stmt)
-    if achievement is None:
-        return None
+        if id is not None:
+            select_stmt = select_stmt.where(AchievementsTable.id == id)
+        if name is not None:
+            select_stmt = select_stmt.where(AchievementsTable.name == name)
 
-    achievement["cond"] = eval(f'lambda score, mode_vn: {achievement["cond"]}')
-    return cast(Achievement, achievement)
+        achievement = await self._database.fetch_one(select_stmt)
+        if achievement is None:
+            return None
 
+        return self._deserialize_achievement(achievement)
 
-async def fetch_count() -> int:
-    """Fetch the number of achievements."""
-    select_stmt = select(func.count().label("count")).select_from(AchievementsTable)
+    async def fetch_count(self) -> int:
+        """Fetch the number of achievements."""
+        select_stmt = select(func.count().label("count")).select_from(AchievementsTable)
 
-    rec = await app.state.services.database.fetch_one(select_stmt)
-    assert rec is not None
-    return cast(int, rec["count"])
+        rec = await self._database.fetch_one(select_stmt)
+        assert rec is not None
+        return int(rec["count"])
 
+    async def fetch_many(
+        self,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> list[Achievement]:
+        """Fetch a list of achievements."""
+        select_stmt = select(*READ_PARAMS)
+        if page is not None and page_size is not None:
+            select_stmt = select_stmt.limit(page_size).offset((page - 1) * page_size)
 
-async def fetch_many(
-    page: int | None = None,
-    page_size: int | None = None,
-) -> list[Achievement]:
-    """Fetch a list of achievements."""
-    select_stmt = select(*READ_PARAMS)
-    if page is not None and page_size is not None:
-        select_stmt = select_stmt.limit(page_size).offset((page - 1) * page_size)
+        achievements = await self._database.fetch_all(select_stmt)
+        return [
+            self._deserialize_achievement(achievement) for achievement in achievements
+        ]
 
-    achievements = await app.state.services.database.fetch_all(select_stmt)
-    for achievement in achievements:
-        achievement["cond"] = eval(f'lambda score, mode_vn: {achievement["cond"]}')
+    async def partial_update(
+        self,
+        id: int,
+        file: str | _UnsetSentinel = UNSET,
+        name: str | _UnsetSentinel = UNSET,
+        desc: str | _UnsetSentinel = UNSET,
+        cond: str | _UnsetSentinel = UNSET,
+    ) -> Achievement | None:
+        """Update an existing achievement."""
+        update_stmt = update(AchievementsTable).where(AchievementsTable.id == id)
+        if not isinstance(file, _UnsetSentinel):
+            update_stmt = update_stmt.values(file=file)
+        if not isinstance(name, _UnsetSentinel):
+            update_stmt = update_stmt.values(name=name)
+        if not isinstance(desc, _UnsetSentinel):
+            update_stmt = update_stmt.values(desc=desc)
+        if not isinstance(cond, _UnsetSentinel):
+            update_stmt = update_stmt.values(cond=cond)
 
-    return cast(list[Achievement], achievements)
+        await self._database.execute(update_stmt)
 
+        select_stmt = select(*READ_PARAMS).where(AchievementsTable.id == id)
+        achievement = await self._database.fetch_one(select_stmt)
+        if achievement is None:
+            return None
 
-async def partial_update(
-    id: int,
-    file: str | _UnsetSentinel = UNSET,
-    name: str | _UnsetSentinel = UNSET,
-    desc: str | _UnsetSentinel = UNSET,
-    cond: str | _UnsetSentinel = UNSET,
-) -> Achievement | None:
-    """Update an existing achievement."""
-    update_stmt = update(AchievementsTable).where(AchievementsTable.id == id)
-    if not isinstance(file, _UnsetSentinel):
-        update_stmt = update_stmt.values(file=file)
-    if not isinstance(name, _UnsetSentinel):
-        update_stmt = update_stmt.values(name=name)
-    if not isinstance(desc, _UnsetSentinel):
-        update_stmt = update_stmt.values(desc=desc)
-    if not isinstance(cond, _UnsetSentinel):
-        update_stmt = update_stmt.values(cond=cond)
+        return self._deserialize_achievement(achievement)
 
-    await app.state.services.database.execute(update_stmt)
+    async def delete_one(
+        self,
+        id: int,
+    ) -> Achievement | None:
+        """Delete an existing achievement."""
+        select_stmt = select(*READ_PARAMS).where(AchievementsTable.id == id)
+        achievement = await self._database.fetch_one(select_stmt)
+        if achievement is None:
+            return None
 
-    select_stmt = select(*READ_PARAMS).where(AchievementsTable.id == id)
-    achievement = await app.state.services.database.fetch_one(select_stmt)
-    if achievement is None:
-        return None
+        delete_stmt = delete(AchievementsTable).where(AchievementsTable.id == id)
+        await self._database.execute(delete_stmt)
 
-    achievement["cond"] = eval(f'lambda score, mode_vn: {achievement["cond"]}')
-    return cast(Achievement, achievement)
-
-
-async def delete_one(
-    id: int,
-) -> Achievement | None:
-    """Delete an existing achievement."""
-    select_stmt = select(*READ_PARAMS).where(AchievementsTable.id == id)
-    achievement = await app.state.services.database.fetch_one(select_stmt)
-    if achievement is None:
-        return None
-
-    delete_stmt = delete(AchievementsTable).where(AchievementsTable.id == id)
-    await app.state.services.database.execute(delete_stmt)
-
-    achievement["cond"] = eval(f'lambda score, mode_vn: {achievement["cond"]}')
-    return cast(Achievement, achievement)
+        return self._deserialize_achievement(achievement)

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from typing import TypedDict
-from typing import cast
+from dataclasses import dataclass
 
 from sqlalchemy import Column
 from sqlalchemy import Integer
@@ -9,7 +8,8 @@ from sqlalchemy import func
 from sqlalchemy import insert
 from sqlalchemy import select
 
-import app.state.services
+from app.adapters.database import Database
+from app.adapters.database import MySQLRow
 from app.repositories import Base
 
 
@@ -28,48 +28,59 @@ READ_PARAMS = (
 )
 
 
-class Favourite(TypedDict):
+@dataclass(frozen=True, slots=True)
+class Favourite:
     userid: int
     setid: int
     created_at: int
 
 
-async def create(
-    userid: int,
-    setid: int,
-) -> Favourite:
-    """Create a new favourite mapset entry in the database."""
-    insert_stmt = insert(FavouritesTable).values(
-        userid=userid,
-        setid=setid,
-        created_at=func.unix_timestamp(),
-    )
-    await app.state.services.database.execute(insert_stmt)
+class FavouritesRepository:
+    def __init__(self, database: Database) -> None:
+        self._database = database
 
-    select_stmt = (
-        select(*READ_PARAMS)
-        .where(FavouritesTable.userid == userid)
-        .where(FavouritesTable.setid == setid)
-    )
-    favourite = await app.state.services.database.fetch_one(select_stmt)
+    def _deserialize_favourite(self, row: MySQLRow) -> Favourite:
+        return Favourite(
+            userid=row["userid"],
+            setid=row["setid"],
+            created_at=row["created_at"],
+        )
 
-    assert favourite is not None
-    return cast(Favourite, favourite)
+    async def create(
+        self,
+        userid: int,
+        setid: int,
+    ) -> Favourite:
+        """Create a new favourite mapset entry in the database."""
+        insert_stmt = insert(FavouritesTable).values(
+            userid=userid,
+            setid=setid,
+            created_at=func.unix_timestamp(),
+        )
+        await self._database.execute(insert_stmt)
 
+        select_stmt = (
+            select(*READ_PARAMS)
+            .where(FavouritesTable.userid == userid)
+            .where(FavouritesTable.setid == setid)
+        )
+        favourite = await self._database.fetch_one(select_stmt)
 
-async def fetch_all(userid: int) -> list[Favourite]:
-    """Fetch all favourites from a player."""
-    select_stmt = select(*READ_PARAMS).where(FavouritesTable.userid == userid)
-    favourites = await app.state.services.database.fetch_all(select_stmt)
-    return cast(list[Favourite], favourites)
+        assert favourite is not None
+        return self._deserialize_favourite(favourite)
 
+    async def fetch_all(self, userid: int) -> list[Favourite]:
+        """Fetch all favourites from a player."""
+        select_stmt = select(*READ_PARAMS).where(FavouritesTable.userid == userid)
+        favourites = await self._database.fetch_all(select_stmt)
+        return [self._deserialize_favourite(favourite) for favourite in favourites]
 
-async def fetch_one(userid: int, setid: int) -> Favourite | None:
-    """Check if a mapset is already a favourite."""
-    select_stmt = (
-        select(*READ_PARAMS)
-        .where(FavouritesTable.userid == userid)
-        .where(FavouritesTable.setid == setid)
-    )
-    favourite = await app.state.services.database.fetch_one(select_stmt)
-    return cast(Favourite | None, favourite)
+    async def fetch_one(self, userid: int, setid: int) -> Favourite | None:
+        """Check if a mapset is already a favourite."""
+        select_stmt = (
+            select(*READ_PARAMS)
+            .where(FavouritesTable.userid == userid)
+            .where(FavouritesTable.setid == setid)
+        )
+        favourite = await self._database.fetch_one(select_stmt)
+        return self._deserialize_favourite(favourite) if favourite is not None else None
