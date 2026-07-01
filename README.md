@@ -5,12 +5,14 @@
 [![pre-commit.ci status](https://results.pre-commit.ci/badge/github/osuAkatsuki/bancho.py/master.svg)](https://results.pre-commit.ci/latest/github/osuAkatsuki/bancho.py/master)
 [![Discord](https://discordapp.com/api/guilds/748687781605408908/widget.png?style=shield)](https://discord.gg/ShEQgUx)
 
-**bancho.py** is an in-progress osu! server implementation for developers of all levels
+**bancho.py** is an private osu! server backend for developers of all levels
 of experience interested in hosting their own osu private server instance(s).
 
 the project is developed primarily by the [Akatsuki](https://akatsuki.gg/) team,
 and our aim is to create the most easily maintainable, reliable, and feature-rich
-osu! server implementation available.
+osu! server implementation available. It aims to be simpler to deploy and modify
+than the tech stack used by Akatsuki.gg, while maintaining all core features, and
+still retaining the ability to reach a large number of concurrent online users.
 
 If you are interested in running or contributing to **bancho.py**, you should head over to the **[bancho.py wiki](https://github.com/osuAkatsuki/bancho.py/wiki)**.
 
