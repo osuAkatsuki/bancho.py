@@ -4,11 +4,9 @@ import copy
 import hashlib
 from collections.abc import Awaitable
 from collections.abc import Callable
-from collections.abc import Mapping
 from collections.abc import Sequence
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
-from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
@@ -18,6 +16,7 @@ from typing import TypedDict
 
 from app._typing import UNSET
 from app._typing import _UnsetSentinel
+from app.adapters.database import Database
 from app.constants.beatmap_statuses import RankedStatus
 from app.constants.gamemodes import GameMode
 from app.constants.score_statuses import SubmissionStatus
@@ -31,10 +30,15 @@ from app.objects.player import Player
 from app.objects.score import Grade
 from app.objects.score import Score
 from app.repositories.achievements import Achievement
+from app.repositories.achievements import AchievementsRepository
+from app.repositories.maps import MapsRepository
 from app.repositories.scores import DuplicateScoreError
 from app.repositories.scores import FirstPlaceScore
 from app.repositories.scores import ScorePerformanceRow
+from app.repositories.scores import ScoresRepository
+from app.repositories.stats import StatsRepository
 from app.repositories.user_achievements import UserAchievement
+from app.repositories.user_achievements import UserAchievementsRepository
 
 
 class ScoreStatsUpdates(TypedDict):
@@ -80,10 +84,6 @@ class BeatmapPlayStatsUpdates(TypedDict):
     passes: int
 
 
-class DatabaseTransactions(Protocol):
-    def transaction(self) -> AbstractAsyncContextManager[Any]: ...
-
-
 class OsuFileAvailabilityChecker(Protocol):
     def __call__(self, beatmap_id: int, *, expected_md5: str) -> Awaitable[bool]: ...
 
@@ -93,8 +93,9 @@ class BeatmapFetcher(Protocol):
 
 
 class PlayerAuthenticator(Protocol):
-    def __call__(
+    def authenticate_online_player(
         self,
+        *,
         username: str,
         password_md5: str,
     ) -> Awaitable[Player | None]: ...
@@ -117,113 +118,12 @@ VANILLA_GAME_MODES = (
 )
 
 
-class AchievementsService(Protocol):
-    async def fetch_many(self) -> Sequence[Achievement]: ...
-
-
-class UserAchievementsService(Protocol):
-    async def fetch_many(self, *, user_id: int) -> Sequence[UserAchievement]: ...
-
-    async def create(
-        self,
-        user_id: int,
-        achievement_id: int,
-    ) -> UserAchievement: ...
-
-
 class ReplayFile(Protocol):
     async def read(self) -> bytes: ...
 
 
 class AnnouncementChannel(Protocol):
     def send(self, msg: str, sender: Player, to_self: bool = False) -> None: ...
-
-
-class ScoresRepository(Protocol):
-    async def create(
-        self,
-        map_md5: str,
-        score: int,
-        pp: float,
-        acc: float,
-        max_combo: int,
-        mods: int,
-        n300: int,
-        n100: int,
-        n50: int,
-        nmiss: int,
-        ngeki: int,
-        nkatu: int,
-        grade: str,
-        status: int,
-        mode: int,
-        play_time: datetime,
-        time_elapsed: int,
-        client_flags: int,
-        user_id: int,
-        perfect: int,
-        online_checksum: str,
-    ) -> Mapping[str, Any]: ...
-
-    async def mark_previous_best_scores_submitted(
-        self,
-        *,
-        map_md5: str,
-        user_id: int,
-        mode: int,
-    ) -> None: ...
-
-    async def fetch_weighted_best_performances(
-        self,
-        *,
-        user_id: int,
-        mode: int,
-    ) -> Sequence[ScorePerformanceRow]: ...
-
-    async def fetch_first_place_score(
-        self,
-        *,
-        map_md5: str,
-        mode: int,
-        scoring_metric: ScoringMetric,
-    ) -> FirstPlaceScore | None: ...
-
-    async def fetch_one_by_online_checksum(
-        self,
-        online_checksum: str,
-    ) -> Mapping[str, Any] | None: ...
-
-
-class StatsRepository(Protocol):
-    async def partial_update(
-        self,
-        player_id: int,
-        mode: int,
-        tscore: int | _UnsetSentinel = UNSET,
-        rscore: int | _UnsetSentinel = UNSET,
-        pp: int | _UnsetSentinel = UNSET,
-        plays: int | _UnsetSentinel = UNSET,
-        playtime: int | _UnsetSentinel = UNSET,
-        acc: float | _UnsetSentinel = UNSET,
-        max_combo: int | _UnsetSentinel = UNSET,
-        total_hits: int | _UnsetSentinel = UNSET,
-        replay_views: int | _UnsetSentinel = UNSET,
-        xh_count: int | _UnsetSentinel = UNSET,
-        x_count: int | _UnsetSentinel = UNSET,
-        sh_count: int | _UnsetSentinel = UNSET,
-        s_count: int | _UnsetSentinel = UNSET,
-        a_count: int | _UnsetSentinel = UNSET,
-    ) -> Mapping[str, Any] | None: ...
-
-
-class MapsRepository(Protocol):
-    async def partial_update(
-        self,
-        id: int,
-        *,
-        plays: int | _UnsetSentinel = UNSET,
-        passes: int | _UnsetSentinel = UNSET,
-    ) -> Mapping[str, Any] | None: ...
 
 
 @dataclass(frozen=True)
@@ -269,7 +169,6 @@ class ScoreSubmissionErrorCode(StrEnum):
 @dataclass(frozen=True)
 class ScoreSubmissionError:
     code: ScoreSubmissionErrorCode
-    user_message: str | None = None
 
 
 @dataclass(frozen=True)
@@ -515,7 +414,7 @@ async def persist_submitted_score(score: Score, scores: ScoresRepository) -> int
         perfect=int(score.perfect),
         online_checksum=score.client_checksum,
     )
-    score_id = int(created_score["id"])
+    score_id = int(created_score.id)
     score.id = score_id
     return score_id
 
@@ -651,11 +550,11 @@ def announce_first_place(
         ann.insert(1, f"+{score.mods!r}")
 
     if previous_first_place_score:
-        if score.player.id != previous_first_place_score["id"]:
+        if score.player.id != previous_first_place_score.id:
             ann.append(
                 f"(Previous #1: [https://{domain}/u/"
-                f"{previous_first_place_score['id']} "
-                f"{previous_first_place_score['name']}])",
+                f"{previous_first_place_score.id} "
+                f"{previous_first_place_score.name}])",
             )
 
     assert announce_channel is not None
@@ -814,14 +713,14 @@ def apply_score_stats(score: Score, stats: ModeData) -> ScoreStatsUpdates:
 
 def calculate_weighted_accuracy(best_scores: Sequence[ScorePerformanceRow]) -> float:
     # Calculate new total weighted accuracy.
-    weighted_acc = sum(row["acc"] * 0.95**i for i, row in enumerate(best_scores))
+    weighted_acc = sum(row.acc * 0.95**i for i, row in enumerate(best_scores))
     bonus_acc = 100.0 / (20 * (1 - 0.95 ** len(best_scores)))
     return (weighted_acc * bonus_acc) / 100
 
 
 def calculate_weighted_pp(best_scores: Sequence[ScorePerformanceRow]) -> int:
     # Calculate new total weighted pp.
-    weighted_pp = sum(row["pp"] * 0.95**i for i, row in enumerate(best_scores))
+    weighted_pp = sum(row.pp * 0.95**i for i, row in enumerate(best_scores))
     bonus_pp = 416.6667 * (1 - 0.9994 ** len(best_scores))
     return round(weighted_pp + bonus_pp)
 
@@ -853,86 +752,6 @@ def apply_beatmap_play_stats(score: Score) -> BeatmapPlayStatsUpdates:
     }
 
 
-async def persist_score_submission_stats(
-    score: Score,
-    *,
-    stats: StatsRepository,
-    scores: ScoresRepository,
-    maps: MapsRepository,
-) -> ScoreStatsPersistenceResult:
-    assert score.bmap is not None
-    assert score.player is not None
-
-    # get the current stats, and take a
-    # shallow copy for the response charts.
-    current_stats = score.player.stats[score.mode]
-    previous_stats = copy.copy(current_stats)
-
-    stats_updates = apply_score_stats(score, current_stats)
-    should_update_rank = False
-
-    if score.passed and score.bmap.has_leaderboard:
-        # player passed & map is ranked, approved, or loved.
-
-        if score.bmap.awards_ranked_pp and score.status == SubmissionStatus.BEST:
-            # map is ranked or approved, and it's our (new)
-            # best score on the map. update the player's pp,
-            # acc and global rank.
-
-            # fetch scores sorted by pp for total acc/pp calc
-            # NOTE: we select all plays (and not just top100)
-            # because bonus pp counts the total amount of ranked
-            # scores. I'm aware this scales horribly, and it'll
-            # likely be split into two queries in the future.
-            best_scores = await scores.fetch_weighted_best_performances(
-                user_id=score.player.id,
-                mode=score.mode.value,
-            )
-
-            weighted_updates = apply_weighted_performance_stats(
-                current_stats,
-                best_scores,
-            )
-            stats_updates["acc"] = weighted_updates["acc"]
-            stats_updates["pp"] = weighted_updates["pp"]
-
-            should_update_rank = True
-
-    await stats.partial_update(
-        score.player.id,
-        score.mode.value,
-        plays=stats_updates.get("plays", UNSET),
-        playtime=stats_updates.get("playtime", UNSET),
-        tscore=stats_updates.get("tscore", UNSET),
-        total_hits=stats_updates.get("total_hits", UNSET),
-        max_combo=stats_updates.get("max_combo", UNSET),
-        xh_count=stats_updates.get("xh_count", UNSET),
-        x_count=stats_updates.get("x_count", UNSET),
-        sh_count=stats_updates.get("sh_count", UNSET),
-        s_count=stats_updates.get("s_count", UNSET),
-        a_count=stats_updates.get("a_count", UNSET),
-        rscore=stats_updates.get("rscore", UNSET),
-        acc=stats_updates.get("acc", UNSET),
-        pp=stats_updates.get("pp", UNSET),
-    )
-
-    is_public_submission = not score.player.restricted
-    if is_public_submission:
-        beatmap_updates = apply_beatmap_play_stats(score)
-        await maps.partial_update(
-            score.bmap.id,
-            plays=beatmap_updates["plays"],
-            passes=beatmap_updates["passes"],
-        )
-
-    return ScoreStatsPersistenceResult(
-        previous_stats=previous_stats,
-        current_stats=current_stats,
-        should_update_rank=should_update_rank,
-        is_public_submission=is_public_submission,
-    )
-
-
 def score_can_unlock_achievements(score: Score) -> bool:
     assert score.bmap is not None
     assert score.player is not None
@@ -940,230 +759,310 @@ def score_can_unlock_achievements(score: Score) -> bool:
     return score.passed and score.bmap.awards_ranked_pp and not score.player.restricted
 
 
-async def persist_score_submission(
-    score: Score,
-    *,
-    database: DatabaseTransactions,
-    scores: ScoresRepository,
-    stats: StatsRepository,
-    maps: MapsRepository,
-    achievements: AchievementsService,
-    user_achievements: UserAchievementsService,
-) -> ScoreSubmissionPersistenceResult:
-    snapshot = capture_score_submission_state(score)
+@dataclass(frozen=True)
+class ScoreSubmissionService:
+    replays_path: Path
+    restriction_admin: Player
+    fetch_beatmap: BeatmapFetcher
+    bancho_authentication: PlayerAuthenticator
+    score_submission_locks: ScoreSubmissionLocks
+    database: Database
+    scores: ScoresRepository
+    stats: StatsRepository
+    maps: MapsRepository
+    achievements: AchievementsRepository
+    user_achievements: UserAchievementsRepository
+    ensure_osu_file_is_available: OsuFileAvailabilityChecker
+    publish_user_stats: Callable[[Player], None]
+    send_personal_best_notification: Callable[[Player, str], None]
+    announce_channel: AnnouncementChannel | None
+    domain: str
+    increment_metric: Callable[[str], None]
+    record_submission_integrity_failure: Callable[[], Awaitable[None]]
 
-    try:
-        async with database.transaction():
-            should_announce_first_place = score_should_announce_first_place(score)
-            previous_first_place_score = (
-                await fetch_previous_first_place_score(score, scores=scores)
-                if should_announce_first_place
-                else None
-            )
-            score_id = await persist_submitted_score(score, scores)
-            stats_result = await persist_score_submission_stats(
-                score,
-                stats=stats,
-                scores=scores,
-                maps=maps,
-            )
-            unlocked_achievements = (
-                await unlock_new_achievements(
-                    score=score,
-                    achievements=achievements,
-                    user_achievements=user_achievements,
+    async def persist_score_submission_stats(
+        self,
+        score: Score,
+    ) -> ScoreStatsPersistenceResult:
+        assert score.bmap is not None
+        assert score.player is not None
+
+        # get the current stats, and take a
+        # shallow copy for the response charts.
+        current_stats = score.player.stats[score.mode]
+        previous_stats = copy.copy(current_stats)
+
+        stats_updates = apply_score_stats(score, current_stats)
+        should_update_rank = False
+
+        if score.passed and score.bmap.has_leaderboard:
+            # player passed & map is ranked, approved, or loved.
+
+            if score.bmap.awards_ranked_pp and score.status == SubmissionStatus.BEST:
+                # map is ranked or approved, and it's our (new)
+                # best score on the map. update the player's pp,
+                # acc and global rank.
+
+                # fetch scores sorted by pp for total acc/pp calc
+                # NOTE: we select all plays (and not just top100)
+                # because bonus pp counts the total amount of ranked
+                # scores. I'm aware this scales horribly, and it'll
+                # likely be split into two queries in the future.
+                best_scores = await self.scores.fetch_weighted_best_performances(
+                    user_id=score.player.id,
+                    mode=score.mode.value,
                 )
-                if score_can_unlock_achievements(score)
-                else []
-            )
-    except BaseException:
-        restore_score_submission_state(score, snapshot)
-        raise
 
-    return ScoreSubmissionPersistenceResult(
-        score_id=score_id,
-        previous_stats=stats_result.previous_stats,
-        current_stats=stats_result.current_stats,
-        previous_first_place_score=previous_first_place_score,
-        unlocked_achievements=unlocked_achievements,
-        should_update_rank=stats_result.should_update_rank,
-        is_public_submission=stats_result.is_public_submission,
-    )
+                weighted_updates = apply_weighted_performance_stats(
+                    current_stats,
+                    best_scores,
+                )
+                stats_updates["acc"] = weighted_updates["acc"]
+                stats_updates["pp"] = weighted_updates["pp"]
 
+                should_update_rank = True
 
-async def submit_score(
-    request: ScoreSubmissionRequest,
-    *,
-    replays_path: Path,
-    restriction_admin: Player,
-    fetch_beatmap: BeatmapFetcher,
-    authenticate_player: PlayerAuthenticator,
-    score_submission_locks: ScoreSubmissionLocks,
-    database: DatabaseTransactions,
-    scores: ScoresRepository,
-    stats: StatsRepository,
-    maps: MapsRepository,
-    achievements: AchievementsService,
-    user_achievements: UserAchievementsService,
-    ensure_osu_file_is_available: OsuFileAvailabilityChecker,
-    publish_user_stats: Callable[[Player], None],
-    send_personal_best_notification: Callable[[Player, str], None],
-    announce_channel: AnnouncementChannel | None,
-    domain: str,
-    increment_metric: Callable[[str], None],
-    record_submission_integrity_failure: Callable[[], Awaitable[None]],
-) -> SubmittedScore | ScoreSubmissionError:
-    beatmap_md5 = score_submission_beatmap_md5(request)
-    beatmap = await fetch_beatmap(beatmap_md5)
-    if beatmap is None:
-        return ScoreSubmissionError(
-            code=ScoreSubmissionErrorCode.BEATMAP_NOT_FOUND,
-            user_message="Beatmap not found.",
+        await self.stats.partial_update(
+            score.player.id,
+            score.mode.value,
+            plays=stats_updates.get("plays", UNSET),
+            playtime=stats_updates.get("playtime", UNSET),
+            tscore=stats_updates.get("tscore", UNSET),
+            total_hits=stats_updates.get("total_hits", UNSET),
+            max_combo=stats_updates.get("max_combo", UNSET),
+            xh_count=stats_updates.get("xh_count", UNSET),
+            x_count=stats_updates.get("x_count", UNSET),
+            sh_count=stats_updates.get("sh_count", UNSET),
+            s_count=stats_updates.get("s_count", UNSET),
+            a_count=stats_updates.get("a_count", UNSET),
+            rscore=stats_updates.get("rscore", UNSET),
+            acc=stats_updates.get("acc", UNSET),
+            pp=stats_updates.get("pp", UNSET),
         )
 
-    username = score_submission_username(request)
-    player = await authenticate_player(username, request.password_md5)
-    if player is None:
-        return ScoreSubmissionError(
-            code=ScoreSubmissionErrorCode.PLAYER_NOT_FOUND,
-            user_message="Player could not be authenticated.",
-        )
-
-    score = build_score_from_submission_request(
-        request,
-        beatmap=beatmap,
-        player=player,
-    )
-
-    try:
-        validate_submission_integrity(
-            client_details=player.client_details,
-            osu_version=request.osu_version,
-            client_hash=request.client_hash,
-            unique_ids=request.unique_ids,
-            score=score,
-            storyboard_md5=request.storyboard_md5,
-            submission_beatmap_md5=beatmap_md5,
-            updated_beatmap_hash=request.updated_beatmap_hash,
-        )
-
-    except (ValueError, AssertionError):
-        # NOTE: this is undergoing a temporary trial period,
-        # after which, it will be enabled & perform restrictions.
-        await record_submission_integrity_failure()
-
-        # await player.restrict(
-        #     admin=app.state.sessions.bot,
-        #     reason="mismatching hashes on score submission",
-        # )
-
-        # refresh their client state
-        # if player.online:
-        #     player.logout()
-
-        # return b"error: ban"
-
-    # we should update their activity no matter
-    # what the result of the score submission is.
-    player.update_latest_activity_soon()
-
-    update_submitter_status_mode(score, publish_user_stats=publish_user_stats)
-
-    replay_data: bytes | None = None
-
-    # hold a lock around (check if submitted, submission) to ensure no duplicates
-    # are submitted to the database, and potentially award duplicate score/pp/etc.
-    async with score_submission_locks[score.client_checksum]:
-        if await score_submission_is_duplicate(score, scores=scores):
-            return ScoreSubmissionError(
-                code=ScoreSubmissionErrorCode.DUPLICATE_SUBMISSION,
-                user_message="Score has already been submitted.",
+        is_public_submission = not score.player.restricted
+        if is_public_submission:
+            beatmap_updates = apply_beatmap_play_stats(score)
+            await self.maps.partial_update(
+                score.bmap.id,
+                plays=beatmap_updates["plays"],
+                passes=beatmap_updates["passes"],
             )
 
-        await calculate_score_submission_status(
-            score,
-            score_time=request.score_time,
-            fail_time=request.fail_time,
-            ensure_osu_file_is_available=ensure_osu_file_is_available,
+        return ScoreStatsPersistenceResult(
+            previous_stats=previous_stats,
+            current_stats=current_stats,
+            should_update_rank=should_update_rank,
+            is_public_submission=is_public_submission,
         )
 
-        # TODO: re-implement pp caps for non-whitelisted players?
-
-        replay_data = await read_submitted_replay_file(
-            score,
-            replay_file=request.replay_file,
-        )
-        if replay_data is not None and not replay_data_is_valid(replay_data):
-            await restrict_player_for_missing_replay(
-                score,
-                restriction_admin=restriction_admin,
-            )
-            replay_data = None
-
-        """ Score submission checks completed; submit the score. """
-
-        increment_metric("bancho.submitted_scores")
-
-        if score.status == SubmissionStatus.BEST:
-            increment_metric("bancho.submitted_scores_best")
+    async def persist_score_submission(
+        self,
+        score: Score,
+    ) -> ScoreSubmissionPersistenceResult:
+        snapshot = capture_score_submission_state(score)
 
         try:
-            persistence_result = await persist_score_submission(
-                score,
-                database=database,
-                scores=scores,
-                stats=stats,
-                maps=maps,
-                achievements=achievements,
-                user_achievements=user_achievements,
-            )
-        except DuplicateScoreError:
+            async with self.database.transaction():
+                should_announce_first_place = score_should_announce_first_place(score)
+                previous_first_place_score = (
+                    await fetch_previous_first_place_score(score, scores=self.scores)
+                    if should_announce_first_place
+                    else None
+                )
+                score_id = await persist_submitted_score(score, self.scores)
+                stats_result = await self.persist_score_submission_stats(score)
+                unlocked_achievements = (
+                    await self.unlock_new_achievements(score)
+                    if score_can_unlock_achievements(score)
+                    else []
+                )
+        except BaseException:
+            restore_score_submission_state(score, snapshot)
+            raise
+
+        return ScoreSubmissionPersistenceResult(
+            score_id=score_id,
+            previous_stats=stats_result.previous_stats,
+            current_stats=stats_result.current_stats,
+            previous_first_place_score=previous_first_place_score,
+            unlocked_achievements=unlocked_achievements,
+            should_update_rank=stats_result.should_update_rank,
+            is_public_submission=stats_result.is_public_submission,
+        )
+
+    async def submit_score(
+        self,
+        request: ScoreSubmissionRequest,
+    ) -> SubmittedScore | ScoreSubmissionError:
+        beatmap_md5 = score_submission_beatmap_md5(request)
+        beatmap = await self.fetch_beatmap(beatmap_md5)
+        if beatmap is None:
             return ScoreSubmissionError(
-                code=ScoreSubmissionErrorCode.DUPLICATE_SUBMISSION,
-                user_message="Score has already been submitted.",
+                code=ScoreSubmissionErrorCode.BEATMAP_NOT_FOUND,
             )
 
-    write_replay_file(
-        score,
-        replay_data=replay_data,
-        replays_path=replays_path,
-    )
+        username = score_submission_username(request)
+        player = await self.bancho_authentication.authenticate_online_player(
+            username=username,
+            password_md5=request.password_md5,
+        )
+        if player is None:
+            return ScoreSubmissionError(
+                code=ScoreSubmissionErrorCode.PLAYER_NOT_FOUND,
+            )
 
-    if persistence_result.should_update_rank:
-        persistence_result.current_stats.rank = await player.update_rank(
-            score.mode,
+        score = build_score_from_submission_request(
+            request,
+            beatmap=beatmap,
+            player=player,
         )
 
-    if persistence_result.is_public_submission:
-        publish_user_stats(player)
+        try:
+            validate_submission_integrity(
+                client_details=player.client_details,
+                osu_version=request.osu_version,
+                client_hash=request.client_hash,
+                unique_ids=request.unique_ids,
+                score=score,
+                storyboard_md5=request.storyboard_md5,
+                submission_beatmap_md5=beatmap_md5,
+                updated_beatmap_hash=request.updated_beatmap_hash,
+            )
 
-    player.recent_scores[score.mode] = score
+        except (ValueError, AssertionError):
+            # NOTE: this is undergoing a temporary trial period,
+            # after which, it will be enabled & perform restrictions.
+            await self.record_submission_integrity_failure()
 
-    if score.status == SubmissionStatus.BEST:
-        notify_score_submitter_of_personal_best(
+            # await player.restrict(
+            #     admin=app.state.sessions.bot,
+            #     reason="mismatching hashes on score submission",
+            # )
+
+            # refresh their client state
+            # if player.online:
+            #     player.logout()
+
+            # return b"error: ban"
+
+        # we should update their activity no matter
+        # what the result of the score submission is.
+        player.update_latest_activity_soon()
+
+        update_submitter_status_mode(
             score,
-            send_notification=send_personal_best_notification,
+            publish_user_stats=self.publish_user_stats,
         )
-        announce_first_place(
+
+        replay_data: bytes | None = None
+
+        # hold a lock around (check if submitted, submission) to ensure no duplicates
+        # are submitted to the database, and potentially award duplicate score/pp/etc.
+        async with self.score_submission_locks[score.client_checksum]:
+            if await score_submission_is_duplicate(score, scores=self.scores):
+                return ScoreSubmissionError(
+                    code=ScoreSubmissionErrorCode.DUPLICATE_SUBMISSION,
+                )
+
+            await calculate_score_submission_status(
+                score,
+                score_time=request.score_time,
+                fail_time=request.fail_time,
+                ensure_osu_file_is_available=self.ensure_osu_file_is_available,
+            )
+
+            # TODO: re-implement pp caps for non-whitelisted players?
+
+            replay_data = await read_submitted_replay_file(
+                score,
+                replay_file=request.replay_file,
+            )
+            if replay_data is not None and not replay_data_is_valid(replay_data):
+                await restrict_player_for_missing_replay(
+                    score,
+                    restriction_admin=self.restriction_admin,
+                )
+                replay_data = None
+
+            """ Score submission checks completed; submit the score. """
+
+            self.increment_metric("bancho.submitted_scores")
+
+            if score.status == SubmissionStatus.BEST:
+                self.increment_metric("bancho.submitted_scores_best")
+
+            try:
+                persistence_result = await self.persist_score_submission(score)
+            except DuplicateScoreError:
+                return ScoreSubmissionError(
+                    code=ScoreSubmissionErrorCode.DUPLICATE_SUBMISSION,
+                )
+
+        write_replay_file(
             score,
-            previous_first_place_score=persistence_result.previous_first_place_score,
-            announce_channel=announce_channel,
-            domain=domain,
+            replay_data=replay_data,
+            replays_path=self.replays_path,
         )
 
-    log(
-        f"[{score.mode!r}] {score.player} submitted a score! "
-        f"({score.status!r}, {score.pp:,.2f}pp / {persistence_result.current_stats.pp:,}pp)",
-        Ansi.LGREEN,
-    )
+        if persistence_result.should_update_rank:
+            persistence_result.current_stats.rank = await player.update_rank(
+                score.mode,
+            )
 
-    return SubmittedScore(
-        score=score,
-        score_id=persistence_result.score_id,
-        previous_stats=persistence_result.previous_stats,
-        current_stats=persistence_result.current_stats,
-        unlocked_achievements=persistence_result.unlocked_achievements,
-    )
+        if persistence_result.is_public_submission:
+            self.publish_user_stats(player)
+
+        player.recent_scores[score.mode] = score
+
+        if score.status == SubmissionStatus.BEST:
+            notify_score_submitter_of_personal_best(
+                score,
+                send_notification=self.send_personal_best_notification,
+            )
+            announce_first_place(
+                score,
+                previous_first_place_score=persistence_result.previous_first_place_score,
+                announce_channel=self.announce_channel,
+                domain=self.domain,
+            )
+
+        log(
+            f"[{score.mode!r}] {score.player} submitted a score! "
+            f"({score.status!r}, {score.pp:,.2f}pp / {persistence_result.current_stats.pp:,}pp)",
+            Ansi.LGREEN,
+        )
+
+        return SubmittedScore(
+            score=score,
+            score_id=persistence_result.score_id,
+            previous_stats=persistence_result.previous_stats,
+            current_stats=persistence_result.current_stats,
+            unlocked_achievements=persistence_result.unlocked_achievements,
+        )
+
+    async def unlock_new_achievements(self, score: Score) -> list[Achievement]:
+        assert score.player is not None
+
+        unlocked_achievements: list[Achievement] = []
+        server_achievements = await self.achievements.fetch_many()
+        player_achievements = await self.user_achievements.fetch_many(
+            user_id=score.player.id,
+        )
+
+        for server_achievement in server_achievements:
+            if achievement_is_unlocked(server_achievement, player_achievements):
+                continue
+
+            achievement_condition = server_achievement.cond
+            if achievement_condition(score, score.mode.as_vanilla):
+                await self.user_achievements.create(
+                    score.player.id,
+                    server_achievement.id,
+                )
+                unlocked_achievements.append(server_achievement)
+
+        return unlocked_achievements
 
 
 def achievement_is_unlocked(
@@ -1171,33 +1070,6 @@ def achievement_is_unlocked(
     user_achievements: Sequence[UserAchievement],
 ) -> bool:
     return any(
-        user_achievement["achid"] == achievement["id"]
+        user_achievement.achid == achievement.id
         for user_achievement in user_achievements
     )
-
-
-async def unlock_new_achievements(
-    *,
-    score: Score,
-    achievements: AchievementsService,
-    user_achievements: UserAchievementsService,
-) -> list[Achievement]:
-    assert score.player is not None
-
-    unlocked_achievements: list[Achievement] = []
-    server_achievements = await achievements.fetch_many()
-    player_achievements = await user_achievements.fetch_many(user_id=score.player.id)
-
-    for server_achievement in server_achievements:
-        if achievement_is_unlocked(server_achievement, player_achievements):
-            continue
-
-        achievement_condition = server_achievement["cond"]
-        if achievement_condition(score, score.mode.as_vanilla):
-            await user_achievements.create(
-                score.player.id,
-                server_achievement["id"],
-            )
-            unlocked_achievements.append(server_achievement)
-
-    return unlocked_achievements

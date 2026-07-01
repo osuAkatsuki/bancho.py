@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 from datetime import date
+from ipaddress import IPv4Address
 
 import pytest
 
 from app.api.domains import cho
+from app.objects.player import WINE_ADAPTER_SENTINEL
+from app.objects.player import ClientDetails
 from app.objects.player import OsuStream
+from app.objects.player import OsuVersion
 from app.packets import MultiplayerMatch
 
 
@@ -68,9 +72,36 @@ def test_parse_adapters_string() -> None:
 
 
 def test_parse_adapters_string_detects_wine() -> None:
-    _, running_under_wine = cho.parse_adapters_string("runningunderwine")
+    adapters, running_under_wine = cho.parse_adapters_string(WINE_ADAPTER_SENTINEL)
 
+    assert adapters == [WINE_ADAPTER_SENTINEL]
     assert running_under_wine is True
+
+
+def test_parse_adapters_string_rejects_non_wine_without_trailing_delimiter() -> None:
+    with pytest.raises(ValueError):
+        cho.parse_adapters_string("1.2.3")
+
+
+def test_client_details_client_hash_preserves_wine_adapter_sentinel() -> None:
+    client_details = ClientDetails(
+        osu_version=OsuVersion(
+            date=date(2026, 6, 22),
+            revision=None,
+            stream=OsuStream.STABLE,
+        ),
+        osu_path_md5="osu-path",
+        adapters=[WINE_ADAPTER_SENTINEL],
+        adapters_md5="adapters",
+        uninstall_md5="uninstall",
+        disk_signature_md5="disk",
+        ip=IPv4Address("127.0.0.1"),
+    )
+
+    assert (
+        client_details.client_hash
+        == "osu-path:runningunderwine:adapters:uninstall:disk:"
+    )
 
 
 def test_validate_match_data_accepts_expected_host_and_reasonable_name() -> None:

@@ -18,7 +18,6 @@ import pymysql
 from redis import asyncio as aioredis
 
 import app.settings
-import app.state
 from app._typing import IPAddress
 from app.adapters.database import Database
 from app.logging import Ansi
@@ -46,7 +45,7 @@ if str(app.settings.DATADOG_API_KEY) and str(app.settings.DATADOG_APP_KEY):
 
 ip_resolver: IPResolver
 
-""" session usecases """
+""" geolocation """
 
 
 class Country(TypedDict):
@@ -387,7 +386,7 @@ async def check_for_dependency_updates() -> None:
 
 async def _get_current_sql_structure_version() -> Version | None:
     """Get the last launched version of the server."""
-    res = await app.state.services.database.fetch_one(
+    res = await database.fetch_one(
         "SELECT ver_major, ver_minor, ver_micro "
         "FROM startups ORDER BY datetime DESC LIMIT 1",
     )
@@ -408,7 +407,7 @@ async def run_sql_migrations() -> None:
     if not last_run_migration_version:
         # Migrations have never run before - this is the first time starting the server.
         # We'll insert the current version into the database, so future versions know to migrate.
-        await app.state.services.database.execute(
+        await database.execute(
             "INSERT INTO startups (ver_major, ver_minor, ver_micro, datetime) "
             "VALUES (:major, :minor, :micro, NOW())",
             {
@@ -467,7 +466,7 @@ async def run_sql_migrations() -> None:
     # tables implicitly commit: https://dev.mysql.com/doc/refman/5.7/en/implicit-commit.html
     for query in queries:
         try:
-            await app.state.services.database.execute(query)
+            await database.execute(query)
         except pymysql.err.MySQLError as exc:
             log(f"Failed: {query}", Ansi.GRAY)
             log(repr(exc))
@@ -480,7 +479,7 @@ async def run_sql_migrations() -> None:
             raise KeyboardInterrupt from exc
     else:
         # all queries executed successfully
-        await app.state.services.database.execute(
+        await database.execute(
             "INSERT INTO startups (ver_major, ver_minor, ver_micro, datetime) "
             "VALUES (:major, :minor, :micro, NOW())",
             {

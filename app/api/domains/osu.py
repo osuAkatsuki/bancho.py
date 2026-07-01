@@ -2,26 +2,16 @@
 
 from __future__ import annotations
 
-import hashlib
-import random
-import secrets
-from collections import defaultdict
-from collections.abc import Awaitable
-from collections.abc import Callable
-from collections.abc import Mapping
 from collections.abc import Sequence
-from functools import cache
 from pathlib import Path as SystemPath
+from typing import Annotated
 from typing import Any
 from typing import Literal
 from urllib.parse import unquote
-from urllib.parse import unquote_plus
 
-import bcrypt
 from fastapi import status
 from fastapi.datastructures import FormData
 from fastapi.datastructures import UploadFile
-from fastapi.exceptions import HTTPException
 from fastapi.param_functions import Depends
 from fastapi.param_functions import File
 from fastapi.param_functions import Form
@@ -34,46 +24,53 @@ from fastapi.responses import ORJSONResponse
 from fastapi.responses import RedirectResponse
 from fastapi.responses import Response
 from fastapi.routing import APIRouter
+from pydantic import ValidationError
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
-import app.packets
 import app.settings
 import app.state
 import app.utils
 from app import encryption
-from app.constants import regexes
-from app.constants.beatmap_statuses import RankedStatus
-from app.constants.clientflags import LastFMFlags
-from app.constants.gamemodes import GameMode
-from app.constants.leaderboard_types import LeaderboardType
-from app.constants.mods import Mods
+from app.api import dependencies as api_dependencies
 from app.constants.privileges import Privileges
-from app.constants.score_statuses import SubmissionStatus
 from app.logging import Ansi
 from app.logging import log
 from app.objects import models
-from app.objects.beatmap import Beatmap
-from app.objects.beatmap import ensure_osu_file_is_available
 from app.objects.player import ModeData
 from app.objects.player import Player
 from app.objects.score import Score
-from app.repositories import clans as clans_repo
-from app.repositories import comments as comments_repo
-from app.repositories import favourites as favourites_repo
-from app.repositories import mail as mail_repo
-from app.repositories import maps as maps_repo
-from app.repositories import ratings as ratings_repo
-from app.repositories import scores as scores_repo
-from app.repositories import stats as stats_repo
-from app.repositories import users as users_repo
 from app.repositories.achievements import Achievement
-from app.usecases import achievements as achievements_usecases
-from app.usecases import score_leaderboards as score_leaderboards_usecases
-from app.usecases import score_submission as score_submission_usecases
-from app.usecases import user_achievements as user_achievements_usecases
+from app.repositories.scores import BeatmapLeaderboardScoreRow
+from app.services.accounts import AccountRegistrationResultCode
+from app.services.accounts import AccountRegistrationService
+from app.services.bancho import BanchoAuthenticationService
+from app.services.beatmap_leaderboards import BeatmapLeaderboardRequest
+from app.services.beatmap_leaderboards import BeatmapLeaderboardResult
+from app.services.beatmap_leaderboards import BeatmapLeaderboardResultCode
+from app.services.beatmap_leaderboards import BeatmapLeaderboardService
+from app.services.client_integrity import ClientIntegrityResult
+from app.services.client_integrity import ClientIntegrityService
+from app.services.comments import CommentsService
+from app.services.direct_search import DirectSearchResult
+from app.services.direct_search import DirectSearchResultCode
+from app.services.direct_search import DirectSearchService
+from app.services.favourites import AddFavouriteResult
+from app.services.favourites import FavouritesService
+from app.services.mail import MailReadService
+from app.services.maps import BeatmapInfoService
+from app.services.maps import BeatmapRatingResultCode
+from app.services.maps import BeatmapRatingService
+from app.services.maps import BeatmapSetService
+from app.services.replays import ReplayResultCode
+from app.services.replays import ReplayService
+from app.services.score_submission import ScoreSubmissionError
+from app.services.score_submission import ScoreSubmissionErrorCode
+from app.services.score_submission import ScoreSubmissionRequest
+from app.services.score_submission import ScoreSubmissionService
+from app.services.screenshots import ScreenshotService
+from app.services.screenshots import ScreenshotUploadResultCode
 
 BEATMAPS_PATH = SystemPath.cwd() / ".data/osu"
-REPLAYS_PATH = SystemPath.cwd() / ".data/osr"
 SCREENSHOTS_PATH = SystemPath.cwd() / ".data/ss"
 
 
@@ -81,33 +78,6 @@ router = APIRouter(
     tags=["osu! web API"],
     default_response_class=Response,
 )
-
-
-@cache
-def authenticate_player_session(
-    param_function: Callable[..., Any],
-    username_alias: str = "u",
-    pw_md5_alias: str = "p",
-    err: Any | None = None,
-) -> Callable[[str, str], Awaitable[Player]]:
-    async def wrapper(
-        username: str = param_function(..., alias=username_alias),
-        pw_md5: str = param_function(..., alias=pw_md5_alias),
-    ) -> Player:
-        player = await app.state.sessions.players.from_login(
-            name=unquote(username),
-            pw_md5=pw_md5,
-        )
-        if player:
-            return player
-
-        # player login incorrect
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=err,
-        )
-
-    return wrapper
 
 
 """ /web/ handlers """
@@ -123,50 +93,64 @@ def authenticate_player_session(
 
 @router.post("/web/osu-screenshot.php")
 async def osuScreenshot(
-    player: Player = Depends(authenticate_player_session(Form, "u", "p")),
+    *,
+    username: str = Form(..., alias="u"),
+    password_md5: str = Form(..., alias="p"),
     endpoint_version: int = Form(..., alias="v"),
     screenshot_file: UploadFile = File(..., alias="ss"),
+    bancho_authentication: Annotated[
+        BanchoAuthenticationService,
+        Depends(api_dependencies.get_bancho_authentication_service),
+    ],
+    screenshot_service: Annotated[
+        ScreenshotService,
+        Depends(api_dependencies.get_screenshot_service),
+    ],
 ) -> Response:
-    with memoryview(await screenshot_file.read()) as screenshot_view:
-        # png sizes: 1080p: ~300-800kB | 4k: ~1-2mB
-        if len(screenshot_view) > (4 * 1024 * 1024):
-            return Response(
-                content=b"Screenshot file too large.",
-                status_code=status.HTTP_400_BAD_REQUEST,
-            )
+    player = await bancho_authentication.authenticate_online_player(
+        username=unquote(username),
+        password_md5=password_md5,
+    )
+    if player is None:
+        return Response(status_code=status.HTTP_401_UNAUTHORIZED)
 
-        if endpoint_version != 1:
-            await app.state.services.log_strange_occurrence(
-                f"Incorrect endpoint version (/web/osu-screenshot.php v{endpoint_version})",
-            )
+    result = await screenshot_service.upload_screenshot(
+        player=player,
+        endpoint_version=endpoint_version,
+        screenshot_data=await screenshot_file.read(),
+    )
+    if result.code is ScreenshotUploadResultCode.FILE_TOO_LARGE:
+        return Response(
+            content=b"Screenshot file too large.",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+    if result.code is ScreenshotUploadResultCode.INVALID_FILE_TYPE:
+        return Response(
+            content=b"Invalid file type",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
 
-        if app.utils.has_jpeg_headers_and_trailers(screenshot_view):
-            extension = "jpeg"
-        elif app.utils.has_png_headers_and_trailers(screenshot_view):
-            extension = "png"
-        else:
-            return Response(
-                content=b"Invalid file type",
-                status_code=status.HTTP_400_BAD_REQUEST,
-            )
-
-        while True:
-            filename = f"{secrets.token_urlsafe(6)}.{extension}"
-            ss_file = SCREENSHOTS_PATH / filename
-            if not ss_file.exists():
-                break
-
-        with ss_file.open("wb") as f:
-            f.write(screenshot_view)
-
-    log(f"{player} uploaded {filename}.")
-    return Response(filename.encode())
+    assert result.filename is not None
+    return Response(result.filename.encode())
 
 
 @router.get("/web/osu-getfriends.php")
 async def osuGetFriends(
-    player: Player = Depends(authenticate_player_session(Query, "u", "h")),
+    *,
+    username: str = Query(..., alias="u"),
+    password_md5: str = Query(..., alias="h"),
+    bancho_authentication: Annotated[
+        BanchoAuthenticationService,
+        Depends(api_dependencies.get_bancho_authentication_service),
+    ],
 ) -> Response:
+    player = await bancho_authentication.authenticate_online_player(
+        username=unquote(username),
+        password_md5=password_md5,
+    )
+    if player is None:
+        return Response(status_code=status.HTTP_401_UNAUTHORIZED)
+
     return Response("\n".join(map(str, player.friends)).encode())
 
 
@@ -180,46 +164,59 @@ def bancho_to_osuapi_status(bancho_status: int) -> int:
     }[bancho_status]
 
 
+def parse_beatmap_info_request_body(
+    raw_body: bytes,
+) -> models.OsuBeatmapRequestForm | None:
+    try:
+        return models.OsuBeatmapRequestForm.model_validate_json(raw_body)
+    except ValidationError:
+        return None
+
+
 @router.post("/web/osu-getbeatmapinfo.php")
 async def osuGetBeatmapInfo(
-    form_data: models.OsuBeatmapRequestForm,
-    player: Player = Depends(authenticate_player_session(Query, "u", "h")),
+    request: Request,
+    *,
+    username: str = Query(..., alias="u"),
+    password_md5: str = Query(..., alias="h"),
+    bancho_authentication: Annotated[
+        BanchoAuthenticationService,
+        Depends(api_dependencies.get_bancho_authentication_service),
+    ],
+    beatmap_info_service: Annotated[
+        BeatmapInfoService,
+        Depends(api_dependencies.get_beatmap_info_service),
+    ],
 ) -> Response:
+    player = await bancho_authentication.authenticate_online_player(
+        username=unquote(username),
+        password_md5=password_md5,
+    )
+    if player is None:
+        return Response(status_code=status.HTTP_401_UNAUTHORIZED)
+
+    form_data = parse_beatmap_info_request_body(await request.body())
+    if form_data is None:
+        return Response(status_code=status.HTTP_400_BAD_REQUEST)
+
     num_requests = len(form_data.Filenames) + len(form_data.Ids)
     log(f"{player} requested info for {num_requests} maps.", Ansi.LCYAN)
 
     response_lines: list[str] = []
 
-    for idx, map_filename in enumerate(form_data.Filenames):
-        # try getting the map from sql
-
-        beatmap = await maps_repo.fetch_one(filename=map_filename)
-
-        if not beatmap:
-            continue
-
-        # try to get the user's grades on the map
-        # NOTE: osu! only allows us to send back one per gamemode,
-        #       so we've decided to send back *vanilla* grades.
-        #       (in theory we could make this user-customizable)
-        grades = ["N", "N", "N", "N"]
-
-        for score in await scores_repo.fetch_many(
-            map_md5=beatmap["md5"],
-            user_id=player.id,
-            mode=player.status.mode.as_vanilla,
-            status=SubmissionStatus.BEST,
-        ):
-            grades[score["mode"]] = score["grade"]
-
+    for beatmap_info in await beatmap_info_service.fetch_beatmap_info(
+        filenames=form_data.Filenames,
+        player_id=player.id,
+        vanilla_mode=player.status.mode.as_vanilla,
+    ):
         response_lines.append(
             "{i}|{id}|{set_id}|{md5}|{status}|{grades}".format(
-                i=idx,
-                id=beatmap["id"],
-                set_id=beatmap["set_id"],
-                md5=beatmap["md5"],
-                status=bancho_to_osuapi_status(beatmap["status"]),
-                grades="|".join(grades),
+                i=beatmap_info.index,
+                id=beatmap_info.id,
+                set_id=beatmap_info.set_id,
+                md5=beatmap_info.md5,
+                status=bancho_to_osuapi_status(beatmap_info.status),
+                grades="|".join(beatmap_info.grades),
             ),
         )
 
@@ -233,35 +230,66 @@ async def osuGetBeatmapInfo(
 
 @router.get("/web/osu-getfavourites.php")
 async def osuGetFavourites(
-    player: Player = Depends(authenticate_player_session(Query, "u", "h")),
+    *,
+    username: str = Query(..., alias="u"),
+    password_md5: str = Query(..., alias="h"),
+    bancho_authentication: Annotated[
+        BanchoAuthenticationService,
+        Depends(api_dependencies.get_bancho_authentication_service),
+    ],
+    favourites_service: Annotated[
+        FavouritesService,
+        Depends(api_dependencies.get_favourites_service),
+    ],
 ) -> Response:
-    favourites = await favourites_repo.fetch_all(userid=player.id)
+    player = await bancho_authentication.authenticate_online_player(
+        username=unquote(username),
+        password_md5=password_md5,
+    )
+    if player is None:
+        return Response(status_code=status.HTTP_401_UNAUTHORIZED)
 
+    favourite_set_ids = await favourites_service.fetch_favourite_set_ids(player.id)
     return Response(
-        "\n".join([str(favourite["setid"]) for favourite in favourites]).encode(),
+        "\n".join([str(map_set_id) for map_set_id in favourite_set_ids]).encode(),
     )
 
 
 @router.get("/web/osu-addfavourite.php")
 async def osuAddFavourite(
-    player: Player = Depends(authenticate_player_session(Query, "u", "h")),
+    *,
+    username: str = Query(..., alias="u"),
+    password_md5: str = Query(..., alias="h"),
     map_set_id: int = Query(..., alias="a"),
+    bancho_authentication: Annotated[
+        BanchoAuthenticationService,
+        Depends(api_dependencies.get_bancho_authentication_service),
+    ],
+    favourites_service: Annotated[
+        FavouritesService,
+        Depends(api_dependencies.get_favourites_service),
+    ],
 ) -> Response:
-    # check if they already have this favourited.
-    if await favourites_repo.fetch_one(player.id, map_set_id):
-        return Response(b"You've already favourited this beatmap!")
-
-    # add favourite
-    await favourites_repo.create(
-        userid=player.id,
-        setid=map_set_id,
+    player = await bancho_authentication.authenticate_online_player(
+        username=unquote(username),
+        password_md5=password_md5,
     )
+    if player is None:
+        return Response(status_code=status.HTTP_401_UNAUTHORIZED)
+
+    result = await favourites_service.add_favourite(
+        player_id=player.id,
+        map_set_id=map_set_id,
+    )
+    if result is AddFavouriteResult.ALREADY_FAVOURITED:
+        return Response(b"You've already favourited this beatmap!")
 
     return Response(b"Added favourite!")
 
 
 @router.get("/web/lastfm.php")
 async def lastFM(
+    *,
     action: Literal["scrobble", "np"],
     beatmap_id_or_hidden_flag: str = Query(
         ...,
@@ -271,79 +299,30 @@ async def lastFM(
         ),
         alias="b",
     ),
-    player: Player = Depends(authenticate_player_session(Query, "us", "ha")),
+    username: str = Query(..., alias="us"),
+    password_md5: str = Query(..., alias="ha"),
+    bancho_authentication: Annotated[
+        BanchoAuthenticationService,
+        Depends(api_dependencies.get_bancho_authentication_service),
+    ],
+    client_integrity_service: Annotated[
+        ClientIntegrityService,
+        Depends(api_dependencies.get_client_integrity_service),
+    ],
 ) -> Response:
-    if beatmap_id_or_hidden_flag[0] != "a":
-        # not anticheat related, tell the
-        # client not to send any more for now.
+    player = await bancho_authentication.authenticate_online_player(
+        username=unquote(username),
+        password_md5=password_md5,
+    )
+    if player is None:
+        return Response(status_code=status.HTTP_401_UNAUTHORIZED)
+
+    result = await client_integrity_service.handle_lastfm_flags(
+        player=player,
+        beatmap_id_or_hidden_flag=beatmap_id_or_hidden_flag,
+    )
+    if result is ClientIntegrityResult.STOP_SENDING:
         return Response(b"-3")
-
-    flags = LastFMFlags(int(beatmap_id_or_hidden_flag[1:]))
-
-    if flags & (LastFMFlags.HQ_ASSEMBLY | LastFMFlags.HQ_FILE):
-        # Player is currently running hq!osu; could possibly
-        # be a separate client, buuuut prooobably not lol.
-
-        await player.restrict(
-            admin=app.state.sessions.bot,
-            reason=f"hq!osu running ({flags})",
-        )
-
-        # refresh their client state
-        if player.is_online:
-            player.logout()
-
-        return Response(b"-3")
-
-    if flags & LastFMFlags.REGISTRY_EDITS:
-        # Player has registry edits left from
-        # hq!osu's multiaccounting tool. This
-        # does not necessarily mean they are
-        # using it now, but they have in the past.
-
-        if random.randrange(32) == 0:
-            # Random chance (1/32) for a ban.
-            await player.restrict(
-                admin=app.state.sessions.bot,
-                reason="hq!osu relife 1/32",
-            )
-
-            # refresh their client state
-            if player.is_online:
-                player.logout()
-
-            return Response(b"-3")
-
-        player.enqueue(
-            app.packets.notification(
-                "\n".join(
-                    [
-                        "Hey!",
-                        "It appears you have hq!osu's multiaccounting tool (relife) enabled.",
-                        "This tool leaves a change in your registry that the osu! client can detect.",
-                        "Please re-install relife and disable the program to avoid any restrictions.",
-                    ],
-                ),
-            ),
-        )
-
-        player.logout()
-
-        return Response(b"-3")
-
-    """ These checks only worked for ~5 hours from release. rumoi's quick!
-    if flags & (
-        LastFMFlags.SDL2_LIBRARY
-        | LastFMFlags.OPENSSL_LIBRARY
-        | LastFMFlags.AQN_MENU_SAMPLE
-    ):
-        # AQN has been detected in the client, either
-        # through the 'libeay32.dll' library being found
-        # onboard, or from the menu sound being played in
-        # the AQN menu while being in an inappropriate menu
-        # for the context of the sound effect.
-        pass
-    """
 
     return Response(b"")
 
@@ -361,120 +340,120 @@ DIRECT_MAP_INFO_FMTSTR = (
 )
 
 
-@router.get("/web/osu-search.php")
-async def osuSearchHandler(
-    player: Player = Depends(authenticate_player_session(Query, "u", "h")),
-    ranked_status: int = Query(..., alias="r", ge=0, le=8),
-    query: str = Query(..., alias="q"),
-    mode: int = Query(..., alias="m", ge=-1, le=3),  # -1 for all
-    page_num: int = Query(..., alias="p"),
-) -> Response:
-    params: dict[str, Any] = {"amount": 100, "offset": page_num * 100}
+def format_direct_search_response(result: DirectSearchResult) -> bytes:
+    assert result.beatmap_sets is not None
+    response_lines = [str(result.result_count)]
 
-    # eventually we could try supporting these,
-    # but it mostly depends on the mirror.
-    if query not in ("Newest", "Top+Rated", "Most+Played"):
-        params["query"] = query
-
-    if mode != -1:  # -1 for all
-        params["mode"] = mode
-
-    if ranked_status != 4:  # 4 for all
-        # convert to osu!api status
-        params["status"] = RankedStatus.from_osudirect(ranked_status).osu_api
-
-    response = await app.state.services.http_client.get(
-        app.settings.MIRROR_SEARCH_ENDPOINT,
-        params=params,
-    )
-    if response.status_code != status.HTTP_200_OK:
-        return Response(b"-1\nFailed to retrieve data from the beatmap mirror.")
-
-    result = response.json()
-
-    lresult = len(result)  # send over 100 if we receive
-    # 100 matches, so the client
-    # knows there are more to get
-    ret = [f"{'101' if lresult == 100 else lresult}"]
-    for bmapset in result:
-        if bmapset["ChildrenBeatmaps"] is None:
-            continue
-
-        # some mirrors use a true/false instead of 0 or 1
-        bmapset["HasVideo"] = int(bmapset["HasVideo"])
-
-        diff_sorted_maps = sorted(
-            bmapset["ChildrenBeatmaps"],
-            key=lambda m: m["DifficultyRating"],
-        )
-
-        def handle_invalid_characters(s: str) -> str:
-            # XXX: this is a bug that exists on official servers (lmao)
-            # | is used to delimit the set data, so the difficulty name
-            # cannot contain this or it will be ignored. we fix it here
-            # by using a different character.
-            return s.replace("|", "I")
-
+    for beatmap_set in result.beatmap_sets:
         diffs_str = ",".join(
             [
                 DIRECT_MAP_INFO_FMTSTR.format(
-                    DifficultyRating=row["DifficultyRating"],
-                    DiffName=handle_invalid_characters(row["DiffName"]),
-                    CS=row["CS"],
-                    OD=row["OD"],
-                    AR=row["AR"],
-                    HP=row["HP"],
-                    Mode=row["Mode"],
+                    DifficultyRating=beatmap.difficulty_rating,
+                    DiffName=beatmap.name,
+                    CS=beatmap.cs,
+                    OD=beatmap.od,
+                    AR=beatmap.ar,
+                    HP=beatmap.hp,
+                    Mode=beatmap.mode,
                 )
-                for row in diff_sorted_maps
+                for beatmap in beatmap_set.beatmaps
             ],
         )
-
-        ret.append(
+        response_lines.append(
             DIRECT_SET_INFO_FMTSTR.format(
-                Artist=handle_invalid_characters(bmapset["Artist"]),
-                Title=handle_invalid_characters(bmapset["Title"]),
-                Creator=bmapset["Creator"],
-                RankedStatus=bmapset["RankedStatus"],
-                LastUpdate=bmapset["LastUpdate"],
-                SetID=bmapset["SetID"],
-                HasVideo=bmapset["HasVideo"],
+                Artist=beatmap_set.artist,
+                Title=beatmap_set.title,
+                Creator=beatmap_set.creator,
+                RankedStatus=beatmap_set.ranked_status,
+                LastUpdate=beatmap_set.last_update,
+                SetID=beatmap_set.set_id,
+                HasVideo=beatmap_set.has_video,
                 diffs=diffs_str,
             ),
         )
 
-    return Response("\n".join(ret).encode())
+    return "\n".join(response_lines).encode()
+
+
+@router.get("/web/osu-search.php")
+async def osuSearchHandler(
+    *,
+    username: str = Query(..., alias="u"),
+    password_md5: str = Query(..., alias="h"),
+    ranked_status: int = Query(..., alias="r", ge=0, le=8),
+    query: str = Query(..., alias="q"),
+    mode: int = Query(..., alias="m", ge=-1, le=3),  # -1 for all
+    page_num: int = Query(..., alias="p"),
+    bancho_authentication: Annotated[
+        BanchoAuthenticationService,
+        Depends(api_dependencies.get_bancho_authentication_service),
+    ],
+    direct_search_service: Annotated[
+        DirectSearchService,
+        Depends(api_dependencies.get_direct_search_service),
+    ],
+) -> Response:
+    if (
+        await bancho_authentication.authenticate_online_player(
+            username=unquote(username),
+            password_md5=password_md5,
+        )
+        is None
+    ):
+        return Response(status_code=status.HTTP_401_UNAUTHORIZED)
+
+    result = await direct_search_service.search(
+        ranked_status=ranked_status,
+        query=query,
+        mode=mode,
+        page_num=page_num,
+    )
+    if result.code is DirectSearchResultCode.MIRROR_ERROR:
+        return Response(b"-1\nFailed to retrieve data from the beatmap mirror.")
+
+    return Response(format_direct_search_response(result))
 
 
 # TODO: video support (needs db change)
 @router.get("/web/osu-search-set.php")
 async def osuSearchSetHandler(
-    player: Player = Depends(authenticate_player_session(Query, "u", "h")),
+    *,
+    username: str = Query(..., alias="u"),
+    password_md5: str = Query(..., alias="h"),
     map_set_id: int | None = Query(None, alias="s"),
     map_id: int | None = Query(None, alias="b"),
     checksum: str | None = Query(None, alias="c"),
+    bancho_authentication: Annotated[
+        BanchoAuthenticationService,
+        Depends(api_dependencies.get_bancho_authentication_service),
+    ],
+    beatmap_set_service: Annotated[
+        BeatmapSetService,
+        Depends(api_dependencies.get_beatmap_set_service),
+    ],
 ) -> Response:
+    if (
+        await bancho_authentication.authenticate_online_player(
+            username=unquote(username),
+            password_md5=password_md5,
+        )
+        is None
+    ):
+        return Response(status_code=status.HTTP_401_UNAUTHORIZED)
+
     # Since we only need set-specific data, we can basically
     # just do same query with either bid or bsid.
 
-    v: int | str
     if map_set_id is not None:
         # this is just a normal request
-        k, v = ("set_id", map_set_id)
+        bmapset = await beatmap_set_service.fetch_set_info(set_id=map_set_id)
     elif map_id is not None:
-        k, v = ("id", map_id)
+        bmapset = await beatmap_set_service.fetch_set_info(map_id=map_id)
     elif checksum is not None:
-        k, v = ("md5", checksum)
+        bmapset = await beatmap_set_service.fetch_set_info(md5=checksum)
     else:
         return Response(b"")  # invalid args
 
-    # Get all set data.
-    bmapset = await app.state.services.database.fetch_one(
-        "SELECT DISTINCT set_id, artist, "
-        "title, status, creator, last_update "
-        f"FROM maps WHERE {k} = :v",
-        {"v": v},
-    )
     if bmapset is None:
         # TODO: get from osu!
         return Response(b"")
@@ -483,12 +462,10 @@ async def osuSearchSetHandler(
 
     return Response(
         (
-            "{set_id}.osz|{artist}|{title}|{creator}|"
-            "{status}|{rating:.1f}|{last_update}|{set_id}|"
-            "0|0|0|0|0"
-        )
-        .format(**bmapset, rating=rating)
-        .encode(),
+            f"{bmapset.set_id}.osz|{bmapset.artist}|{bmapset.title}|"
+            f"{bmapset.creator}|{bmapset.status}|{rating:.1f}|"
+            f"{bmapset.last_update}|{bmapset.set_id}|0|0|0|0|0"
+        ).encode(),
     )
     # 0s are threadid, has_vid, has_story, filesize, filesize_novid
 
@@ -531,9 +508,9 @@ def format_achievement_string(file: str, name: str, description: str) -> str:
 def format_achievements(achievements: Sequence[Achievement]) -> str:
     return "/".join(
         format_achievement_string(
-            achievement["file"],
-            achievement["name"],
-            achievement["desc"],
+            achievement.file,
+            achievement.name,
+            achievement.desc,
         )
         for achievement in achievements
     )
@@ -632,61 +609,24 @@ def build_score_submission_response(
 
 
 def build_score_submission_error_response(
-    error: score_submission_usecases.ScoreSubmissionError,
+    error: ScoreSubmissionError,
 ) -> bytes:
-    if (
-        error.code
-        is score_submission_usecases.ScoreSubmissionErrorCode.BEATMAP_NOT_FOUND
-    ):
+    if error.code is ScoreSubmissionErrorCode.BEATMAP_NOT_FOUND:
         return b"error: beatmap"
-    if (
-        error.code
-        is score_submission_usecases.ScoreSubmissionErrorCode.PLAYER_NOT_FOUND
-    ):
+    if error.code is ScoreSubmissionErrorCode.PLAYER_NOT_FOUND:
         # Player is not online, return nothing so that their
         # client will retry submission when they log in.
         return b""
-    if (
-        error.code
-        is score_submission_usecases.ScoreSubmissionErrorCode.DUPLICATE_SUBMISSION
-    ):
+    if error.code is ScoreSubmissionErrorCode.DUPLICATE_SUBMISSION:
         return b"error: no"
 
     raise ValueError(f"Unexpected score submission error: {error.code!r}")
 
 
-async def fetch_score_submission_beatmap(md5: str) -> Beatmap | None:
-    return await Beatmap.from_md5(md5)
-
-
-async def authenticate_score_submitter(
-    username: str,
-    password_md5: str,
-) -> Player | None:
-    return await app.state.sessions.players.from_login(username, password_md5)
-
-
-async def record_score_submission_integrity_failure() -> None:
-    stacktrace = app.utils.get_appropriate_stacktrace()
-    await app.state.services.log_strange_occurrence(stacktrace)
-
-
-def increment_score_submission_metric(metric: str) -> None:
-    if app.state.services.datadog:
-        app.state.services.datadog.increment(metric)  # type: ignore[no-untyped-call]
-
-
-def send_personal_best_notification(player: Player, message: str) -> None:
-    player.enqueue(app.packets.notification(message))
-
-
-def publish_score_submitter_stats(player: Player) -> None:
-    app.state.sessions.players.enqueue(app.packets.user_stats(player))
-
-
 @router.post("/web/osu-submit-modular-selector.php")
 async def osuSubmitModularSelector(
     request: Request,
+    *,
     # TODO: should token be allowed
     # through but ac'd if not found?
     # TODO: validate token format
@@ -705,6 +645,10 @@ async def osuSubmitModularSelector(
     osu_version: str = Form(..., alias="osuver"),
     client_hash_b64: bytes = Form(..., alias="s"),
     fl_cheat_screenshot: bytes | None = File(None, alias="i"),
+    score_submission_service: Annotated[
+        ScoreSubmissionService,
+        Depends(api_dependencies.get_score_submission_service),
+    ],
 ) -> Response:
     """Handle a score submission from an osu! client with an active session."""
 
@@ -730,8 +674,8 @@ async def osuSubmitModularSelector(
         osu_version,
     )
 
-    submitted_score = await score_submission_usecases.submit_score(
-        score_submission_usecases.ScoreSubmissionRequest(
+    submitted_score = await score_submission_service.submit_score(
+        ScoreSubmissionRequest(
             score_data=score_data,
             password_md5=pw_md5,
             osu_version=osu_version,
@@ -743,26 +687,8 @@ async def osuSubmitModularSelector(
             fail_time=fail_time,
             replay_file=replay_file,
         ),
-        replays_path=REPLAYS_PATH,
-        restriction_admin=app.state.sessions.bot,
-        fetch_beatmap=fetch_score_submission_beatmap,
-        authenticate_player=authenticate_score_submitter,
-        score_submission_locks=app.state.score_submission_locks,
-        database=app.state.services.database,
-        scores=scores_repo,
-        stats=stats_repo,
-        maps=maps_repo,
-        achievements=achievements_usecases,
-        user_achievements=user_achievements_usecases,
-        ensure_osu_file_is_available=ensure_osu_file_is_available,
-        publish_user_stats=publish_score_submitter_stats,
-        send_personal_best_notification=send_personal_best_notification,
-        announce_channel=app.state.sessions.channels.get_by_name("#announce"),
-        domain=app.settings.DOMAIN,
-        increment_metric=increment_score_submission_metric,
-        record_submission_integrity_failure=record_score_submission_integrity_failure,
     )
-    if isinstance(submitted_score, score_submission_usecases.ScoreSubmissionError):
+    if isinstance(submitted_score, ScoreSubmissionError):
         return Response(build_score_submission_error_response(submitted_score))
 
     response = build_score_submission_response(
@@ -778,60 +704,76 @@ async def osuSubmitModularSelector(
 
 @router.get("/web/osu-getreplay.php")
 async def getReplay(
-    player: Player = Depends(authenticate_player_session(Query, "u", "h")),
+    *,
+    username: str = Query(..., alias="u"),
+    password_md5: str = Query(..., alias="h"),
     mode: int = Query(..., alias="m", ge=0, le=3),
     score_id: int = Query(..., alias="c", min=0, max=9_223_372_036_854_775_807),
+    bancho_authentication: Annotated[
+        BanchoAuthenticationService,
+        Depends(api_dependencies.get_bancho_authentication_service),
+    ],
+    replay_service: Annotated[
+        ReplayService,
+        Depends(api_dependencies.get_replay_service),
+    ],
 ) -> Response:
-    score = await Score.from_sql(score_id)
-    if not score:
+    player = await bancho_authentication.authenticate_online_player(
+        username=unquote(username),
+        password_md5=password_md5,
+    )
+    if player is None:
+        return Response(status_code=status.HTTP_401_UNAUTHORIZED)
+
+    replay = await replay_service.fetch_replay_file(
+        viewer_id=player.id,
+        score_id=score_id,
+    )
+    if replay.code is ReplayResultCode.NOT_FOUND:
         return Response(b"", status_code=404)
 
-    file = REPLAYS_PATH / f"{score_id}.osr"
-    if not file.exists():
-        return Response(b"", status_code=404)
-
-    # increment replay views for this score
-    if score.player is not None and player.id != score.player.id:
-        app.state.loop.create_task(score.increment_replay_views())  # type: ignore[unused-awaitable]
-
-    return FileResponse(file)
+    assert replay.path is not None
+    return FileResponse(replay.path)
 
 
 @router.get("/web/osu-rate.php")
 async def osuRate(
-    player: Player = Depends(
-        authenticate_player_session(Query, "u", "p", err=b"auth fail"),
-    ),
+    *,
+    username: str = Query(..., alias="u"),
+    password_md5: str = Query(..., alias="p"),
     map_md5: str = Query(..., alias="c", min_length=32, max_length=32),
     rating: int | None = Query(None, alias="v", ge=1, le=10),
+    bancho_authentication: Annotated[
+        BanchoAuthenticationService,
+        Depends(api_dependencies.get_bancho_authentication_service),
+    ],
+    beatmap_rating_service: Annotated[
+        BeatmapRatingService,
+        Depends(api_dependencies.get_beatmap_rating_service),
+    ],
 ) -> Response:
-    if rating is None:
-        # check if we have the map in our cache;
-        # if not, the map probably doesn't exist.
-        if map_md5 not in app.state.cache.beatmap:
-            return Response(b"no exist")
+    player = await bancho_authentication.authenticate_online_player(
+        username=unquote(username),
+        password_md5=password_md5,
+    )
+    if player is None:
+        return Response(b"auth fail", status_code=status.HTTP_401_UNAUTHORIZED)
 
-        cached = app.state.cache.beatmap[map_md5]
-
-        # only allow rating on maps with a leaderboard.
-        if cached.status < RankedStatus.Ranked:
-            return Response(b"not ranked")
-
-        # osu! client is checking whether we can rate the map or not.
-        # the client hasn't rated the map, so simply
-        # tell them that they can submit a rating.
-        if not await ratings_repo.fetch_one(map_md5=map_md5, userid=player.id):
-            return Response(b"ok")
-    else:
-        # the client is submitting a rating for the map.
-        await ratings_repo.create(userid=player.id, map_md5=map_md5, rating=rating)
-
-    map_ratings = await ratings_repo.fetch_many(map_md5=map_md5)
-    ratings = [row["rating"] for row in map_ratings]
+    rating_result = await beatmap_rating_service.rate_or_check(
+        player_id=player.id,
+        map_md5=map_md5,
+        rating=rating,
+    )
+    if rating_result.code is BeatmapRatingResultCode.NO_EXIST:
+        return Response(b"no exist")
+    if rating_result.code is BeatmapRatingResultCode.NOT_RANKED:
+        return Response(b"not ranked")
+    if rating_result.code is BeatmapRatingResultCode.CAN_RATE:
+        return Response(b"ok")
 
     # send back the average rating
-    avg = sum(ratings) / len(ratings)
-    return Response(f"alreadyvoted\n{avg}".encode())
+    assert rating_result.average_rating is not None
+    return Response(f"alreadyvoted\n{rating_result.average_rating}".encode())
 
 
 SCORE_LISTING_FMTSTR = (
@@ -841,172 +783,73 @@ SCORE_LISTING_FMTSTR = (
 )
 
 
-@router.get("/web/osu-osz2-getscores.php")
-async def getScores(
-    player: Player = Depends(authenticate_player_session(Query, "us", "ha")),
-    requesting_from_editor_song_select: bool = Query(..., alias="s"),
-    leaderboard_version: int = Query(..., alias="vv"),
-    leaderboard_type: int = Query(..., alias="v", ge=0, le=4),
-    map_md5: str = Query(..., alias="c", min_length=32, max_length=32),
-    map_filename: str = Query(..., alias="f"),
-    mode_arg: int = Query(..., alias="m", ge=0, le=3),
-    map_set_id: int = Query(..., alias="i", ge=-1, le=2_147_483_647),
-    mods_arg: int = Query(..., alias="mods", ge=0, le=2_147_483_647),
-    map_package_hash: str = Query(..., alias="h"),  # TODO: further validation
-    aqn_files_found: bool = Query(..., alias="a"),
-) -> Response:
-    if aqn_files_found:
-        stacktrace = app.utils.get_appropriate_stacktrace()
-        await app.state.services.log_strange_occurrence(stacktrace)
-
-    # check if this md5 has already been  cached as
-    # unsubmitted/needs update to reduce osu!api spam
-    if map_md5 in app.state.cache.unsubmitted:
-        return Response(b"-1|false")
-    if map_md5 in app.state.cache.needs_update:
-        return Response(b"1|false")
-
-    if mods_arg & Mods.RELAX:
-        if mode_arg == 3:  # rx!mania doesn't exist
-            mods_arg &= ~Mods.RELAX
-        else:
-            mode_arg += 4
-    elif mods_arg & Mods.AUTOPILOT:
-        if mode_arg in (1, 2, 3):  # ap!catch, taiko and mania don't exist
-            mods_arg &= ~Mods.AUTOPILOT
-        else:
-            mode_arg += 8
-
-    mods = Mods(mods_arg)
-    mode = GameMode(mode_arg)
-
-    # attempt to update their stats if their
-    # gm/gm-affecting-mods change at all.
-    if mode != player.status.mode:
-        player.status.mods = mods
-        player.status.mode = mode
-
-        if not player.restricted:
-            app.state.sessions.players.enqueue(app.packets.user_stats(player))
-
-    scoring_metric: Literal["pp", "score"] = (
-        "pp" if mode >= GameMode.RELAX_OSU else "score"
+def format_score_listing(
+    score_row: BeatmapLeaderboardScoreRow,
+    *,
+    rank: int,
+) -> str:
+    return SCORE_LISTING_FMTSTR.format(
+        id=score_row.id,
+        name=score_row.name,
+        score=int(round(score_row.leaderboard_value)),
+        max_combo=score_row.max_combo,
+        n50=score_row.n50,
+        n100=score_row.n100,
+        n300=score_row.n300,
+        nmiss=score_row.nmiss,
+        nkatu=score_row.nkatu,
+        ngeki=score_row.ngeki,
+        perfect=score_row.perfect,
+        mods=score_row.mods,
+        userid=score_row.userid,
+        rank=rank,
+        time=score_row.time,
+        has_replay="1",
     )
 
-    bmap = await Beatmap.from_md5(map_md5, set_id=map_set_id)
-    has_set_id = map_set_id > 0
 
-    if not bmap:
-        # map not found, figure out whether it needs an
-        # update or isn't submitted using its filename.
-
-        if has_set_id and map_set_id not in app.state.cache.beatmapset:
-            # set not cached, it doesn't exist
-            app.state.cache.unsubmitted.add(map_md5)
-            return Response(b"-1|false")
-
-        map_filename = unquote_plus(map_filename)  # TODO: is unquote needed?
-
-        map_exists = False
-        if has_set_id:
-            # we can look it up in the specific set from cache
-            for bmap in app.state.cache.beatmapset[map_set_id].maps:
-                if map_filename == bmap.filename:
-                    map_exists = True
-                    break
-            else:
-                map_exists = False
-        else:
-            # we can't find it on the osu!api by md5,
-            # and we don't have the set id, so we must
-            # look it up in sql from the filename.
-            map_exists = (
-                await maps_repo.fetch_one(
-                    filename=map_filename,
-                )
-                is not None
-            )
-
-        if map_exists:
-            # map can be updated.
-            app.state.cache.needs_update.add(map_md5)
-            return Response(b"1|false")
-        else:
-            # map is unsubmitted.
-            # add this map to the unsubmitted cache, so
-            # that we don't have to make this request again.
-            app.state.cache.unsubmitted.add(map_md5)
-            return Response(b"-1|false")
-
-    # we've found a beatmap for the request.
-
-    if app.state.services.datadog:
-        app.state.services.datadog.increment("bancho.leaderboards_served")  # type: ignore[no-untyped-call]
-
-    if bmap.status < RankedStatus.Ranked:
-        # only show leaderboards for ranked,
-        # approved, qualified, or loved maps.
-        return Response(f"{int(bmap.status)}|false".encode())
-
-    # fetch scores & personal best
-    # TODO: create a leaderboard cache
-    if not requesting_from_editor_song_select:
-        leaderboard_scores = await score_leaderboards_usecases.fetch_leaderboard_scores(
-            leaderboard_type=leaderboard_type,
-            map_md5=bmap.md5,
-            mode=mode,
-            mods=mods,
-            player=player,
-            scoring_metric=scoring_metric,
-            scores=scores_repo,
-        )
-        score_rows = leaderboard_scores.score_rows
-        personal_best_score_row = leaderboard_scores.personal_best_score_row
-    else:
-        score_rows = []
-        personal_best_score_row = None
-
-    # fetch beatmap rating
-    map_ratings = await ratings_repo.fetch_many(
-        map_md5=bmap.md5,
-        page=None,
-        page_size=None,
-    )
-    ratings = [row["rating"] for row in map_ratings]
-    map_avg_rating = sum(ratings) / len(ratings) if ratings else 0.0
-
-    ## construct response for osu! client
+def format_scores_response(leaderboard: BeatmapLeaderboardResult) -> bytes:
+    assert leaderboard.ranked_status is not None
+    assert leaderboard.beatmap_id is not None
+    assert leaderboard.beatmap_set_id is not None
+    assert leaderboard.beatmap_name is not None
+    assert leaderboard.beatmap_rating is not None
+    assert leaderboard.score_rows is not None
 
     response_lines: list[str] = [
         # NOTE: fa stands for featured artist (for the ones that may not know)
         # {ranked_status}|{serv_has_osz2}|{bid}|{bsid}|{len(scores)}|{fa_track_id}|{fa_license_text}
-        f"{int(bmap.status)}|false|{bmap.id}|{bmap.set_id}|{len(score_rows)}|0|",
+        f"{int(leaderboard.ranked_status)}|false|{leaderboard.beatmap_id}|{leaderboard.beatmap_set_id}|{len(leaderboard.score_rows)}|0|",
         # {offset}\n{beatmap_name}\n{rating}
         # TODO: server side beatmap offsets
-        f"0\n{bmap.full_name}\n{map_avg_rating}",
+        f"0\n{leaderboard.beatmap_name}\n{leaderboard.beatmap_rating}",
     ]
 
-    if not score_rows:
+    if not leaderboard.score_rows:
         response_lines.extend(("", ""))  # no scores, no personal best
-        return Response("\n".join(response_lines).encode())
+        return "\n".join(response_lines).encode()
 
-    if personal_best_score_row is not None:
-        user_clan = (
-            await clans_repo.fetch_one(id=player.clan_id)
-            if player.clan_id is not None
-            else None
-        )
-        display_name = (
-            f"[{user_clan['tag']}] {player.name}"
-            if user_clan is not None
-            else player.name
-        )
+    if leaderboard.personal_best_score_row is not None:
+        assert leaderboard.personal_best_display_name is not None
+        assert leaderboard.personal_best_user_id is not None
+        personal_best_score = leaderboard.personal_best_score_row
         response_lines.append(
             SCORE_LISTING_FMTSTR.format(
-                **personal_best_score_row,
-                name=display_name,
-                userid=player.id,
-                score=int(round(personal_best_score_row["leaderboard_value"])),
+                id=personal_best_score.id,
+                name=leaderboard.personal_best_display_name,
+                max_combo=personal_best_score.max_combo,
+                n50=personal_best_score.n50,
+                n100=personal_best_score.n100,
+                n300=personal_best_score.n300,
+                nmiss=personal_best_score.nmiss,
+                nkatu=personal_best_score.nkatu,
+                ngeki=personal_best_score.ngeki,
+                perfect=personal_best_score.perfect,
+                mods=personal_best_score.mods,
+                userid=leaderboard.personal_best_user_id,
+                rank=personal_best_score.rank,
+                time=personal_best_score.time,
+                score=int(round(personal_best_score.leaderboard_value)),
                 has_replay="1",
             ),
         )
@@ -1015,22 +858,75 @@ async def getScores(
 
     response_lines.extend(
         [
-            SCORE_LISTING_FMTSTR.format(
-                **s,
-                score=int(round(s["leaderboard_value"])),
-                has_replay="1",
-                rank=idx + 1,
-            )
-            for idx, s in enumerate(score_rows)
+            format_score_listing(score_row, rank=idx + 1)
+            for idx, score_row in enumerate(leaderboard.score_rows)
         ],
     )
 
-    return Response("\n".join(response_lines).encode())
+    return "\n".join(response_lines).encode()
+
+
+@router.get("/web/osu-osz2-getscores.php")
+async def getScores(
+    *,
+    username: str = Query(..., alias="us"),
+    password_md5: str = Query(..., alias="ha"),
+    requesting_from_editor_song_select: bool = Query(..., alias="s"),
+    _leaderboard_version: int = Query(..., alias="vv"),
+    leaderboard_type: int = Query(..., alias="v", ge=0, le=4),
+    map_md5: str = Query(..., alias="c", min_length=32, max_length=32),
+    map_filename: str = Query(..., alias="f"),
+    mode_arg: int = Query(..., alias="m", ge=0, le=3),
+    map_set_id: int = Query(..., alias="i", ge=-1, le=2_147_483_647),
+    mods_arg: int = Query(..., alias="mods", ge=0, le=2_147_483_647),
+    _map_package_hash: str = Query(..., alias="h"),  # TODO: further validation
+    aqn_files_found: bool = Query(..., alias="a"),
+    bancho_authentication: Annotated[
+        BanchoAuthenticationService,
+        Depends(api_dependencies.get_bancho_authentication_service),
+    ],
+    beatmap_leaderboard_service: Annotated[
+        BeatmapLeaderboardService,
+        Depends(api_dependencies.get_beatmap_leaderboard_service),
+    ],
+) -> Response:
+    player = await bancho_authentication.authenticate_online_player(
+        username=unquote(username),
+        password_md5=password_md5,
+    )
+    if player is None:
+        return Response(status_code=status.HTTP_401_UNAUTHORIZED)
+
+    leaderboard = await beatmap_leaderboard_service.fetch_leaderboard(
+        player=player,
+        request=BeatmapLeaderboardRequest(
+            requesting_from_editor_song_select=requesting_from_editor_song_select,
+            leaderboard_type=leaderboard_type,
+            map_md5=map_md5,
+            map_filename=map_filename,
+            mode_arg=mode_arg,
+            map_set_id=map_set_id,
+            mods_arg=mods_arg,
+            aqn_files_found=aqn_files_found,
+        ),
+    )
+
+    if leaderboard.code is BeatmapLeaderboardResultCode.NOT_SUBMITTED:
+        return Response(b"-1|false")
+    if leaderboard.code is BeatmapLeaderboardResultCode.NEEDS_UPDATE:
+        return Response(b"1|false")
+    if leaderboard.code is BeatmapLeaderboardResultCode.NO_LEADERBOARD:
+        assert leaderboard.ranked_status is not None
+        return Response(f"{int(leaderboard.ranked_status)}|false".encode())
+
+    return Response(format_scores_response(leaderboard))
 
 
 @router.post("/web/osu-comment.php")
 async def osuComment(
-    player: Player = Depends(authenticate_player_session(Form, "u", "p")),
+    *,
+    username: str = Form(..., alias="u"),
+    password_md5: str = Form(..., alias="p"),
     map_id: int = Form(..., alias="b"),
     map_set_id: int = Form(..., alias="s"),
     score_id: int = Form(..., alias="r", ge=0, le=9_223_372_036_854_775_807),
@@ -1041,10 +937,26 @@ async def osuComment(
     colour: str | None = Form(None, alias="f", min_length=6, max_length=6),
     start_time: int | None = Form(None, alias="starttime"),
     comment: str | None = Form(None, min_length=1, max_length=80),
+    bancho_authentication: Annotated[
+        BanchoAuthenticationService,
+        Depends(api_dependencies.get_bancho_authentication_service),
+    ],
+    comments_service: Annotated[
+        CommentsService,
+        Depends(api_dependencies.get_comments_service),
+    ],
 ) -> Response:
+    player = await bancho_authentication.authenticate_online_player(
+        username=unquote(username),
+        password_md5=password_md5,
+    )
+    if player is None:
+        return Response(status_code=status.HTTP_401_UNAUTHORIZED)
+
     if action == "get":
         # client is requesting all comments
-        comments = await comments_repo.fetch_all_relevant_to_replay(
+        comments = await comments_service.fetch_relevant_to_replay_for_player(
+            player=player,
             score_id=score_id,
             map_set_id=map_set_id,
             map_id=map_id,
@@ -1055,21 +967,20 @@ async def osuComment(
         for cmt in comments:
             # note: this implementation does not support
             #       "player" or "creator" comment colours
-            if cmt["priv"] & Privileges.NOMINATOR:
+            if cmt.priv & Privileges.NOMINATOR:
                 fmt = "bat"
-            elif cmt["priv"] & Privileges.DONATOR:
+            elif cmt.priv & Privileges.DONATOR:
                 fmt = "supporter"
             else:
                 fmt = ""
 
-            if cmt["colour"]:
-                fmt += f'|{cmt["colour"]}'
+            if cmt.colour:
+                fmt += f"|{cmt.colour}"
 
             ret.append(
-                "{time}\t{target_type}\t{fmt}\t{comment}".format(fmt=fmt, **cmt),
+                f"{cmt.time}\t{cmt.target_type}\t{fmt}\t{cmt.comment}",
             )
 
-        player.update_latest_activity_soon()
         return Response("\n".join(ret).encode())
 
     elif action == "post":
@@ -1080,58 +991,46 @@ async def osuComment(
         assert start_time is not None
         assert comment is not None
 
-        # get the corresponding id from the request
-        if target == "song":
-            target_id = map_set_id
-        elif target == "map":
-            target_id = map_id
-        else:  # target == "replay"
-            target_id = score_id
-
-        if colour and not player.priv & Privileges.DONATOR:
-            # only supporters can use colours.
-            colour = None
-
-            log(
-                f"User {player} attempted to use a coloured comment without "
-                "supporter status. Submitting comment without a colour.",
-            )
-
-        # insert into sql
-        await comments_repo.create(
-            target_id=target_id,
-            target_type=comments_repo.TargetType(target),
-            userid=player.id,
-            time=start_time,
+        await comments_service.create_comment_for_player(
+            player=player,
+            target=target,
+            map_set_id=map_set_id,
+            map_id=map_id,
+            score_id=score_id,
+            start_time=start_time,
             comment=comment,
             colour=colour,
         )
-
-        player.update_latest_activity_soon()
 
     return Response(b"")  # empty resp is fine
 
 
 @router.get("/web/osu-markasread.php")
 async def osuMarkAsRead(
-    player: Player = Depends(authenticate_player_session(Query, "u", "h")),
+    *,
+    username: str = Query(..., alias="u"),
+    password_md5: str = Query(..., alias="h"),
     channel: str = Query(..., min_length=0, max_length=32),
+    bancho_authentication: Annotated[
+        BanchoAuthenticationService,
+        Depends(api_dependencies.get_bancho_authentication_service),
+    ],
+    mail_read_service: Annotated[
+        MailReadService,
+        Depends(api_dependencies.get_mail_read_service),
+    ],
 ) -> Response:
-    target_name = unquote(channel)  # TODO: unquote needed?
-    if not target_name:
-        log(
-            f"User {player} attempted to mark a channel as read without a target.",
-            Ansi.LYELLOW,
-        )
-        return Response(b"")  # no channel specified
+    player = await bancho_authentication.authenticate_online_player(
+        username=unquote(username),
+        password_md5=password_md5,
+    )
+    if player is None:
+        return Response(status_code=status.HTTP_401_UNAUTHORIZED)
 
-    target = await app.state.sessions.players.from_cache_or_sql(name=target_name)
-    if target:
-        # mark any unread mail from this user as read.
-        await mail_repo.mark_conversation_as_read(
-            to_id=player.id,
-            from_id=target.id,
-        )
+    await mail_read_service.mark_channel_as_read(
+        player=player,
+        channel=channel,
+    )
 
     return Response(b"")
 
@@ -1145,12 +1044,12 @@ async def osuSeasonal() -> Response:
 async def banchoConnect(
     # NOTE: this is disabled as this endpoint can be called
     #       before a player has been granted a session
-    # player: Player = Depends(authenticate_player_session(Query, "u", "h")),
+    # TODO: authenticate this endpoint when the client reliably has a session.
     osu_ver: str = Query(..., alias="v"),
-    active_endpoint: str | None = Query(None, alias="fail"),
-    net_framework_vers: str | None = Query(None, alias="fx"),  # delimited by |
+    _active_endpoint: str | None = Query(None, alias="fail"),
+    _net_framework_vers: str | None = Query(None, alias="fx"),  # delimited by |
     client_hash: str | None = Query(None, alias="ch"),
-    retrying: bool | None = Query(None, alias="retry"),  # '0' or '1'
+    _retrying: bool | None = Query(None, alias="retry"),  # '0' or '1'
 ) -> Response:
     return Response(b"")
 
@@ -1270,110 +1169,49 @@ INGAME_REGISTRATION_DISALLOWED_ERROR = {
 @router.post("/users")
 async def register_account(
     request: Request,
+    *,
     username: str = Form(..., alias="user[username]"),
     email: str = Form(..., alias="user[user_email]"),
     pw_plaintext: str = Form(..., alias="user[password]"),
     check: int = Form(...),
     # XXX: require/validate these headers; they are used later
     # on in the registration process for resolving geolocation
-    forwarded_ip: str = Header(..., alias="X-Forwarded-For"),
-    real_ip: str = Header(..., alias="X-Real-IP"),
+    _forwarded_ip: str = Header(..., alias="X-Forwarded-For"),
+    _real_ip: str = Header(..., alias="X-Real-IP"),
+    account_registration_service: Annotated[
+        AccountRegistrationService,
+        Depends(api_dependencies.get_account_registration_service),
+    ],
 ) -> Response:
-    if not all((username, email, pw_plaintext)):
+    result = await account_registration_service.check_or_register(
+        username=username,
+        email=email,
+        password=pw_plaintext,
+        should_create_account=check == 0,
+        request_headers=request.headers,
+    )
+
+    if result.code is AccountRegistrationResultCode.MISSING_REQUIRED_PARAMS:
         return Response(
             content=b"Missing required params",
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
-    # Disable in-game registration if enabled
-    if app.settings.DISALLOW_INGAME_REGISTRATION:
+    if result.code is AccountRegistrationResultCode.INGAME_REGISTRATION_DISABLED:
         return ORJSONResponse(
             content=INGAME_REGISTRATION_DISALLOWED_ERROR,
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
-    # ensure all args passed
-    # are safe for registration.
-    errors: Mapping[str, list[str]] = defaultdict(list)
-
-    # Usernames must:
-    # - be within 2-15 characters in length
-    # - not contain both ' ' and '_', one is fine
-    # - not be in the config's `disallowed_names` list
-    # - not already be taken by another player
-    if not regexes.USERNAME.match(username):
-        errors["username"].append("Must be 2-15 characters in length.")
-
-    if "_" in username and " " in username:
-        errors["username"].append('May contain "_" and " ", but not both.')
-
-    if username in app.settings.DISALLOWED_NAMES:
-        errors["username"].append("Disallowed username; pick another.")
-
-    if "username" not in errors:
-        if await users_repo.fetch_one(name=username):
-            errors["username"].append("Username already taken by another player.")
-
-    # Emails must:
-    # - match the regex `^[^@\s]{1,200}@[^@\s\.]{1,30}\.[^@\.\s]{1,24}$`
-    # - not already be taken by another player
-    if not regexes.EMAIL.match(email):
-        errors["user_email"].append("Invalid email syntax.")
-    else:
-        if await users_repo.fetch_one(email=email):
-            errors["user_email"].append("Email already taken by another player.")
-
-    # Passwords must:
-    # - be within 8-32 characters in length
-    # - have more than 3 unique characters
-    # - not be in the config's `disallowed_passwords` list
-    if not 8 <= len(pw_plaintext) <= 32:
-        errors["password"].append("Must be 8-32 characters in length.")
-
-    if len(set(pw_plaintext)) <= 3:
-        errors["password"].append("Must have more than 3 unique characters.")
-
-    if pw_plaintext.lower() in app.settings.DISALLOWED_PASSWORDS:
-        errors["password"].append("That password was deemed too simple.")
-
-    if errors:
+    if result.code is AccountRegistrationResultCode.VALIDATION_FAILED:
+        assert result.errors is not None
         # we have errors to send back, send them back delimited by newlines.
-        errors = {k: ["\n".join(v)] for k, v in errors.items()}
-        errors_full = {"form_error": {"user": errors}}
+        formatted_errors = {k: ["\n".join(v)] for k, v in result.errors.items()}
+        errors_full = {"form_error": {"user": formatted_errors}}
         return ORJSONResponse(
             content=errors_full,
             status_code=status.HTTP_400_BAD_REQUEST,
         )
-
-    if check == 0:
-        # the client isn't just checking values,
-        # they want to register the account now.
-        # make the md5 & bcrypt the md5 for sql.
-        pw_md5 = hashlib.md5(pw_plaintext.encode()).hexdigest().encode()
-        pw_bcrypt = bcrypt.hashpw(pw_md5, bcrypt.gensalt())
-        app.state.cache.bcrypt[pw_bcrypt] = pw_md5  # cache result for login
-
-        ip = app.state.services.ip_resolver.get_ip(request.headers)
-
-        geoloc = await app.state.services.fetch_geoloc(ip, request.headers)
-        country = geoloc["country"]["acronym"] if geoloc is not None else "XX"
-
-        async with app.state.services.database.transaction():
-            # add to `users` table.
-            player = await users_repo.create(
-                name=username,
-                email=email,
-                pw_bcrypt=pw_bcrypt,
-                country=country,
-            )
-
-            # add to `stats` table.
-            await stats_repo.create_all_modes(player_id=player["id"])
-
-        if app.state.services.datadog:
-            app.state.services.datadog.increment("bancho.registrations")  # type: ignore[no-untyped-call]
-
-        log(f"<{username} ({player['id']})> has registered!", Ansi.LGREEN)
 
     return Response(content=b"ok")  # success
 

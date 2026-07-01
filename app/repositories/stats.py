@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from typing import TypedDict
-from typing import cast
+from dataclasses import dataclass
 
 from sqlalchemy import Column
 from sqlalchemy import Index
@@ -13,10 +12,14 @@ from sqlalchemy import update
 from sqlalchemy.dialects.mysql import FLOAT
 from sqlalchemy.dialects.mysql import TINYINT
 
-import app.state.services
 from app._typing import UNSET
 from app._typing import _UnsetSentinel
+from app.adapters.database import Database
+from app.adapters.database import MySQLRow
+from app.constants.privileges import Privileges
 from app.repositories import Base
+from app.repositories.clans import ClansTable
+from app.repositories.users import UsersTable
 
 
 class StatsTable(Base):
@@ -72,7 +75,8 @@ READ_PARAMS = (
 )
 
 
-class Stat(TypedDict):
+@dataclass(frozen=True, slots=True)
+class Stat:
     id: int
     mode: int
     tscore: int
@@ -91,147 +95,273 @@ class Stat(TypedDict):
     a_count: int
 
 
-async def create(player_id: int, mode: int) -> Stat:
-    """Create a new player stats entry in the database."""
-    insert_stmt = insert(StatsTable).values(id=player_id, mode=mode)
-    rec_id = await app.state.services.database.execute(insert_stmt)
+@dataclass(frozen=True, slots=True)
+class LeaderboardStatsRow:
+    player_id: int
+    name: str
+    country: str
+    tscore: int
+    rscore: int
+    pp: int
+    plays: int
+    playtime: int
+    acc: float
+    max_combo: int
+    xh_count: int
+    x_count: int
+    sh_count: int
+    s_count: int
+    a_count: int
+    clan_id: int | None
+    clan_name: str | None
+    clan_tag: str | None
 
-    select_stmt = select(*READ_PARAMS).where(StatsTable.id == rec_id)
-    stat = await app.state.services.database.fetch_one(select_stmt)
-    assert stat is not None
-    return cast(Stat, stat)
 
+class StatsRepository:
+    def __init__(self, database: Database) -> None:
+        self._database = database
 
-async def create_all_modes(player_id: int) -> list[Stat]:
-    """Create new player stats entries for each game mode in the database."""
-    insert_stmt = insert(StatsTable).values(
-        [
-            {"id": player_id, "mode": mode}
-            for mode in (
-                0,  # vn!std
-                1,  # vn!taiko
-                2,  # vn!catch
-                3,  # vn!mania
-                4,  # rx!std
-                5,  # rx!taiko
-                6,  # rx!catch
-                8,  # ap!std
+    def _deserialize_stat(self, row: MySQLRow) -> Stat:
+        return Stat(
+            id=row["id"],
+            mode=row["mode"],
+            tscore=row["tscore"],
+            rscore=row["rscore"],
+            pp=row["pp"],
+            plays=row["plays"],
+            playtime=row["playtime"],
+            acc=row["acc"],
+            max_combo=row["max_combo"],
+            total_hits=row["total_hits"],
+            replay_views=row["replay_views"],
+            xh_count=row["xh_count"],
+            x_count=row["x_count"],
+            sh_count=row["sh_count"],
+            s_count=row["s_count"],
+            a_count=row["a_count"],
+        )
+
+    def _deserialize_leaderboard_stats_row(
+        self,
+        row: MySQLRow,
+    ) -> LeaderboardStatsRow:
+        return LeaderboardStatsRow(
+            player_id=row["player_id"],
+            name=row["name"],
+            country=row["country"],
+            tscore=row["tscore"],
+            rscore=row["rscore"],
+            pp=row["pp"],
+            plays=row["plays"],
+            playtime=row["playtime"],
+            acc=row["acc"],
+            max_combo=row["max_combo"],
+            xh_count=row["xh_count"],
+            x_count=row["x_count"],
+            sh_count=row["sh_count"],
+            s_count=row["s_count"],
+            a_count=row["a_count"],
+            clan_id=row["clan_id"],
+            clan_name=row["clan_name"],
+            clan_tag=row["clan_tag"],
+        )
+
+    async def create(self, player_id: int, mode: int) -> Stat:
+        """Create a new player stats entry in the database."""
+        insert_stmt = insert(StatsTable).values(id=player_id, mode=mode)
+        rec_id = await self._database.execute(insert_stmt)
+
+        select_stmt = select(*READ_PARAMS).where(StatsTable.id == rec_id)
+        stat = await self._database.fetch_one(select_stmt)
+        assert stat is not None
+        return self._deserialize_stat(stat)
+
+    async def create_all_modes(self, player_id: int) -> list[Stat]:
+        """Create new player stats entries for each game mode in the database."""
+        insert_stmt = insert(StatsTable).values(
+            [
+                {"id": player_id, "mode": mode}
+                for mode in (
+                    0,  # vn!std
+                    1,  # vn!taiko
+                    2,  # vn!catch
+                    3,  # vn!mania
+                    4,  # rx!std
+                    5,  # rx!taiko
+                    6,  # rx!catch
+                    8,  # ap!std
+                )
+            ],
+        )
+        await self._database.execute(insert_stmt)
+
+        select_stmt = select(*READ_PARAMS).where(StatsTable.id == player_id)
+        stats = await self._database.fetch_all(select_stmt)
+        return [self._deserialize_stat(stat) for stat in stats]
+
+    async def fetch_one(self, player_id: int, mode: int) -> Stat | None:
+        """Fetch a player stats entry from the database."""
+        select_stmt = (
+            select(*READ_PARAMS)
+            .where(StatsTable.id == player_id)
+            .where(StatsTable.mode == mode)
+        )
+        stat = await self._database.fetch_one(select_stmt)
+        return self._deserialize_stat(stat) if stat is not None else None
+
+    async def fetch_count(
+        self,
+        player_id: int | None = None,
+        mode: int | None = None,
+    ) -> int:
+        select_stmt = select(func.count().label("count")).select_from(StatsTable)
+        if player_id is not None:
+            select_stmt = select_stmt.where(StatsTable.id == player_id)
+        if mode is not None:
+            select_stmt = select_stmt.where(StatsTable.mode == mode)
+
+        rec = await self._database.fetch_one(select_stmt)
+        assert rec is not None
+        return int(rec["count"])
+
+    async def fetch_many(
+        self,
+        player_id: int | None = None,
+        mode: int | None = None,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> list[Stat]:
+        select_stmt = select(*READ_PARAMS)
+        if player_id is not None:
+            select_stmt = select_stmt.where(StatsTable.id == player_id)
+        if mode is not None:
+            select_stmt = select_stmt.where(StatsTable.mode == mode)
+        if page is not None and page_size is not None:
+            select_stmt = select_stmt.limit(page_size).offset((page - 1) * page_size)
+
+        stats = await self._database.fetch_all(select_stmt)
+        return [self._deserialize_stat(stat) for stat in stats]
+
+    async def fetch_leaderboard_stats_rows(
+        self,
+        *,
+        sort: str,
+        mode: int,
+        limit: int,
+        offset: int,
+        country: str | None,
+    ) -> list[LeaderboardStatsRow]:
+        sort_columns = {
+            "tscore": StatsTable.tscore,
+            "rscore": StatsTable.rscore,
+            "pp": StatsTable.pp,
+            "acc": StatsTable.acc,
+            "plays": StatsTable.plays,
+            "playtime": StatsTable.playtime,
+        }
+        sort_column = sort_columns[sort]
+
+        select_stmt = (
+            select(
+                UsersTable.id.label("player_id"),
+                UsersTable.name,
+                UsersTable.country,
+                StatsTable.tscore,
+                StatsTable.rscore,
+                StatsTable.pp,
+                StatsTable.plays,
+                StatsTable.playtime,
+                StatsTable.acc,
+                StatsTable.max_combo,
+                StatsTable.xh_count,
+                StatsTable.x_count,
+                StatsTable.sh_count,
+                StatsTable.s_count,
+                StatsTable.a_count,
+                ClansTable.id.label("clan_id"),
+                ClansTable.name.label("clan_name"),
+                ClansTable.tag.label("clan_tag"),
             )
-        ],
-    )
-    await app.state.services.database.execute(insert_stmt)
+            .select_from(StatsTable)
+            .join(UsersTable, UsersTable.id == StatsTable.id)
+            .outerjoin(ClansTable, ClansTable.id == UsersTable.clan_id)
+            .where(
+                StatsTable.mode == mode,
+                UsersTable.priv.bitwise_and(Privileges.UNRESTRICTED.value) != 0,
+                sort_column > 0,
+            )
+            .order_by(sort_column.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        if country is not None:
+            select_stmt = select_stmt.where(UsersTable.country == country)
 
-    select_stmt = select(*READ_PARAMS).where(StatsTable.id == player_id)
-    stats = await app.state.services.database.fetch_all(select_stmt)
-    return cast(list[Stat], stats)
+        rows = await self._database.fetch_all(select_stmt)
+        return [self._deserialize_leaderboard_stats_row(row) for row in rows]
 
+    async def partial_update(
+        self,
+        player_id: int,
+        mode: int,
+        tscore: int | _UnsetSentinel = UNSET,
+        rscore: int | _UnsetSentinel = UNSET,
+        pp: int | _UnsetSentinel = UNSET,
+        plays: int | _UnsetSentinel = UNSET,
+        playtime: int | _UnsetSentinel = UNSET,
+        acc: float | _UnsetSentinel = UNSET,
+        max_combo: int | _UnsetSentinel = UNSET,
+        total_hits: int | _UnsetSentinel = UNSET,
+        replay_views: int | _UnsetSentinel = UNSET,
+        xh_count: int | _UnsetSentinel = UNSET,
+        x_count: int | _UnsetSentinel = UNSET,
+        sh_count: int | _UnsetSentinel = UNSET,
+        s_count: int | _UnsetSentinel = UNSET,
+        a_count: int | _UnsetSentinel = UNSET,
+    ) -> Stat | None:
+        """Update a player stats entry in the database."""
+        update_stmt = (
+            update(StatsTable)
+            .where(StatsTable.id == player_id)
+            .where(StatsTable.mode == mode)
+        )
+        if not isinstance(tscore, _UnsetSentinel):
+            update_stmt = update_stmt.values(tscore=tscore)
+        if not isinstance(rscore, _UnsetSentinel):
+            update_stmt = update_stmt.values(rscore=rscore)
+        if not isinstance(pp, _UnsetSentinel):
+            update_stmt = update_stmt.values(pp=pp)
+        if not isinstance(plays, _UnsetSentinel):
+            update_stmt = update_stmt.values(plays=plays)
+        if not isinstance(playtime, _UnsetSentinel):
+            update_stmt = update_stmt.values(playtime=playtime)
+        if not isinstance(acc, _UnsetSentinel):
+            update_stmt = update_stmt.values(acc=acc)
+        if not isinstance(max_combo, _UnsetSentinel):
+            update_stmt = update_stmt.values(max_combo=max_combo)
+        if not isinstance(total_hits, _UnsetSentinel):
+            update_stmt = update_stmt.values(total_hits=total_hits)
+        if not isinstance(replay_views, _UnsetSentinel):
+            update_stmt = update_stmt.values(replay_views=replay_views)
+        if not isinstance(xh_count, _UnsetSentinel):
+            update_stmt = update_stmt.values(xh_count=xh_count)
+        if not isinstance(x_count, _UnsetSentinel):
+            update_stmt = update_stmt.values(x_count=x_count)
+        if not isinstance(sh_count, _UnsetSentinel):
+            update_stmt = update_stmt.values(sh_count=sh_count)
+        if not isinstance(s_count, _UnsetSentinel):
+            update_stmt = update_stmt.values(s_count=s_count)
+        if not isinstance(a_count, _UnsetSentinel):
+            update_stmt = update_stmt.values(a_count=a_count)
 
-async def fetch_one(player_id: int, mode: int) -> Stat | None:
-    """Fetch a player stats entry from the database."""
-    select_stmt = (
-        select(*READ_PARAMS)
-        .where(StatsTable.id == player_id)
-        .where(StatsTable.mode == mode)
-    )
-    stat = await app.state.services.database.fetch_one(select_stmt)
-    return cast(Stat | None, stat)
+        await self._database.execute(update_stmt)
 
+        select_stmt = (
+            select(*READ_PARAMS)
+            .where(StatsTable.id == player_id)
+            .where(StatsTable.mode == mode)
+        )
+        stat = await self._database.fetch_one(select_stmt)
+        return self._deserialize_stat(stat) if stat is not None else None
 
-async def fetch_count(
-    player_id: int | None = None,
-    mode: int | None = None,
-) -> int:
-    select_stmt = select(func.count().label("count")).select_from(StatsTable)
-    if player_id is not None:
-        select_stmt = select_stmt.where(StatsTable.id == player_id)
-    if mode is not None:
-        select_stmt = select_stmt.where(StatsTable.mode == mode)
-
-    rec = await app.state.services.database.fetch_one(select_stmt)
-    assert rec is not None
-    return cast(int, rec["count"])
-
-
-async def fetch_many(
-    player_id: int | None = None,
-    mode: int | None = None,
-    page: int | None = None,
-    page_size: int | None = None,
-) -> list[Stat]:
-    select_stmt = select(*READ_PARAMS)
-    if player_id is not None:
-        select_stmt = select_stmt.where(StatsTable.id == player_id)
-    if mode is not None:
-        select_stmt = select_stmt.where(StatsTable.mode == mode)
-    if page is not None and page_size is not None:
-        select_stmt = select_stmt.limit(page_size).offset((page - 1) * page_size)
-
-    stats = await app.state.services.database.fetch_all(select_stmt)
-    return cast(list[Stat], stats)
-
-
-async def partial_update(
-    player_id: int,
-    mode: int,
-    tscore: int | _UnsetSentinel = UNSET,
-    rscore: int | _UnsetSentinel = UNSET,
-    pp: int | _UnsetSentinel = UNSET,
-    plays: int | _UnsetSentinel = UNSET,
-    playtime: int | _UnsetSentinel = UNSET,
-    acc: float | _UnsetSentinel = UNSET,
-    max_combo: int | _UnsetSentinel = UNSET,
-    total_hits: int | _UnsetSentinel = UNSET,
-    replay_views: int | _UnsetSentinel = UNSET,
-    xh_count: int | _UnsetSentinel = UNSET,
-    x_count: int | _UnsetSentinel = UNSET,
-    sh_count: int | _UnsetSentinel = UNSET,
-    s_count: int | _UnsetSentinel = UNSET,
-    a_count: int | _UnsetSentinel = UNSET,
-) -> Stat | None:
-    """Update a player stats entry in the database."""
-    update_stmt = (
-        update(StatsTable)
-        .where(StatsTable.id == player_id)
-        .where(StatsTable.mode == mode)
-    )
-    if not isinstance(tscore, _UnsetSentinel):
-        update_stmt = update_stmt.values(tscore=tscore)
-    if not isinstance(rscore, _UnsetSentinel):
-        update_stmt = update_stmt.values(rscore=rscore)
-    if not isinstance(pp, _UnsetSentinel):
-        update_stmt = update_stmt.values(pp=pp)
-    if not isinstance(plays, _UnsetSentinel):
-        update_stmt = update_stmt.values(plays=plays)
-    if not isinstance(playtime, _UnsetSentinel):
-        update_stmt = update_stmt.values(playtime=playtime)
-    if not isinstance(acc, _UnsetSentinel):
-        update_stmt = update_stmt.values(acc=acc)
-    if not isinstance(max_combo, _UnsetSentinel):
-        update_stmt = update_stmt.values(max_combo=max_combo)
-    if not isinstance(total_hits, _UnsetSentinel):
-        update_stmt = update_stmt.values(total_hits=total_hits)
-    if not isinstance(replay_views, _UnsetSentinel):
-        update_stmt = update_stmt.values(replay_views=replay_views)
-    if not isinstance(xh_count, _UnsetSentinel):
-        update_stmt = update_stmt.values(xh_count=xh_count)
-    if not isinstance(x_count, _UnsetSentinel):
-        update_stmt = update_stmt.values(x_count=x_count)
-    if not isinstance(sh_count, _UnsetSentinel):
-        update_stmt = update_stmt.values(sh_count=sh_count)
-    if not isinstance(s_count, _UnsetSentinel):
-        update_stmt = update_stmt.values(s_count=s_count)
-    if not isinstance(a_count, _UnsetSentinel):
-        update_stmt = update_stmt.values(a_count=a_count)
-
-    await app.state.services.database.execute(update_stmt)
-
-    select_stmt = (
-        select(*READ_PARAMS)
-        .where(StatsTable.id == player_id)
-        .where(StatsTable.mode == mode)
-    )
-    stat = await app.state.services.database.fetch_one(select_stmt)
-    return cast(Stat | None, stat)
-
-
-# TODO: delete?
+    # TODO: delete?

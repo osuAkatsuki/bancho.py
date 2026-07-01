@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import struct
 from pathlib import Path as SystemPath
+from typing import Annotated
 from typing import Literal
 from typing import cast
 
@@ -19,19 +20,21 @@ from fastapi.security import HTTPBearer
 
 import app.packets
 import app.state
-import app.usecases.performance
+from app.api import dependencies as api_dependencies
 from app.constants import regexes
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
 from app.objects.beatmap import Beatmap
 from app.objects.beatmap import ensure_osu_file_is_available
-from app.repositories import clans as clans_repo
-from app.repositories import scores as scores_repo
-from app.repositories import stats as stats_repo
-from app.repositories import tourney_pool_maps as tourney_pool_maps_repo
-from app.repositories import tourney_pools as tourney_pools_repo
-from app.repositories import users as users_repo
-from app.usecases.performance import ScoreParams
+from app.repositories.users import User
+from app.services.clans import ClansService
+from app.services.performance import PerformanceResult
+from app.services.performance import PerformanceService
+from app.services.performance import ScoreParams
+from app.services.players import PlayersService
+from app.services.scores import PlayerScoreWithBeatmap
+from app.services.scores import ScoresService
+from app.services.tourney_pools import TourneyPoolsService
 
 AVATARS_PATH = SystemPath.cwd() / ".data/avatars"
 BEATMAPS_PATH = SystemPath.cwd() / ".data/osu"
@@ -67,7 +70,7 @@ DATETIME_OFFSET = 0x89F7FF5F7B58000
 
 @router.get("/calculate_pp")
 async def api_calculate_pp(
-    token: HTTPCredentials | None = Depends(http_bearer_scheme),
+    *,
     beatmap_id: int = Query(None, alias="id", min=0, max=2_147_483_647),
     nkatu: int = Query(None, max=2_147_483_647),
     ngeki: int = Query(None, max=2_147_483_647),
@@ -78,6 +81,11 @@ async def api_calculate_pp(
     mode: int = Query(0, min=0, max=11),
     combo: int = Query(None, max=2_147_483_647),
     acclist: list[float] = Query([100, 99, 98, 95], alias="acc"),
+    token: HTTPCredentials | None = Depends(http_bearer_scheme),
+    performance_service: Annotated[
+        PerformanceService,
+        Depends(api_dependencies.get_performance_service),
+    ],
 ) -> Response:
     """Calculates the PP of a specified map with specified score parameters."""
 
@@ -125,14 +133,13 @@ async def api_calculate_pp(
             ),
         )
 
-    results = app.usecases.performance.calculate_performances(
+    results = performance_service.calculate_performances(
         str(BEATMAPS_PATH / f"{beatmap.id}.osu"),
         scores,
     )
 
-    # "Inject" the accuracy into the list of results
     final_results = [
-        performance_result | {"accuracy": score.acc}
+        format_performance_result(performance_result, accuracy=score.acc)
         for performance_result, score in zip(results, scores)
     ]
 
@@ -147,39 +154,73 @@ async def api_calculate_pp(
     )
 
 
+def format_performance_result(
+    performance_result: PerformanceResult,
+    *,
+    accuracy: float | None,
+) -> dict[str, object]:
+    return {
+        "performance": {
+            "pp": performance_result.performance.pp,
+            "pp_acc": performance_result.performance.pp_acc,
+            "pp_aim": performance_result.performance.pp_aim,
+            "pp_speed": performance_result.performance.pp_speed,
+            "pp_flashlight": performance_result.performance.pp_flashlight,
+            "effective_miss_count": performance_result.performance.effective_miss_count,
+            "pp_difficulty": performance_result.performance.pp_difficulty,
+        },
+        "difficulty": {
+            "stars": performance_result.difficulty.stars,
+            "aim": performance_result.difficulty.aim,
+            "speed": performance_result.difficulty.speed,
+            "flashlight": performance_result.difficulty.flashlight,
+            "slider_factor": performance_result.difficulty.slider_factor,
+            "speed_note_count": performance_result.difficulty.speed_note_count,
+            "stamina": performance_result.difficulty.stamina,
+            "color": performance_result.difficulty.color,
+            "rhythm": performance_result.difficulty.rhythm,
+            "peak": performance_result.difficulty.peak,
+        },
+        "accuracy": accuracy,
+    }
+
+
 @router.get("/search_players")
 async def api_search_players(
+    *,
     search: str | None = Query(None, alias="q", min=2, max=32),
+    players_service: Annotated[
+        PlayersService,
+        Depends(api_dependencies.get_players_service),
+    ],
 ) -> Response:
     """Search for users on the server by name."""
-    rows = await app.state.services.database.fetch_all(
-        "SELECT id, name "
-        "FROM users "
-        "WHERE name LIKE COALESCE(:name, name) "
-        "AND priv & 3 = 3 "
-        "ORDER BY id ASC",
-        {"name": f"%{search}%" if search is not None else None},
-    )
+    rows = await players_service.search_public_players(search)
 
     return ORJSONResponse(
         {
             "status": "success",
             "results": len(rows),
-            "result": [dict(row) for row in rows],
+            "result": rows,
         },
     )
 
 
 @router.get("/get_player_count")
-async def api_get_player_count() -> Response:
+async def api_get_player_count(
+    players_service: Annotated[
+        PlayersService,
+        Depends(api_dependencies.get_players_service),
+    ],
+) -> Response:
     """Get the current amount of online players."""
     return ORJSONResponse(
         {
             "status": "success",
             "counts": {
                 # -1 for the bot, who is always online
-                "online": len(app.state.sessions.players.unrestricted) - 1,
-                "total": await users_repo.fetch_count(),
+                "online": players_service.fetch_online_player_count(),
+                "total": await players_service.fetch_total_player_count(),
             },
         },
     )
@@ -188,8 +229,13 @@ async def api_get_player_count() -> Response:
 @router.get("/get_player_info")
 async def api_get_player_info(
     scope: Literal["stats", "info", "all"],
+    *,
     user_id: int | None = Query(None, alias="id", ge=3, le=2_147_483_647),
     username: str | None = Query(None, alias="name", pattern=regexes.USERNAME.pattern),
+    players_service: Annotated[
+        PlayersService,
+        Depends(api_dependencies.get_players_service),
+    ],
 ) -> Response:
     """Return information about a given player."""
     if not (username or user_id) or (username and user_id):
@@ -198,11 +244,10 @@ async def api_get_player_info(
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
-    # get user info from username or user id
-    if username:
-        user_info = await users_repo.fetch_one(name=username)
-    else:  # if user_id
-        user_info = await users_repo.fetch_one(id=user_id)
+    user_info = await players_service.fetch_player_by_id_or_name(
+        user_id=user_id,
+        username=username,
+    )
 
     if user_info is None:
         return ORJSONResponse(
@@ -210,58 +255,75 @@ async def api_get_player_info(
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
-    resolved_user_id: int = user_info["id"]
-    resolved_country: str = user_info["country"]
+    resolved_user_id: int = user_info.id
+    resolved_country: str = user_info.country
 
     api_data = {}
 
     # fetch user's info if requested
     if scope in ("info", "all"):
-        api_data["info"] = dict(user_info)
+        api_data["info"] = {
+            "id": user_info.id,
+            "name": user_info.name,
+            "safe_name": user_info.safe_name,
+            "priv": user_info.priv,
+            "country": user_info.country,
+            "silence_end": user_info.silence_end,
+            "donor_end": user_info.donor_end,
+            "creation_time": user_info.creation_time,
+            "latest_activity": user_info.latest_activity,
+            "clan_id": user_info.clan_id,
+            "clan_priv": user_info.clan_priv,
+            "preferred_mode": user_info.preferred_mode,
+            "play_style": user_info.play_style,
+            "custom_badge_name": user_info.custom_badge_name,
+            "custom_badge_icon": user_info.custom_badge_icon,
+            "userpage_content": user_info.userpage_content,
+        }
 
     # fetch user's stats if requested
     if scope in ("stats", "all"):
         api_data["stats"] = {}
 
         # get all stats
-        all_stats = await stats_repo.fetch_many(player_id=resolved_user_id)
+        all_stats = await players_service.fetch_all_player_stats(resolved_user_id)
 
         for mode_stats in all_stats:
             rank = cast(
                 int | None,
                 await app.state.services.redis.zrevrank(
-                    f"bancho:leaderboard:{mode_stats['mode']}",
+                    f"bancho:leaderboard:{mode_stats.mode}",
                     str(resolved_user_id),
                 ),
             )
             country_rank = cast(
                 int | None,
                 await app.state.services.redis.zrevrank(
-                    f"bancho:leaderboard:{mode_stats['mode']}:{resolved_country}",
+                    f"bancho:leaderboard:{mode_stats.mode}:{resolved_country}",
                     str(resolved_user_id),
                 ),
             )
 
             # NOTE: this dict-like return is intentional.
             #       but quite cursed.
-            stats_key = str(mode_stats["mode"])
+            stats_key = str(mode_stats.mode)
             api_data["stats"][stats_key] = {
-                "id": mode_stats["id"],
-                "mode": mode_stats["mode"],
-                "tscore": mode_stats["tscore"],
-                "rscore": mode_stats["rscore"],
-                "pp": mode_stats["pp"],
-                "plays": mode_stats["plays"],
-                "playtime": mode_stats["playtime"],
-                "acc": mode_stats["acc"],
-                "max_combo": mode_stats["max_combo"],
-                "total_hits": mode_stats["total_hits"],
-                "replay_views": mode_stats["replay_views"],
-                "xh_count": mode_stats["xh_count"],
-                "x_count": mode_stats["x_count"],
-                "sh_count": mode_stats["sh_count"],
-                "s_count": mode_stats["s_count"],
-                "a_count": mode_stats["a_count"],
+                "id": mode_stats.id,
+                "mode": mode_stats.mode,
+                "tscore": mode_stats.tscore,
+                "rscore": mode_stats.rscore,
+                "pp": mode_stats.pp,
+                "plays": mode_stats.plays,
+                "playtime": mode_stats.playtime,
+                "acc": mode_stats.acc,
+                "max_combo": mode_stats.max_combo,
+                "total_hits": mode_stats.total_hits,
+                "replay_views": mode_stats.replay_views,
+                "xh_count": mode_stats.xh_count,
+                "x_count": mode_stats.x_count,
+                "sh_count": mode_stats.sh_count,
+                "s_count": mode_stats.s_count,
+                "a_count": mode_stats.a_count,
                 # extra fields are added to the api response
                 "rank": rank + 1 if rank is not None else 0,
                 "country_rank": country_rank + 1 if country_rank is not None else 0,
@@ -272,8 +334,13 @@ async def api_get_player_info(
 
 @router.get("/get_player_status")
 async def api_get_player_status(
+    *,
     user_id: int | None = Query(None, alias="id", ge=3, le=2_147_483_647),
     username: str | None = Query(None, alias="name", pattern=regexes.USERNAME.pattern),
+    players_service: Annotated[
+        PlayersService,
+        Depends(api_dependencies.get_players_service),
+    ],
 ) -> Response:
     """Return a players current status, if they are online."""
     if username and user_id:
@@ -282,23 +349,24 @@ async def api_get_player_status(
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
-    if username:
-        player = app.state.sessions.players.get(name=username)
-    elif user_id:
-        player = app.state.sessions.players.get(id=user_id)
-    else:
+    if username is None and user_id is None:
         return ORJSONResponse(
             {"status": "Must provide either id OR name!"},
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
+    player = players_service.fetch_online_player(
+        user_id=user_id,
+        username=username,
+    )
+
     if not player:
         # no such player online, return their last seen time if they exist in sql
 
-        if username:
-            row = await users_repo.fetch_one(name=username)
-        else:  # if userid
-            row = await users_repo.fetch_one(id=user_id)
+        row = await players_service.fetch_player_by_id_or_name(
+            user_id=user_id,
+            username=username,
+        )
 
         if not row:
             return ORJSONResponse(
@@ -311,7 +379,7 @@ async def api_get_player_status(
                 "status": "success",
                 "player_status": {
                     "online": False,
-                    "last_seen": row["latest_activity"],
+                    "last_seen": row.latest_activity,
                 },
             },
         )
@@ -342,6 +410,7 @@ async def api_get_player_status(
 @router.get("/get_player_scores")
 async def api_get_player_scores(
     scope: Literal["recent", "best"],
+    *,
     user_id: int | None = Query(None, alias="id", ge=3, le=2_147_483_647),
     username: str | None = Query(None, alias="name", pattern=regexes.USERNAME.pattern),
     mods_arg: str | None = Query(None, alias="mods"),
@@ -349,6 +418,18 @@ async def api_get_player_scores(
     limit: int = Query(25, ge=1, le=100),
     include_loved: bool = False,
     include_failed: bool = True,
+    players_service: Annotated[
+        PlayersService,
+        Depends(api_dependencies.get_players_service),
+    ],
+    scores_service: Annotated[
+        ScoresService,
+        Depends(api_dependencies.get_scores_service),
+    ],
+    clans_service: Annotated[
+        ClansService,
+        Depends(api_dependencies.get_clans_service),
+    ],
 ) -> Response:
     """Return a list of a given user's recent/best scores."""
     if mode_arg in (
@@ -368,15 +449,16 @@ async def api_get_player_scores(
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
-    if username:
-        player = await app.state.sessions.players.from_cache_or_sql(name=username)
-    elif user_id:
-        player = await app.state.sessions.players.from_cache_or_sql(id=user_id)
-    else:
+    if username is None and user_id is None:
         return ORJSONResponse(
             {"status": "Must provide either id OR name!"},
             status_code=status.HTTP_400_BAD_REQUEST,
         )
+
+    player = await players_service.fetch_player_session(
+        user_id=user_id,
+        username=username,
+    )
 
     if not player:
         return ORJSONResponse(
@@ -403,70 +485,32 @@ async def api_get_player_scores(
     else:
         mods = None
 
-    # build sql query & fetch info
-
-    query = [
-        "SELECT t.id, t.map_md5, t.score, t.pp, t.acc, t.max_combo, "
-        "t.mods, t.n300, t.n100, t.n50, t.nmiss, t.ngeki, t.nkatu, t.grade, "
-        "t.status, t.mode, t.play_time, t.time_elapsed, t.perfect "
-        "FROM scores t "
-        "INNER JOIN maps b ON t.map_md5 = b.md5 "
-        "WHERE t.userid = :user_id AND t.mode = :mode",
-    ]
-
-    params: dict[str, object] = {
-        "user_id": player.id,
-        "mode": mode,
-    }
-
-    if mods is not None:
-        if strong_equality:
-            query.append("AND t.mods & :mods = :mods")
-        else:
-            query.append("AND t.mods & :mods != 0")
-
-        params["mods"] = mods
-
-    if scope == "best":
-        allowed_statuses = [2, 3]
-
-        if include_loved:
-            allowed_statuses.append(5)
-
-        query.append("AND t.status = 2 AND b.status IN :statuses")
-        params["statuses"] = allowed_statuses
-        sort = "t.pp"
-    else:
-        if not include_failed:
-            query.append("AND t.status != 0")
-
-        sort = "t.play_time"
-
-    query.append(f"ORDER BY {sort} DESC LIMIT :limit")
-    params["limit"] = limit
-
     rows = [
-        dict(row)
-        for row in await app.state.services.database.fetch_all(" ".join(query), params)
+        format_player_score_with_beatmap(row)
+        for row in await scores_service.fetch_player_scores(
+            player_id=player.id,
+            mode=mode,
+            mods=mods,
+            strong_mods_equality=strong_equality,
+            scope=scope,
+            limit=limit,
+            include_loved=include_loved,
+            include_failed=include_failed,
+        )
     ]
 
-    # fetch & return info from sql
-    for row in rows:
-        bmap = await Beatmap.from_md5(row.pop("map_md5"))
-        row["beatmap"] = bmap.as_dict if bmap else None
-
-    clan: clans_repo.Clan | None = None
+    clan = None
     if player.clan_id:
-        clan = await clans_repo.fetch_one(id=player.clan_id)
+        clan = await clans_service.fetch_clan(player.clan_id)
 
     player_info = {
         "id": player.id,
         "name": player.name,
         "clan": (
             {
-                "id": clan["id"],
-                "name": clan["name"],
-                "tag": clan["tag"],
+                "id": clan.id,
+                "name": clan.name,
+                "tag": clan.tag,
             }
             if clan is not None
             else None
@@ -482,12 +526,48 @@ async def api_get_player_scores(
     )
 
 
+def format_player_score_with_beatmap(
+    player_score: PlayerScoreWithBeatmap,
+) -> dict[str, object]:
+    score = player_score.score
+    return {
+        "id": score.id,
+        "score": score.score,
+        "pp": score.pp,
+        "acc": score.acc,
+        "max_combo": score.max_combo,
+        "mods": score.mods,
+        "n300": score.n300,
+        "n100": score.n100,
+        "n50": score.n50,
+        "nmiss": score.nmiss,
+        "ngeki": score.ngeki,
+        "nkatu": score.nkatu,
+        "grade": score.grade,
+        "status": score.status,
+        "mode": score.mode,
+        "play_time": score.play_time,
+        "time_elapsed": score.time_elapsed,
+        "perfect": score.perfect,
+        "beatmap": player_score.beatmap.as_dict if player_score.beatmap else None,
+    }
+
+
 @router.get("/get_player_most_played")
 async def api_get_player_most_played(
+    *,
     user_id: int | None = Query(None, alias="id", ge=3, le=2_147_483_647),
     username: str | None = Query(None, alias="name", pattern=regexes.USERNAME.pattern),
     mode_arg: int = Query(0, alias="mode", ge=0, le=11),
     limit: int = Query(25, ge=1, le=100),
+    players_service: Annotated[
+        PlayersService,
+        Depends(api_dependencies.get_players_service),
+    ],
+    scores_service: Annotated[
+        ScoresService,
+        Depends(api_dependencies.get_scores_service),
+    ],
 ) -> Response:
     """Return the most played beatmaps of a given player."""
     # NOTE: this will almost certainly not scale well, lol.
@@ -502,15 +582,16 @@ async def api_get_player_most_played(
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
-    if user_id is not None:
-        player = await app.state.sessions.players.from_cache_or_sql(id=user_id)
-    elif username is not None:
-        player = await app.state.sessions.players.from_cache_or_sql(name=username)
-    else:
+    if user_id is None and username is None:
         return ORJSONResponse(
             {"status": "Must provide either id or name."},
             status_code=status.HTTP_400_BAD_REQUEST,
         )
+
+    player = await players_service.fetch_player_session(
+        user_id=user_id,
+        username=username,
+    )
 
     if not player:
         return ORJSONResponse(
@@ -522,24 +603,16 @@ async def api_get_player_most_played(
 
     mode = GameMode(mode_arg)
 
-    # fetch & return info from sql
-    rows = await app.state.services.database.fetch_all(
-        "SELECT m.md5, m.id, m.set_id, m.status, "
-        "m.artist, m.title, m.version, m.creator, COUNT(*) plays "
-        "FROM scores s "
-        "INNER JOIN maps m ON m.md5 = s.map_md5 "
-        "WHERE s.userid = :user_id "
-        "AND s.mode = :mode "
-        "GROUP BY s.map_md5 "
-        "ORDER BY plays DESC "
-        "LIMIT :limit",
-        {"user_id": player.id, "mode": mode, "limit": limit},
+    rows = await scores_service.fetch_player_most_played(
+        player_id=player.id,
+        mode=mode,
+        limit=limit,
     )
 
     return ORJSONResponse(
         {
             "status": "success",
-            "maps": [dict(row) for row in rows],
+            "maps": rows,
         },
     )
 
@@ -577,11 +650,16 @@ async def api_get_map_info(
 @router.get("/get_map_scores")
 async def api_get_map_scores(
     scope: Literal["recent", "best"],
+    *,
     map_id: int | None = Query(None, alias="id", ge=0, le=2_147_483_647),
     map_md5: str | None = Query(None, alias="md5", min_length=32, max_length=32),
     mods_arg: str | None = Query(None, alias="mods"),
     mode_arg: int = Query(0, alias="mode", ge=0, le=11),
     limit: int = Query(50, ge=1, le=100),
+    scores_service: Annotated[
+        ScoresService,
+        Depends(api_dependencies.get_scores_service),
+    ],
 ) -> Response:
     """Return the top n scores on a given beatmap."""
     if mode_arg in (
@@ -630,59 +708,34 @@ async def api_get_map_scores(
     else:
         mods = None
 
-    query = [
-        "SELECT s.map_md5, s.score, s.pp, s.acc, s.max_combo, s.mods, "
-        "s.n300, s.n100, s.n50, s.nmiss, s.ngeki, s.nkatu, s.grade, s.status, "
-        "s.mode, s.play_time, s.time_elapsed, s.userid, s.perfect, "
-        "u.name player_name, u.country player_country, "
-        "c.id clan_id, c.name clan_name, c.tag clan_tag "
-        "FROM scores s "
-        "INNER JOIN users u ON u.id = s.userid "
-        "LEFT JOIN clans c ON c.id = u.clan_id "
-        "WHERE s.map_md5 = :map_md5 "
-        "AND s.mode = :mode "
-        "AND s.status = 2 "
-        "AND u.priv & 1",
-    ]
-    params: dict[str, object] = {
-        "map_md5": bmap.md5,
-        "mode": mode,
-    }
-
-    if mods is not None:
-        if strong_equality:
-            query.append("AND mods & :mods = :mods")
-        else:
-            query.append("AND mods & :mods != 0")
-
-        params["mods"] = mods
-
-    # unlike /get_player_scores, we'll sort by score/pp depending
-    # on the mode played, since we want to replicated leaderboards.
-    if scope == "best":
-        sort = "pp" if mode >= GameMode.RELAX_OSU else "score"
-    else:  # recent
-        sort = "play_time"
-
-    query.append(f"ORDER BY {sort} DESC LIMIT :limit")
-    params["limit"] = limit
-
-    rows = await app.state.services.database.fetch_all(" ".join(query), params)
+    rows = await scores_service.fetch_map_scores(
+        map_md5=bmap.md5,
+        mode=mode,
+        mods=mods,
+        strong_mods_equality=strong_equality,
+        scope=scope,
+        limit=limit,
+    )
 
     return ORJSONResponse(
         {
             "status": "success",
-            "scores": [dict(row) for row in rows],
+            "scores": rows,
         },
     )
 
 
 @router.get("/get_score_info")
 async def api_get_score_info(
+    *,
     score_id: int = Query(..., alias="id", ge=0, le=9_223_372_036_854_775_807),
+    scores_service: Annotated[
+        ScoresService,
+        Depends(api_dependencies.get_scores_service),
+    ],
 ) -> Response:
     """Return information about a given score."""
-    score = await scores_repo.fetch_one(score_id)
+    score = await scores_service.fetch_score(score_id)
 
     if score is None:
         return ORJSONResponse(
@@ -695,8 +748,13 @@ async def api_get_score_info(
 
 @router.get("/get_replay")
 async def api_get_replay(
+    *,
     score_id: int = Query(..., alias="id", ge=0, le=9_223_372_036_854_775_807),
     include_headers: bool = True,
+    scores_service: Annotated[
+        ScoresService,
+        Depends(api_dependencies.get_scores_service),
+    ],
 ) -> Response:
     """\
     Return a given replay (including headers).
@@ -724,18 +782,7 @@ async def api_get_replay(
         )
     # add replay headers from sql
     # TODO: osu_version & life graph in scores tables?
-    row = await app.state.services.database.fetch_one(
-        "SELECT u.name username, m.md5 map_md5, "
-        "m.artist, m.title, m.version, "
-        "s.mode, s.n300, s.n100, s.n50, s.ngeki, "
-        "s.nkatu, s.nmiss, s.score, s.max_combo, "
-        "s.perfect, s.mods, s.play_time "
-        "FROM scores s "
-        "INNER JOIN users u ON u.id = s.userid "
-        "INNER JOIN maps m ON m.md5 = s.map_md5 "
-        "WHERE s.id = :score_id",
-        {"score_id": score_id},
-    )
+    row = await scores_service.fetch_replay_header(score_id)
     if not row:
         # score not found in sql
         return ORJSONResponse(
@@ -745,18 +792,18 @@ async def api_get_replay(
     # generate the replay's hash
     replay_md5 = hashlib.md5(
         "{}p{}o{}o{}t{}a{}r{}e{}y{}o{}u{}{}{}".format(
-            row["n100"] + row["n300"],
-            row["n50"],
-            row["ngeki"],
-            row["nkatu"],
-            row["nmiss"],
-            row["map_md5"],
-            row["max_combo"],
-            str(row["perfect"] == 1),
-            row["username"],
-            row["score"],
+            row.n100 + row.n300,
+            row.n50,
+            row.ngeki,
+            row.nkatu,
+            row.nmiss,
+            row.map_md5,
+            row.max_combo,
+            str(row.perfect == 1),
+            row.username,
+            row.score,
             0,  # TODO: rank
-            row["mods"],
+            row.mods,
             "True",  # TODO: ??
         ).encode(),
     ).hexdigest()
@@ -765,27 +812,27 @@ async def api_get_replay(
     # pack first section of headers.
     replay_data += struct.pack(
         "<Bi",
-        GameMode(row["mode"]).as_vanilla,
+        GameMode(row.mode).as_vanilla,
         20200207,
     )  # TODO: osuver
-    replay_data += app.packets.write_string(row["map_md5"])
-    replay_data += app.packets.write_string(row["username"])
+    replay_data += app.packets.write_string(row.map_md5)
+    replay_data += app.packets.write_string(row.username)
     replay_data += app.packets.write_string(replay_md5)
     replay_data += struct.pack(
         "<hhhhhhihBi",
-        row["n300"],
-        row["n100"],
-        row["n50"],
-        row["ngeki"],
-        row["nkatu"],
-        row["nmiss"],
-        row["score"],
-        row["max_combo"],
-        row["perfect"],
-        row["mods"],
+        row.n300,
+        row.n100,
+        row.n50,
+        row.ngeki,
+        row.nkatu,
+        row.nmiss,
+        row.score,
+        row.max_combo,
+        row.perfect,
+        row.mods,
     )
     replay_data += b"\x00"  # TODO: hp graph
-    timestamp = int(row["play_time"].timestamp() * 1e7)
+    timestamp = int(row.play_time.timestamp() * 1e7)
     replay_data += struct.pack("<q", timestamp + DATETIME_OFFSET)
     # pack the raw replay data into the buffer
     replay_data += struct.pack("<i", len(raw_replay_data))
@@ -801,10 +848,10 @@ async def api_get_replay(
         headers={
             "Content-Description": "File Transfer",
             "Content-Disposition": (
-                'attachment; filename="{username} - '
-                "{artist} - {title} [{version}] "
-                '({play_time:%Y-%m-%d}).osr"'
-            ).format(**row),
+                f'attachment; filename="{row.username} - '
+                f"{row.artist} - {row.title} [{row.version}] "
+                f'({row.play_time:%Y-%m-%d}).osr"'
+            ),
         },
     )
 
@@ -859,11 +906,16 @@ async def api_get_match(
 
 @router.get("/get_leaderboard")
 async def api_get_global_leaderboard(
+    *,
     sort: Literal["tscore", "rscore", "pp", "acc", "plays", "playtime"] = "pp",
     mode_arg: int = Query(0, alias="mode", ge=0, le=11),
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, min=0, max=2_147_483_647),
     country: str | None = Query(None, min_length=2, max_length=2),
+    players_service: Annotated[
+        PlayersService,
+        Depends(api_dependencies.get_players_service),
+    ],
 ) -> Response:
     if mode_arg in (
         GameMode.RELAX_MANIA,
@@ -878,59 +930,59 @@ async def api_get_global_leaderboard(
 
     mode = GameMode(mode_arg)
 
-    query_conditions = ["s.mode = :mode", "u.priv & 1", f"s.{sort} > 0"]
-    query_parameters: dict[str, object] = {"mode": mode}
-
-    if country is not None:
-        query_conditions.append("u.country = :country")
-        query_parameters["country"] = country
-
-    rows = await app.state.services.database.fetch_all(
-        "SELECT u.id as player_id, u.name, u.country, s.tscore, s.rscore, "
-        "s.pp, s.plays, s.playtime, s.acc, s.max_combo, "
-        "s.xh_count, s.x_count, s.sh_count, s.s_count, s.a_count, "
-        "c.id as clan_id, c.name as clan_name, c.tag as clan_tag "
-        "FROM stats s "
-        "LEFT JOIN users u USING (id) "
-        "LEFT JOIN clans c ON u.clan_id = c.id "
-        f"WHERE {' AND '.join(query_conditions)} "
-        f"ORDER BY s.{sort} DESC LIMIT :offset, :limit",
-        query_parameters | {"offset": offset, "limit": limit},
+    rows = await players_service.fetch_global_leaderboard(
+        sort=sort,
+        mode=mode,
+        limit=limit,
+        offset=offset,
+        country=country,
     )
 
     return ORJSONResponse(
-        {"status": "success", "leaderboard": [dict(row) for row in rows]},
+        {"status": "success", "leaderboard": rows},
     )
 
 
 @router.get("/get_clan")
 async def api_get_clan(
+    *,
     clan_id: int = Query(..., alias="id", ge=1, le=2_147_483_647),
+    clans_service: Annotated[
+        ClansService,
+        Depends(api_dependencies.get_clans_service),
+    ],
+    players_service: Annotated[
+        PlayersService,
+        Depends(api_dependencies.get_players_service),
+    ],
 ) -> Response:
     """Return information of a given clan."""
-    clan = await clans_repo.fetch_one(id=clan_id)
+    clan = await clans_service.fetch_clan(clan_id)
     if not clan:
         return ORJSONResponse(
             {"status": "Clan not found."},
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
-    clan_members = await users_repo.fetch_many(clan_id=clan["id"])
+    clan_members = await clans_service.fetch_clan_members(clan.id)
 
-    owner = await app.state.sessions.players.from_cache_or_sql(id=clan["owner"])
+    owner = await players_service.fetch_player_session(
+        user_id=clan.owner,
+        username=None,
+    )
     assert owner is not None
 
     return ORJSONResponse(
         {
-            "id": clan["id"],
-            "name": clan["name"],
-            "tag": clan["tag"],
+            "id": clan.id,
+            "name": clan.name,
+            "tag": clan.tag,
             "members": [
                 {
-                    "id": member["id"],
-                    "name": member["name"],
-                    "country": member["country"],
-                    "rank": ("Member", "Officer", "Owner")[member["clan_priv"] - 1],
+                    "id": member.id,
+                    "name": member.name,
+                    "country": member.country,
+                    "rank": ("Member", "Officer", "Owner")[member.clan_priv - 1],
                 }
                 for member in clan_members
             ],
@@ -946,11 +998,24 @@ async def api_get_clan(
 
 @router.get("/get_mappool")
 async def api_get_pool(
+    *,
     pool_id: int = Query(..., alias="id", ge=1, le=2_147_483_647),
+    tourney_pools_service: Annotated[
+        TourneyPoolsService,
+        Depends(api_dependencies.get_tourney_pools_service),
+    ],
+    players_service: Annotated[
+        PlayersService,
+        Depends(api_dependencies.get_players_service),
+    ],
+    clans_service: Annotated[
+        ClansService,
+        Depends(api_dependencies.get_clans_service),
+    ],
 ) -> Response:
     """Return information of a given mappool."""
 
-    tourney_pool = await tourney_pools_repo.fetch_by_id(id=pool_id)
+    tourney_pool = await tourney_pools_service.fetch_tourney_pool(pool_id)
     if tourney_pool is None:
         return ORJSONResponse(
             {"status": "Pool not found."},
@@ -958,12 +1023,15 @@ async def api_get_pool(
         )
 
     tourney_pool_maps: dict[tuple[int, int], Beatmap] = {}
-    for pool_map in await tourney_pool_maps_repo.fetch_many(pool_id=pool_id):
-        bmap = await Beatmap.from_bid(pool_map["map_id"])
+    for pool_map in await tourney_pools_service.fetch_tourney_pool_maps(pool_id):
+        bmap = await Beatmap.from_bid(pool_map.map_id)
         if bmap is not None:
-            tourney_pool_maps[(pool_map["mods"], pool_map["slot"])] = bmap
+            tourney_pool_maps[(pool_map.mods, pool_map.slot)] = bmap
 
-    pool_creator = app.state.sessions.players.get(id=tourney_pool["created_by"])
+    pool_creator = players_service.fetch_online_player(
+        user_id=tourney_pool.created_by,
+        username=None,
+    )
 
     if pool_creator is None:
         return ORJSONResponse(
@@ -972,30 +1040,31 @@ async def api_get_pool(
         )
 
     pool_creator_clan = (
-        await clans_repo.fetch_one(id=pool_creator.clan_id)
+        await clans_service.fetch_clan(pool_creator.clan_id)
         if pool_creator.clan_id is not None
         else None
     )
-    pool_creator_clan_members: list[users_repo.User] = []
+    pool_creator_clan_members: list[User] = []
     if pool_creator_clan is not None:
-        pool_creator_clan_members = await users_repo.fetch_many(
-            clan_id=pool_creator.clan_id,
+        assert pool_creator.clan_id is not None
+        pool_creator_clan_members = await clans_service.fetch_clan_members(
+            pool_creator.clan_id,
         )
 
     return ORJSONResponse(
         {
-            "id": tourney_pool["id"],
-            "name": tourney_pool["name"],
-            "created_at": tourney_pool["created_at"],
+            "id": tourney_pool.id,
+            "name": tourney_pool.name,
+            "created_at": tourney_pool.created_at,
             "created_by": {
                 "id": pool_creator.id,
                 "name": pool_creator.name,
                 "country": pool_creator.geoloc["country"]["acronym"],
                 "clan": (
                     {
-                        "id": pool_creator_clan["id"],
-                        "name": pool_creator_clan["name"],
-                        "tag": pool_creator_clan["tag"],
+                        "id": pool_creator_clan.id,
+                        "name": pool_creator_clan.name,
+                        "tag": pool_creator_clan.tag,
                         "members": len(pool_creator_clan_members),
                     }
                     if pool_creator_clan is not None
