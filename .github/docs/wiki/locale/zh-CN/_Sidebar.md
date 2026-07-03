@@ -7,7 +7,6 @@
 
 * **[主页](https://github.com/osuAkatsuki/bancho.py/wiki/Home-zh-CN)**
 * **[设置前请阅读](https://github.com/osuAkatsuki/bancho.py/wiki/Read-before-setting-up-zh-CN)**
-* **[重大变更](https://github.com/osuAkatsuki/bancho.py/wiki/Breaking-changes-zh-CN)**
 
 ## 玩家
 

@@ -7,7 +7,6 @@
 
 * **[Home](https://github.com/osuAkatsuki/bancho.py/wiki/Home)**
 * **[Read before setting up](https://github.com/osuAkatsuki/bancho.py/wiki/Read-before-setting-up)**
-* **[Breaking changes](https://github.com/osuAkatsuki/bancho.py/wiki/Breaking-changes)**
 
 ## Guides
 

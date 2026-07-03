@@ -7,7 +7,6 @@
 
 * **[Главная](https://github.com/osuAkatsuki/bancho.py/wiki/Home-ru-RU)**
 * **[Прочитайте перед установкой](https://github.com/osuAkatsuki/bancho.py/wiki/Read-before-setting-up-ru-RU)**
-* **[Критические изменения](https://github.com/osuAkatsuki/bancho.py/wiki/Breaking-changes-ru-RU)**
 
 ## Руководства
 
