@@ -10,7 +10,7 @@ git clone https://github.com/osuAkatsuki/bancho.py
 cd bancho.py
 
 # 安装 docker，用于构建和运行应用镜像
-sudo apt install -y docker.io docker-compose-plugin
+sudo apt install -y docker.io docker-compose-v2
 
 # 可选：安装 uv，用于本地 lint、类型检查和单元测试
 curl -LsSf https://astral.sh/uv/install.sh | sh

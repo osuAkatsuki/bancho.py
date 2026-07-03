@@ -10,7 +10,7 @@ git clone https://github.com/osuAkatsuki/bancho.py
 cd bancho.py
 
 # docker zum Bauen und Ausführen des Anwendungs-Images installieren
-sudo apt install -y docker.io docker-compose-plugin
+sudo apt install -y docker.io docker-compose-v2
 
 # wahlweise: uv für lokales Linting, Type-Checking und Unit-Tests installieren
 curl -LsSf https://astral.sh/uv/install.sh | sh
