@@ -43,7 +43,7 @@ services:
   ## application services
 
   bancho:
-    # we also have a public image: osuakatsuki/bancho.py:latest
+    # we also have a public image: ghcr.io/osuakatsuki/bancho.py:latest
     image: bancho:latest
     ports:
       - ${APP_PORT}:${APP_PORT}

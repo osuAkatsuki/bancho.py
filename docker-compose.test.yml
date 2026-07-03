@@ -47,7 +47,7 @@ services:
   ## application services
 
   bancho-test:
-    # we also have a public image: osuakatsuki/bancho.py:latest
+    # we also have a public image: ghcr.io/osuakatsuki/bancho.py:latest
     image: bancho:latest
     depends_on:
       mysql-test:
