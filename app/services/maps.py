@@ -11,6 +11,7 @@ from app.objects.beatmap import Beatmap
 from app.repositories.maps import Map
 from app.repositories.maps import MapSetInfo
 from app.repositories.maps import MapsRepository
+from app.repositories.ratings import MapRatingStats
 from app.repositories.ratings import RatingsRepository
 from app.repositories.scores import ScoresRepository
 
@@ -174,6 +175,9 @@ class BeatmapRatingService:
             code=BeatmapRatingResultCode.ALREADY_VOTED,
             average_rating=sum(ratings) / len(ratings),
         )
+
+    async def fetch_map_rating_stats(self, map_md5: str) -> MapRatingStats:
+        return await self.ratings.fetch_map_rating_stats(map_md5)
 
 
 @dataclass(frozen=True)

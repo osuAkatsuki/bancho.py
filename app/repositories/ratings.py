@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from sqlalchemy import Column
 from sqlalchemy import Integer
 from sqlalchemy import String
+from sqlalchemy import func
 from sqlalchemy import insert
 from sqlalchemy import select
 from sqlalchemy.dialects.mysql import TINYINT
@@ -34,6 +35,12 @@ class Rating:
     userid: int
     map_md5: str
     rating: int
+
+
+@dataclass(frozen=True, slots=True)
+class MapRatingStats:
+    average: float | None
+    count: int
 
 
 class RatingsRepository:
@@ -94,3 +101,17 @@ class RatingsRepository:
         )
         rating = await self._database.fetch_one(select_stmt)
         return self._deserialize_rating(rating) if rating is not None else None
+
+    async def fetch_map_rating_stats(self, map_md5: str) -> MapRatingStats:
+        """Fetch the average rating and rating count for a given map."""
+        select_stmt = select(
+            func.avg(RatingsTable.rating).label("average"),
+            func.count().label("count"),
+        ).where(RatingsTable.map_md5 == map_md5)
+
+        stats = await self._database.fetch_one(select_stmt)
+        assert stats is not None
+        return MapRatingStats(
+            average=float(stats["average"]) if stats["average"] is not None else None,
+            count=stats["count"],
+        )

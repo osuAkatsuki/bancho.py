@@ -565,3 +565,188 @@ async def test_v2_player_avatar_upload_lifecycle(
 
     avatar_path = Path.cwd() / ".data/avatars" / f"{player_id}.png"
     assert avatar_path.read_bytes() == _PNG_AVATAR
+
+
+async def test_v2_score_detail_embeds_beatmap_and_player(
+    http_client: AsyncClient,
+) -> None:
+    user = await factories.create_user()
+    beatmap = await factories.create_map()
+    score = await factories.create_score(player_id=user.id, map_md5=beatmap.md5)
+
+    response = await http_client.get(f"/v2/scores/{score.id}", headers=API_HEADERS)
+
+    assert response.status_code == status.HTTP_200_OK
+    body = response.json()
+    assert body["data"]["id"] == score.id
+    assert body["data"]["player"]["id"] == user.id
+    assert body["data"]["player"]["name"] == user.name
+    assert body["data"]["beatmap"]["md5"] == beatmap.md5
+
+
+async def test_v2_player_friends_lifecycle(
+    http_client: AsyncClient,
+    respx_mock: respx.MockRouter,
+) -> None:
+    _mock_out_geolocation(respx_mock)
+    username = f"web-{secrets.token_hex(4)}"
+    password = "myPassword321$"
+    player_id = await _register_account(
+        http_client,
+        username=username,
+        password=password,
+    )
+    friend = await factories.create_user()
+
+    # listing friends requires authentication
+    response = await http_client.get(
+        f"/v2/players/{player_id}/friends",
+        headers=API_HEADERS,
+    )
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    login_response = await http_client.post(
+        "/v2/sessions",
+        headers=API_HEADERS,
+        json={"username": username, "password": password},
+    )
+    assert login_response.status_code == status.HTTP_201_CREATED
+
+    # players may only manage their own friends
+    response = await http_client.put(
+        f"/v2/players/{friend.id}/friends/{player_id}",
+        headers=API_HEADERS,
+    )
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    # friending yourself or a missing player is rejected
+    response = await http_client.put(
+        f"/v2/players/{player_id}/friends/{player_id}",
+        headers=API_HEADERS,
+    )
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    response = await http_client.put(
+        f"/v2/players/{player_id}/friends/999999999",
+        headers=API_HEADERS,
+    )
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    # add a friend, see them in the listing, then remove them
+    response = await http_client.put(
+        f"/v2/players/{player_id}/friends/{friend.id}",
+        headers=API_HEADERS,
+    )
+    assert response.status_code == status.HTTP_200_OK
+
+    response = await http_client.get(
+        f"/v2/players/{player_id}/friends",
+        headers=API_HEADERS,
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert [rec["id"] for rec in response.json()["data"]] == [friend.id]
+
+    response = await http_client.delete(
+        f"/v2/players/{player_id}/friends/{friend.id}",
+        headers=API_HEADERS,
+    )
+    assert response.status_code == status.HTTP_200_OK
+
+    response = await http_client.get(
+        f"/v2/players/{player_id}/friends",
+        headers=API_HEADERS,
+    )
+    assert response.json()["data"] == []
+
+
+async def test_v2_player_favourites_lifecycle(
+    http_client: AsyncClient,
+    respx_mock: respx.MockRouter,
+) -> None:
+    _mock_out_geolocation(respx_mock)
+    username = f"web-{secrets.token_hex(4)}"
+    password = "myPassword321$"
+    player_id = await _register_account(
+        http_client,
+        username=username,
+        password=password,
+    )
+    beatmap = await factories.create_map()
+
+    # mutations require authentication
+    response = await http_client.put(
+        f"/v2/players/{player_id}/favourites/{beatmap.set_id}",
+        headers=API_HEADERS,
+    )
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    login_response = await http_client.post(
+        "/v2/sessions",
+        headers=API_HEADERS,
+        json={"username": username, "password": password},
+    )
+    assert login_response.status_code == status.HTTP_201_CREATED
+
+    response = await http_client.put(
+        f"/v2/players/{player_id}/favourites/{beatmap.set_id}",
+        headers=API_HEADERS,
+    )
+    assert response.status_code == status.HTTP_200_OK
+
+    # favouriting twice is a no-op, not an error
+    response = await http_client.put(
+        f"/v2/players/{player_id}/favourites/{beatmap.set_id}",
+        headers=API_HEADERS,
+    )
+    assert response.status_code == status.HTTP_200_OK
+
+    # the listing is public
+    anonymous_response = await http_client.get(
+        f"/v2/players/{player_id}/favourites",
+        headers=API_HEADERS,
+    )
+    assert anonymous_response.status_code == status.HTTP_200_OK
+    assert anonymous_response.json()["data"] == [beatmap.set_id]
+
+    response = await http_client.delete(
+        f"/v2/players/{player_id}/favourites/{beatmap.set_id}",
+        headers=API_HEADERS,
+    )
+    assert response.status_code == status.HTTP_200_OK
+
+    response = await http_client.get(
+        f"/v2/players/{player_id}/favourites",
+        headers=API_HEADERS,
+    )
+    assert response.json()["data"] == []
+
+
+async def test_v2_map_rating_reports_average_and_count(
+    http_client: AsyncClient,
+) -> None:
+    beatmap = await factories.create_map()
+
+    # no ratings yet
+    response = await http_client.get(
+        f"/v2/maps/{beatmap.id}/rating",
+        headers=API_HEADERS,
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()["data"] == {"average": None, "count": 0}
+
+    rater_1 = await factories.create_user()
+    rater_2 = await factories.create_user()
+    await factories.create_rating(user_id=rater_1.id, map_md5=beatmap.md5, rating=10)
+    await factories.create_rating(user_id=rater_2.id, map_md5=beatmap.md5, rating=7)
+
+    response = await http_client.get(
+        f"/v2/maps/{beatmap.id}/rating",
+        headers=API_HEADERS,
+    )
+    assert response.status_code == status.HTTP_200_OK
+    body = response.json()
+    assert body["data"]["average"] == 8.5
+    assert body["data"]["count"] == 2
+
+    response = await http_client.get("/v2/maps/999999999/rating", headers=API_HEADERS)
+    assert response.status_code == status.HTTP_404_NOT_FOUND

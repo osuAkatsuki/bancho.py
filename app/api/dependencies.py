@@ -30,6 +30,7 @@ from app.repositories.leaderboard_ranks import LeaderboardRanksRepository
 from app.repositories.mail import MailRepository
 from app.repositories.maps import MapsRepository
 from app.repositories.ratings import RatingsRepository
+from app.repositories.relationships import RelationshipsRepository
 from app.repositories.scores import ScoresRepository
 from app.repositories.stats import StatsRepository
 from app.repositories.tourney_pool_maps import TourneyPoolMapsRepository
@@ -58,6 +59,7 @@ from app.services.maps import MapsService
 from app.services.performance import PerformanceService
 from app.services.player_leaderboards import PlayerLeaderboardsService
 from app.services.players import PlayersService
+from app.services.relationships import RelationshipsService
 from app.services.replays import ReplayService
 from app.services.score_leaderboards import ScoreLeaderboardsService
 from app.services.score_submission import ScoreSubmissionService
@@ -160,6 +162,10 @@ def get_maps_repository() -> MapsRepository:
 
 def get_ratings_repository() -> RatingsRepository:
     return RatingsRepository(app.state.services.database)
+
+
+def get_relationships_repository() -> RelationshipsRepository:
+    return RelationshipsRepository(app.state.services.database)
 
 
 def get_scores_repository() -> ScoresRepository:
@@ -453,10 +459,31 @@ def get_score_submission_service(
     )
 
 
+def get_relationships_service(
+    relationships: Annotated[
+        RelationshipsRepository,
+        Depends(get_relationships_repository),
+    ],
+    users: Annotated[UsersRepository, Depends(get_users_repository)],
+) -> RelationshipsService:
+    return RelationshipsService(
+        relationships=relationships,
+        users=users,
+        online_players=app.state.sessions.players,
+    )
+
+
 def get_scores_service(
     scores: Annotated[ScoresRepository, Depends(get_scores_repository)],
+    users: Annotated[UsersRepository, Depends(get_users_repository)],
+    clans: Annotated[ClansRepository, Depends(get_clans_repository)],
 ) -> ScoresService:
-    return ScoresService(scores=scores, fetch_beatmap=Beatmap.from_md5)
+    return ScoresService(
+        scores=scores,
+        users=users,
+        clans=clans,
+        fetch_beatmap=Beatmap.from_md5,
+    )
 
 
 def get_captcha_service() -> CaptchaService:

@@ -238,6 +238,7 @@ class UsersRepository:
 
     async def fetch_many(
         self,
+        ids: list[int] | None = None,
         priv: int | None = None,
         country: str | None = None,
         clan_id: int | None = None,
@@ -249,6 +250,8 @@ class UsersRepository:
     ) -> list[User]:
         """Fetch multiple users from the database."""
         select_stmt = select(*READ_PARAMS)
+        if ids is not None:
+            select_stmt = select_stmt.where(UsersTable.id.in_(ids))
         if priv is not None:
             select_stmt = select_stmt.where(UsersTable.priv == priv)
         if country is not None:

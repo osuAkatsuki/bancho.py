@@ -30,7 +30,10 @@ from app.constants.gamemodes import GameMode
 from app.services.avatars import MAX_AVATAR_SIZE_BYTES
 from app.services.avatars import AvatarsService
 from app.services.avatars import AvatarUploadResultCode
+from app.services.favourites import FavouritesService
 from app.services.players import PlayersService
+from app.services.relationships import AddFriendResult
+from app.services.relationships import RelationshipsService
 from app.services.scores import ScoresService
 from app.services.web_sessions import WebSessionsService
 
@@ -163,6 +166,220 @@ async def update_player_avatar(
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
+    return responses.success(None)
+
+
+@router.get("/players/{player_id}/friends")
+async def get_player_friends(
+    player_id: int,
+    session_token: SessionCookie = None,
+    *,
+    web_sessions_service: Annotated[
+        WebSessionsService,
+        Depends(api_dependencies.get_web_sessions_service),
+    ],
+    relationships_service: Annotated[
+        RelationshipsService,
+        Depends(api_dependencies.get_relationships_service),
+    ],
+) -> Success[list[Player]] | Failure:
+    if session_token is None:
+        return responses.failure(
+            message="Authentication required.",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+        )
+
+    user = await web_sessions_service.fetch_session_user(session_token)
+    if user is None:
+        return responses.failure(
+            message="Invalid or expired session.",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+        )
+
+    if user.id != player_id:
+        return responses.failure(
+            message="You may only view your own friends.",
+            status_code=status.HTTP_403_FORBIDDEN,
+        )
+
+    friends = await relationships_service.fetch_friends(user.id)
+    response = [Player.model_validate(rec) for rec in friends]
+    return responses.success(response, meta={"total": len(response)})
+
+
+@router.put("/players/{player_id}/friends/{target_id}")
+async def add_player_friend(
+    player_id: int,
+    target_id: int,
+    session_token: SessionCookie = None,
+    *,
+    web_sessions_service: Annotated[
+        WebSessionsService,
+        Depends(api_dependencies.get_web_sessions_service),
+    ],
+    relationships_service: Annotated[
+        RelationshipsService,
+        Depends(api_dependencies.get_relationships_service),
+    ],
+) -> Success[None] | Failure:
+    if session_token is None:
+        return responses.failure(
+            message="Authentication required.",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+        )
+
+    user = await web_sessions_service.fetch_session_user(session_token)
+    if user is None:
+        return responses.failure(
+            message="Invalid or expired session.",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+        )
+
+    if user.id != player_id:
+        return responses.failure(
+            message="You may only manage your own friends.",
+            status_code=status.HTTP_403_FORBIDDEN,
+        )
+
+    result = await relationships_service.add_friend(user.id, target_id)
+    if result is AddFriendResult.CANNOT_FRIEND_SELF:
+        return responses.failure(
+            message="You cannot friend yourself.",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+    if result is AddFriendResult.TARGET_NOT_FOUND:
+        return responses.failure(
+            message="Player not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+
+    return responses.success(None)
+
+
+@router.delete("/players/{player_id}/friends/{target_id}")
+async def remove_player_friend(
+    player_id: int,
+    target_id: int,
+    session_token: SessionCookie = None,
+    *,
+    web_sessions_service: Annotated[
+        WebSessionsService,
+        Depends(api_dependencies.get_web_sessions_service),
+    ],
+    relationships_service: Annotated[
+        RelationshipsService,
+        Depends(api_dependencies.get_relationships_service),
+    ],
+) -> Success[None] | Failure:
+    if session_token is None:
+        return responses.failure(
+            message="Authentication required.",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+        )
+
+    user = await web_sessions_service.fetch_session_user(session_token)
+    if user is None:
+        return responses.failure(
+            message="Invalid or expired session.",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+        )
+
+    if user.id != player_id:
+        return responses.failure(
+            message="You may only manage your own friends.",
+            status_code=status.HTTP_403_FORBIDDEN,
+        )
+
+    await relationships_service.remove_friend(user.id, target_id)
+    return responses.success(None)
+
+
+@router.get("/players/{player_id}/favourites")
+async def get_player_favourites(
+    player_id: int,
+    favourites_service: Annotated[
+        FavouritesService,
+        Depends(api_dependencies.get_favourites_service),
+    ],
+) -> Success[list[int]] | Failure:
+    set_ids = await favourites_service.fetch_favourite_set_ids(player_id)
+    return responses.success(set_ids, meta={"total": len(set_ids)})
+
+
+@router.put("/players/{player_id}/favourites/{set_id}")
+async def add_player_favourite(
+    player_id: int,
+    set_id: int,
+    session_token: SessionCookie = None,
+    *,
+    web_sessions_service: Annotated[
+        WebSessionsService,
+        Depends(api_dependencies.get_web_sessions_service),
+    ],
+    favourites_service: Annotated[
+        FavouritesService,
+        Depends(api_dependencies.get_favourites_service),
+    ],
+) -> Success[None] | Failure:
+    if session_token is None:
+        return responses.failure(
+            message="Authentication required.",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+        )
+
+    user = await web_sessions_service.fetch_session_user(session_token)
+    if user is None:
+        return responses.failure(
+            message="Invalid or expired session.",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+        )
+
+    if user.id != player_id:
+        return responses.failure(
+            message="You may only manage your own favourites.",
+            status_code=status.HTTP_403_FORBIDDEN,
+        )
+
+    # adding an existing favourite is a no-op rather than an error
+    await favourites_service.add_favourite(player_id=user.id, map_set_id=set_id)
+    return responses.success(None)
+
+
+@router.delete("/players/{player_id}/favourites/{set_id}")
+async def remove_player_favourite(
+    player_id: int,
+    set_id: int,
+    session_token: SessionCookie = None,
+    *,
+    web_sessions_service: Annotated[
+        WebSessionsService,
+        Depends(api_dependencies.get_web_sessions_service),
+    ],
+    favourites_service: Annotated[
+        FavouritesService,
+        Depends(api_dependencies.get_favourites_service),
+    ],
+) -> Success[None] | Failure:
+    if session_token is None:
+        return responses.failure(
+            message="Authentication required.",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+        )
+
+    user = await web_sessions_service.fetch_session_user(session_token)
+    if user is None:
+        return responses.failure(
+            message="Invalid or expired session.",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+        )
+
+    if user.id != player_id:
+        return responses.failure(
+            message="You may only manage your own favourites.",
+            status_code=status.HTTP_403_FORBIDDEN,
+        )
+
+    await favourites_service.remove_favourite(player_id=user.id, map_set_id=set_id)
     return responses.success(None)
 
 
