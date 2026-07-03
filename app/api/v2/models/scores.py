@@ -109,7 +109,7 @@ class ScorePlayer(BaseModel):
 class ScoreDetail(Score):
     """A single score with its beatmap and player embedded."""
 
-    beatmap: ScoreBeatmap | None
+    beatmap: ScoreBeatmap
     player: ScorePlayer
 
 

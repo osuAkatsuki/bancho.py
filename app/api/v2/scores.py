@@ -78,11 +78,7 @@ async def get_score(
     response = ScoreDetail.model_validate(
         {
             **dataclasses.asdict(data.score),
-            "beatmap": (
-                ScoreBeatmap.model_validate(data.beatmap)
-                if data.beatmap is not None
-                else None
-            ),
+            "beatmap": ScoreBeatmap.model_validate(data.beatmap),
             "player": ScorePlayer(
                 id=data.player.id,
                 name=data.player.name,

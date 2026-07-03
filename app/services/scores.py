@@ -38,7 +38,7 @@ class ScoresListing:
 @dataclass(frozen=True)
 class ScoreWithContext:
     score: Score
-    beatmap: Beatmap | None
+    beatmap: Beatmap
     player: User
     clan: Clan | None
 
@@ -95,11 +95,18 @@ class ScoresService:
         if player is None:
             return None
 
+        # scores are only displayed while the map version they were set
+        # on still exists; a map update invalidates them everywhere else
+        # (profile & map leaderboard queries inner join maps), so their
+        # permalinks are treated as gone too.
+        beatmap = await self.fetch_beatmap(score.map_md5)
+        if beatmap is None:
+            return None
+
         clan = None
         if player.clan_id:
             clan = await self.clans.fetch_one(id=player.clan_id)
 
-        beatmap = await self.fetch_beatmap(score.map_md5)
         return ScoreWithContext(
             score=score,
             beatmap=beatmap,

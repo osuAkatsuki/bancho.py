@@ -585,6 +585,27 @@ async def test_v2_score_detail_embeds_beatmap_and_player(
     assert body["data"]["beatmap"]["md5"] == beatmap.md5
 
 
+async def test_v2_score_detail_is_gone_once_its_map_version_is(
+    http_client: AsyncClient,
+    respx_mock: respx.MockRouter,
+) -> None:
+    # a map update replaces the maps row's md5, orphaning scores set on
+    # the previous version; their permalinks should 404 like everywhere
+    # else the score stops being displayed
+    respx_mock.get(url__regex=r"https://old\.ppy\.sh/api/get_beatmaps.*").mock(
+        return_value=httpx.Response(status_code=status.HTTP_200_OK, json=[]),
+    )
+    user = await factories.create_user()
+    score = await factories.create_score(
+        player_id=user.id,
+        map_md5=secrets.token_hex(16),
+    )
+
+    response = await http_client.get(f"/v2/scores/{score.id}", headers=API_HEADERS)
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
 async def test_v2_player_friends_lifecycle(
     http_client: AsyncClient,
     respx_mock: respx.MockRouter,
