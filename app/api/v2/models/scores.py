@@ -116,6 +116,7 @@ class ScoreDetail(Score):
 class MapScore(BaseModel):
     """A score on a map's leaderboard, including who set it."""
 
+    id: int
     map_md5: str
 
     score: int

@@ -338,6 +338,7 @@ async def test_v2_map_scores_route_returns_seeded_scores(
     assert response.status_code == status.HTTP_200_OK
     body = response.json()
     assert body["meta"]["total"] == 1
+    assert body["data"][0]["id"] == score.id
     assert body["data"][0]["score"] == score.score
     assert body["data"][0]["player"]["id"] == user.id
     assert body["data"][0]["player"]["name"] == user.name

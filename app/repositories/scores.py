@@ -212,6 +212,7 @@ class MostPlayedMapRow:
 
 @dataclass(frozen=True, slots=True)
 class MapScoreListingRow:
+    id: int
     map_md5: str
     score: int
     pp: float
@@ -388,6 +389,7 @@ class ScoresRepository:
 
     def _deserialize_map_score_listing_row(self, row: MySQLRow) -> MapScoreListingRow:
         return MapScoreListingRow(
+            id=row["id"],
             map_md5=row["map_md5"],
             score=row["score"],
             pp=row["pp"],
@@ -830,6 +832,7 @@ class ScoresRepository:
     ) -> list[MapScoreListingRow]:
         select_stmt = (
             select(
+                ScoresTable.id,
                 ScoresTable.map_md5,
                 ScoresTable.score,
                 ScoresTable.pp,
