@@ -16,6 +16,17 @@ still retaining the ability to reach a large number of concurrent online users.
 
 If you are interested in running or contributing to **bancho.py**, you should head over to the **[bancho.py wiki](https://github.com/osuAkatsuki/bancho.py/wiki)**.
 
+## Web frontend
+
+**bancho.py** is a backend server — it does not include a website. To pair it with one:
+
+- **[bancho-web.ts](https://github.com/osuAkatsuki/bancho-web.ts)** (recommended) — a modern
+  React + TypeScript frontend built on bancho.py's v2 api, with leaderboards, player profiles,
+  beatmap pages, clans, player search, and website registration & login (with optional captcha
+  support). Maintained by the bancho.py team.
+- **[guweb](https://github.com/varkaria/guweb)** (alternative) — the long-standing
+  community-maintained python frontend, which talks directly to bancho.py's database.
+
 ## License
 
 **bancho.py** is licensed under the [MIT License](https://opensource.org/license/mit/). Please see the [LICENSE](https://github.com/osuAkatsuki/bancho.py/blob/master/LICENSE) file for more information.
