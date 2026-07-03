@@ -7,12 +7,10 @@ from typing import Annotated
 from fastapi import APIRouter
 from fastapi import Depends
 
-from app import settings
 from app.api import dependencies as api_dependencies
 from app.api.v2.common import responses
 from app.api.v2.common.responses import Failure
 from app.api.v2.common.responses import Success
-from app.api.v2.models.server import ServerMeta
 from app.api.v2.models.server import ServerStats
 from app.services.players import PlayersService
 
@@ -29,13 +27,5 @@ async def get_server_stats(
     response = ServerStats(
         online_players=players_service.fetch_online_player_count(),
         total_players=await players_service.fetch_total_player_count(),
-    )
-    return responses.success(response)
-
-
-@router.get("/server/meta")
-async def get_server_meta() -> Success[ServerMeta] | Failure:
-    response = ServerMeta(
-        discord_invite=settings.DISCORD_INVITE or None,
     )
     return responses.success(response)

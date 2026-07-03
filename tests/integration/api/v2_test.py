@@ -371,16 +371,6 @@ async def test_v2_server_stats_reports_player_counts(
     assert body["data"]["online_players"] >= 0
 
 
-async def test_v2_server_meta_reports_the_discord_invite(
-    http_client: AsyncClient,
-) -> None:
-    response = await http_client.get("/v2/server/meta", headers=API_HEADERS)
-
-    assert response.status_code == status.HTTP_200_OK
-    body = response.json()
-    assert body["data"]["discord_invite"] == "https://discord.gg/ShEQgUx"
-
-
 REGISTRATION_HEADERS = {
     **API_HEADERS,
     "X-Forwarded-For": "127.0.0.1",
