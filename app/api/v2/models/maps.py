@@ -34,3 +34,17 @@ class Map(BaseModel):
     od: float
     hp: float
     diff: float
+
+
+class MostPlayedMap(BaseModel):
+    id: int
+    set_id: int
+    md5: str
+    status: int
+    artist: str
+    title: str
+    version: str
+    creator: str
+
+    # the number of times the player has played the map
+    plays: int

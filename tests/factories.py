@@ -21,6 +21,7 @@ async def create_user(
     *,
     country: str = "ca",
     preferred_mode: int = 0,
+    priv: int | None = None,
 ) -> User:
     suffix = secrets.token_hex(4)
     users = UsersRepository(app.state.services.database)
@@ -36,6 +37,11 @@ async def create_user(
             id=user.id,
             preferred_mode=preferred_mode,
         )
+        assert updated_user is not None
+        user = updated_user
+
+    if priv is not None:
+        updated_user = await users.partial_update(id=user.id, priv=priv)
         assert updated_user is not None
         user = updated_user
 
@@ -82,6 +88,14 @@ async def create_map(
     map_id = secrets.randbelow(1_000_000) + 1_000_000
     if set_id is None:
         set_id = secrets.randbelow(1_000_000) + 2_000_000
+
+    # seed a freshly-checked mapset row so beatmap lookups
+    # resolve from the database instead of the osu! api.
+    await app.state.services.database.execute(
+        "REPLACE INTO mapsets (id, server, last_osuapi_check) "
+        "VALUES (:id, 'osu!', NOW())",
+        {"id": set_id},
+    )
 
     suffix = secrets.token_hex(4)
     return await MapsRepository(app.state.services.database).create(

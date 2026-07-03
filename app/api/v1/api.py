@@ -7,7 +7,6 @@ import struct
 from pathlib import Path as SystemPath
 from typing import Annotated
 from typing import Literal
-from typing import cast
 
 from fastapi import APIRouter
 from fastapi import Depends
@@ -289,19 +288,10 @@ async def api_get_player_info(
         all_stats = await players_service.fetch_all_player_stats(resolved_user_id)
 
         for mode_stats in all_stats:
-            rank = cast(
-                int | None,
-                await app.state.services.redis.zrevrank(
-                    f"bancho:leaderboard:{mode_stats.mode}",
-                    str(resolved_user_id),
-                ),
-            )
-            country_rank = cast(
-                int | None,
-                await app.state.services.redis.zrevrank(
-                    f"bancho:leaderboard:{mode_stats.mode}:{resolved_country}",
-                    str(resolved_user_id),
-                ),
+            ranks = await players_service.fetch_player_mode_ranks(
+                player_id=resolved_user_id,
+                mode=mode_stats.mode,
+                country=resolved_country,
             )
 
             # NOTE: this dict-like return is intentional.
@@ -325,8 +315,8 @@ async def api_get_player_info(
                 "s_count": mode_stats.s_count,
                 "a_count": mode_stats.a_count,
                 # extra fields are added to the api response
-                "rank": rank + 1 if rank is not None else 0,
-                "country_rank": country_rank + 1 if country_rank is not None else 0,
+                "rank": ranks.global_rank,
+                "country_rank": ranks.country_rank,
             }
 
     return ORJSONResponse({"status": "success", "player": api_data})

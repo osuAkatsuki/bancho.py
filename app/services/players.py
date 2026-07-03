@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Awaitable
 from collections.abc import Collection
 from dataclasses import dataclass
 from typing import Protocol
@@ -12,6 +13,10 @@ from app.repositories.stats import StatsRepository
 from app.repositories.users import SearchUser
 from app.repositories.users import User
 from app.repositories.users import UsersRepository
+
+
+class LeaderboardRankFetcher(Protocol):
+    def __call__(self, key: str, member: str) -> Awaitable[int | None]: ...
 
 
 class OnlinePlayers(Protocol):
@@ -55,10 +60,18 @@ class PlayerStatsListing:
 
 
 @dataclass(frozen=True)
+class ModeRanks:
+    # A rank of 0 means the player is unranked for the mode.
+    global_rank: int
+    country_rank: int
+
+
+@dataclass(frozen=True)
 class PlayersService:
     users: UsersRepository
     stats: StatsRepository
     online_players: OnlinePlayers
+    fetch_leaderboard_rank: LeaderboardRankFetcher
 
     async def search_public_players(self, search: str | None) -> list[SearchUser]:
         return await self.users.search_public(name=search)
@@ -185,6 +198,26 @@ class PlayersService:
 
     async def fetch_all_player_stats(self, player_id: int) -> list[Stat]:
         return await self.stats.fetch_many(player_id=player_id)
+
+    async def fetch_player_mode_ranks(
+        self,
+        *,
+        player_id: int,
+        mode: int,
+        country: str,
+    ) -> ModeRanks:
+        global_rank = await self.fetch_leaderboard_rank(
+            f"bancho:leaderboard:{mode}",
+            str(player_id),
+        )
+        country_rank = await self.fetch_leaderboard_rank(
+            f"bancho:leaderboard:{mode}:{country}",
+            str(player_id),
+        )
+        return ModeRanks(
+            global_rank=global_rank + 1 if global_rank is not None else 0,
+            country_rank=country_rank + 1 if country_rank is not None else 0,
+        )
 
     async def fetch_global_leaderboard(
         self,

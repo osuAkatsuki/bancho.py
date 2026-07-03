@@ -93,11 +93,27 @@ class _FakeOnlinePlayers:
         return self.player
 
 
-def _service() -> players.PlayersService:
+class _FakeLeaderboardRankFetcher:
+    def __init__(self, ranks: dict[str, int] | None = None) -> None:
+        self.ranks = ranks if ranks is not None else {}
+        self.calls: list[tuple[str, str]] = []
+
+    async def __call__(self, key: str, member: str) -> int | None:
+        self.calls.append((key, member))
+        return self.ranks.get(key)
+
+
+def _service(
+    fetch_leaderboard_rank: _FakeLeaderboardRankFetcher | None = None,
+) -> players.PlayersService:
+    if fetch_leaderboard_rank is None:
+        fetch_leaderboard_rank = _FakeLeaderboardRankFetcher()
+
     return players.PlayersService(
         users=_FakeUsersRepository(),
         stats=_FakeStatsRepository(),
         online_players=_FakeOnlinePlayers(),
+        fetch_leaderboard_rank=fetch_leaderboard_rank,
     )
 
 
@@ -179,3 +195,27 @@ async def test_players_service_fetches_global_leaderboard() -> None:
             "country": "ca",
         },
     ]
+
+
+async def test_players_service_fetches_player_mode_ranks() -> None:
+    rank_fetcher = _FakeLeaderboardRankFetcher(
+        ranks={"bancho:leaderboard:0": 4, "bancho:leaderboard:0:ca": 0},
+    )
+    service = _service(fetch_leaderboard_rank=rank_fetcher)
+
+    ranks = await service.fetch_player_mode_ranks(player_id=3, mode=0, country="ca")
+
+    # redis ranks are 0-indexed; the api exposes 1-indexed ranks.
+    assert ranks == players.ModeRanks(global_rank=5, country_rank=1)
+    assert rank_fetcher.calls == [
+        ("bancho:leaderboard:0", "3"),
+        ("bancho:leaderboard:0:ca", "3"),
+    ]
+
+
+async def test_players_service_reports_unranked_players_as_rank_zero() -> None:
+    service = _service()
+
+    ranks = await service.fetch_player_mode_ranks(player_id=3, mode=0, country="ca")
+
+    assert ranks == players.ModeRanks(global_rank=0, country_rank=0)

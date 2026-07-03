@@ -58,3 +58,14 @@ class PlayerStats(BaseModel):
     sh_count: int
     s_count: int
     a_count: int
+
+    # Global & country ranks are calculated from the redis
+    # leaderboards, rather than being stored in the database.
+    # A rank of 0 means the player is unranked for the mode.
+    rank: int = 0
+    country_rank: int = 0
+
+
+class SearchPlayer(BaseModel):
+    id: int
+    name: str

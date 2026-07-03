@@ -4,6 +4,7 @@ import random
 import secrets
 from pathlib import Path
 from typing import Annotated
+from typing import cast
 
 import httpx
 from fastapi import Depends
@@ -100,6 +101,13 @@ async def _record_strange_occurrence_stacktrace() -> None:
 
 def _schedule_replay_view_increment(score: Score) -> None:
     _ = app.state.loop.create_task(score.increment_replay_views())
+
+
+async def _fetch_leaderboard_rank(key: str, member: str) -> int | None:
+    return cast(
+        "int | None",
+        await app.state.services.redis.zrevrank(key, member),
+    )
 
 
 def get_achievements_repository() -> AchievementsRepository:
@@ -310,6 +318,7 @@ def get_players_service(
         users=users,
         stats=stats,
         online_players=app.state.sessions.players,
+        fetch_leaderboard_rank=_fetch_leaderboard_rank,
     )
 
 

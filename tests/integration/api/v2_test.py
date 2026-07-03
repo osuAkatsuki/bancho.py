@@ -5,6 +5,7 @@ import secrets
 from fastapi import status
 from httpx import AsyncClient
 
+import app.state.services
 from tests import factories
 
 API_HEADERS = {"Host": "api.cmyui.xyz"}
@@ -185,3 +186,180 @@ async def test_v2_clan_route_returns_not_found_for_missing_clan(
         "status": "error",
         "error": "Clan not found.",
     }
+
+
+async def test_v2_leaderboard_route_returns_ranked_players(
+    http_client: AsyncClient,
+) -> None:
+    user = await factories.create_user()
+    await factories.create_player_stats(player_id=user.id, pp=727, plays=10)
+
+    response = await http_client.get(
+        "/v2/leaderboards/0",
+        headers=API_HEADERS,
+        params={"sort": "pp", "page_size": 100},
+    )
+    assert response.status_code == status.HTTP_200_OK
+    body = response.json()
+
+    entries = [rec for rec in body["data"] if rec["player_id"] == user.id]
+    assert len(entries) == 1
+    assert entries[0]["name"] == user.name
+    assert entries[0]["pp"] == 727
+    assert entries[0]["rank"] >= 1
+
+
+async def test_v2_leaderboard_route_rejects_invalid_gamemode(
+    http_client: AsyncClient,
+) -> None:
+    response = await http_client.get("/v2/leaderboards/7", headers=API_HEADERS)
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert response.json() == {
+        "status": "error",
+        "error": "Invalid gamemode.",
+    }
+
+
+async def test_v2_player_stats_include_leaderboard_ranks(
+    http_client: AsyncClient,
+) -> None:
+    user = await factories.create_user()
+    await factories.create_player_stats(player_id=user.id, pp=555)
+    await app.state.services.redis.zadd(
+        "bancho:leaderboard:0",
+        {str(user.id): 555},
+    )
+    await app.state.services.redis.zadd(
+        f"bancho:leaderboard:0:{user.country}",
+        {str(user.id): 555},
+    )
+
+    response = await http_client.get(
+        f"/v2/players/{user.id}/stats/0",
+        headers=API_HEADERS,
+    )
+    assert response.status_code == status.HTTP_200_OK
+    body = response.json()
+    assert body["data"]["rank"] >= 1
+    assert body["data"]["country_rank"] >= 1
+
+
+async def test_v2_player_search_returns_matching_public_players(
+    http_client: AsyncClient,
+) -> None:
+    # players must be unrestricted & verified to appear in search results.
+    user = await factories.create_user(priv=3)
+
+    response = await http_client.get(
+        "/v2/players/search",
+        headers=API_HEADERS,
+        params={"q": user.name},
+    )
+    assert response.status_code == status.HTTP_200_OK
+    body = response.json()
+    assert body["meta"]["total"] == 1
+    assert body["data"][0] == {"id": user.id, "name": user.name}
+
+
+async def test_v2_player_scores_routes_return_seeded_scores(
+    http_client: AsyncClient,
+) -> None:
+    user = await factories.create_user()
+    beatmap = await factories.create_map()
+    score = await factories.create_score(player_id=user.id, map_md5=beatmap.md5)
+
+    best_response = await http_client.get(
+        f"/v2/players/{user.id}/scores",
+        headers=API_HEADERS,
+        params={"scope": "best", "mode": 0},
+    )
+    assert best_response.status_code == status.HTTP_200_OK
+    best_body = best_response.json()
+    assert best_body["meta"]["total"] == 1
+    assert best_body["data"][0]["id"] == score.id
+    assert best_body["data"][0]["beatmap"]["id"] == beatmap.id
+
+    recent_response = await http_client.get(
+        f"/v2/players/{user.id}/scores",
+        headers=API_HEADERS,
+        params={"scope": "recent", "mode": 0},
+    )
+    assert recent_response.status_code == status.HTTP_200_OK
+    recent_body = recent_response.json()
+    assert recent_body["meta"]["total"] == 1
+    assert recent_body["data"][0]["id"] == score.id
+
+    most_played_response = await http_client.get(
+        f"/v2/players/{user.id}/most_played",
+        headers=API_HEADERS,
+        params={"mode": 0},
+    )
+    assert most_played_response.status_code == status.HTTP_200_OK
+    most_played_body = most_played_response.json()
+    assert most_played_body["meta"]["total"] == 1
+    assert most_played_body["data"][0]["id"] == beatmap.id
+    assert most_played_body["data"][0]["plays"] == 1
+
+
+async def test_v2_player_scores_route_returns_not_found_for_missing_player(
+    http_client: AsyncClient,
+) -> None:
+    response = await http_client.get(
+        "/v2/players/999999999/scores",
+        headers=API_HEADERS,
+    )
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json() == {
+        "status": "error",
+        "error": "Player not found.",
+    }
+
+
+async def test_v2_map_scores_route_returns_seeded_scores(
+    http_client: AsyncClient,
+) -> None:
+    user = await factories.create_user()
+    beatmap = await factories.create_map()
+    score = await factories.create_score(player_id=user.id, map_md5=beatmap.md5)
+
+    response = await http_client.get(
+        f"/v2/maps/{beatmap.id}/scores",
+        headers=API_HEADERS,
+        params={"mode": 0},
+    )
+    assert response.status_code == status.HTTP_200_OK
+    body = response.json()
+    assert body["meta"]["total"] == 1
+    assert body["data"][0]["score"] == score.score
+    assert body["data"][0]["player"]["id"] == user.id
+    assert body["data"][0]["player"]["name"] == user.name
+
+
+async def test_v2_map_scores_route_returns_not_found_for_missing_map(
+    http_client: AsyncClient,
+) -> None:
+    response = await http_client.get(
+        "/v2/maps/999999999/scores",
+        headers=API_HEADERS,
+    )
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.json() == {
+        "status": "error",
+        "error": "Map not found.",
+    }
+
+
+async def test_v2_server_stats_reports_player_counts(
+    http_client: AsyncClient,
+) -> None:
+    await factories.create_user()
+
+    response = await http_client.get("/v2/server/stats", headers=API_HEADERS)
+
+    assert response.status_code == status.HTTP_200_OK
+    body = response.json()
+    assert body["data"]["total_players"] >= 1
+    assert body["data"]["online_players"] >= 0
