@@ -7,8 +7,6 @@
 
 [English](README.md) · 简体中文 · [Italiano](README_IT.md) · [Deutsch](README_DE.md)
 
-*中文翻译最初由 [hedgehog-qd](https://github.com/hedgehog-qd) 提供。*
-
 **bancho.py** 是一个 osu! 私服后端，面向各种经验水平、
 想要搭建自己的 osu! 私服实例的开发者。
 
