@@ -67,7 +67,9 @@ class RelationshipsRepository:
         return self._deserialize_relationship(relationship)
 
     async def fetch_all(
-        self, user1: int, type: str | None = None,
+        self,
+        user1: int,
+        type: str | None = None,
     ) -> list[Relationship]:
         """Fetch all of a user's relationships, optionally of a single type."""
         select_stmt = select(*READ_PARAMS).where(RelationshipsTable.user1 == user1)

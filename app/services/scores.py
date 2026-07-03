@@ -7,14 +7,14 @@ from typing import Protocol
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
 from app.objects.beatmap import Beatmap
+from app.repositories.clans import Clan
+from app.repositories.clans import ClansRepository
 from app.repositories.scores import MapScoreListingRow
 from app.repositories.scores import MostPlayedMapRow
 from app.repositories.scores import PlayerScoreListingRow
 from app.repositories.scores import ReplayHeader
 from app.repositories.scores import Score
 from app.repositories.scores import ScoresRepository
-from app.repositories.clans import Clan
-from app.repositories.clans import ClansRepository
 from app.repositories.users import User
 from app.repositories.users import UsersRepository
 
