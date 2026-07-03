@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 from typing import Annotated
 from typing import Literal
 
@@ -12,6 +13,7 @@ from fastapi.param_functions import Query
 
 from app.api import dependencies as api_dependencies
 from app.api.v2.common import responses
+from app.api.v2.common.parameters import GameModeParam
 from app.api.v2.common.responses import Failure
 from app.api.v2.common.responses import Success
 from app.api.v2.models.maps import Map
@@ -91,7 +93,7 @@ async def get_map_scores(
     map_id: int,
     *,
     scope: Literal["best", "recent"] = "best",
-    mode: int = Query(0, ge=0, le=11),
+    mode: GameModeParam = Query(0),
     limit: int = Query(50, ge=1, le=100),
     maps_service: Annotated[
         MapsService,
@@ -102,12 +104,6 @@ async def get_map_scores(
         Depends(api_dependencies.get_scores_service),
     ],
 ) -> Success[list[MapScore]] | Failure:
-    if mode not in GameMode.valid_gamemodes():
-        return responses.failure(
-            message="Invalid gamemode.",
-            status_code=status.HTTP_400_BAD_REQUEST,
-        )
-
     bmap = await maps_service.fetch_map(map_id)
     if bmap is None:
         return responses.failure(
@@ -125,8 +121,9 @@ async def get_map_scores(
     )
 
     response = [
-        MapScore.model_validate(rec).model_copy(
-            update={
+        MapScore.model_validate(
+            {
+                **dataclasses.asdict(rec),
                 "player": ScorePlayer(
                     id=rec.userid,
                     name=rec.player_name,

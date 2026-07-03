@@ -209,16 +209,19 @@ async def test_v2_leaderboard_route_returns_ranked_players(
     assert entries[0]["rank"] >= 1
 
 
-async def test_v2_leaderboard_route_rejects_invalid_gamemode(
+async def test_v2_leaderboard_route_rejects_invalid_gamemodes(
     http_client: AsyncClient,
 ) -> None:
-    response = await http_client.get("/v2/leaderboards/7", headers=API_HEADERS)
+    # 7 (relax mania) and 9-11 (non-std autopilot) are not playable
+    # gamemodes, and are all rejected by request validation.
+    for invalid_mode in (7, 9, 11):
+        response = await http_client.get(
+            f"/v2/leaderboards/{invalid_mode}",
+            headers=API_HEADERS,
+        )
 
-    assert response.status_code == status.HTTP_400_BAD_REQUEST
-    assert response.json() == {
-        "status": "error",
-        "error": "Invalid gamemode.",
-    }
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        assert "invalid gamemode" in str(response.json()["detail"])
 
 
 async def test_v2_player_stats_include_leaderboard_ranks(

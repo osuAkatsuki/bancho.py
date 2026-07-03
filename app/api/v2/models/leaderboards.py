@@ -11,7 +11,7 @@ from . import BaseModel
 class LeaderboardEntry(BaseModel):
     # Ranks are calculated from the requested page & sort
     # order, rather than being stored in the database.
-    rank: int = 0
+    rank: int
 
     player_id: int
     name: str

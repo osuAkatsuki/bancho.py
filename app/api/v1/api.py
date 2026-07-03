@@ -30,6 +30,7 @@ from app.services.clans import ClansService
 from app.services.performance import PerformanceResult
 from app.services.performance import PerformanceService
 from app.services.performance import ScoreParams
+from app.services.player_leaderboards import PlayerLeaderboardsService
 from app.services.players import PlayersService
 from app.services.scores import PlayerScoreWithBeatmap
 from app.services.scores import ScoresService
@@ -235,6 +236,10 @@ async def api_get_player_info(
         PlayersService,
         Depends(api_dependencies.get_players_service),
     ],
+    player_leaderboards_service: Annotated[
+        PlayerLeaderboardsService,
+        Depends(api_dependencies.get_player_leaderboards_service),
+    ],
 ) -> Response:
     """Return information about a given player."""
     if not (username or user_id) or (username and user_id):
@@ -288,7 +293,7 @@ async def api_get_player_info(
         all_stats = await players_service.fetch_all_player_stats(resolved_user_id)
 
         for mode_stats in all_stats:
-            ranks = await players_service.fetch_player_mode_ranks(
+            ranks = await player_leaderboards_service.fetch_player_mode_ranks(
                 player_id=resolved_user_id,
                 mode=mode_stats.mode,
                 country=resolved_country,
@@ -315,8 +320,11 @@ async def api_get_player_info(
                 "s_count": mode_stats.s_count,
                 "a_count": mode_stats.a_count,
                 # extra fields are added to the api response
-                "rank": ranks.global_rank,
-                "country_rank": ranks.country_rank,
+                # (the v1 contract uses 0 to mean unranked)
+                "rank": ranks.global_rank if ranks.global_rank is not None else 0,
+                "country_rank": (
+                    ranks.country_rank if ranks.country_rank is not None else 0
+                ),
             }
 
     return ORJSONResponse({"status": "success", "player": api_data})
@@ -902,9 +910,9 @@ async def api_get_global_leaderboard(
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, min=0, max=2_147_483_647),
     country: str | None = Query(None, min_length=2, max_length=2),
-    players_service: Annotated[
-        PlayersService,
-        Depends(api_dependencies.get_players_service),
+    player_leaderboards_service: Annotated[
+        PlayerLeaderboardsService,
+        Depends(api_dependencies.get_player_leaderboards_service),
     ],
 ) -> Response:
     if mode_arg in (
@@ -920,7 +928,7 @@ async def api_get_global_leaderboard(
 
     mode = GameMode(mode_arg)
 
-    rows = await players_service.fetch_global_leaderboard(
+    rows = await player_leaderboards_service.fetch_global_leaderboard(
         sort=sort,
         mode=mode,
         limit=limit,

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 from typing import Annotated
 from typing import Literal
 
@@ -12,6 +13,7 @@ from fastapi.param_functions import Query
 
 from app.api import dependencies as api_dependencies
 from app.api.v2.common import responses
+from app.api.v2.common.parameters import GameModeParam
 from app.api.v2.common.responses import Failure
 from app.api.v2.common.responses import Success
 from app.api.v2.models.maps import MostPlayedMap
@@ -146,9 +148,10 @@ async def get_player_mode_stats(
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
-    data = await players_service.fetch_player_mode_stats(
+    data = await players_service.fetch_player_mode_stats_with_ranks(
         player_id=player_id,
         mode=mode,
+        country=player.country,
     )
     if data is None:
         return responses.failure(
@@ -156,18 +159,7 @@ async def get_player_mode_stats(
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
-    ranks = await players_service.fetch_player_mode_ranks(
-        player_id=player_id,
-        mode=mode,
-        country=player.country,
-    )
-
-    response = PlayerStats.model_validate(data).model_copy(
-        update={
-            "rank": ranks.global_rank,
-            "country_rank": ranks.country_rank,
-        },
-    )
+    response = PlayerStats.model_validate(data)
     return responses.success(response)
 
 
@@ -189,27 +181,14 @@ async def get_player_stats(
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
-    listing = await players_service.fetch_player_stats(
+    listing = await players_service.fetch_player_stats_with_ranks(
         player_id=player_id,
+        country=player.country,
         page=page,
         page_size=page_size,
     )
 
-    response = []
-    for rec in listing.stats:
-        ranks = await players_service.fetch_player_mode_ranks(
-            player_id=player_id,
-            mode=rec.mode,
-            country=player.country,
-        )
-        response.append(
-            PlayerStats.model_validate(rec).model_copy(
-                update={
-                    "rank": ranks.global_rank,
-                    "country_rank": ranks.country_rank,
-                },
-            ),
-        )
+    response = [PlayerStats.model_validate(rec) for rec in listing.stats]
 
     return responses.success(
         response,
@@ -226,7 +205,7 @@ async def get_player_scores(
     player_id: int,
     *,
     scope: Literal["best", "recent"] = "best",
-    mode: int = Query(0, ge=0, le=11),
+    mode: GameModeParam = Query(0),
     limit: int = Query(25, ge=1, le=100),
     include_loved: bool = False,
     include_failed: bool = True,
@@ -239,12 +218,6 @@ async def get_player_scores(
         Depends(api_dependencies.get_scores_service),
     ],
 ) -> Success[list[PlayerScore]] | Failure:
-    if mode not in GameMode.valid_gamemodes():
-        return responses.failure(
-            message="Invalid gamemode.",
-            status_code=status.HTTP_400_BAD_REQUEST,
-        )
-
     player = await players_service.fetch_player(player_id)
     if player is None:
         return responses.failure(
@@ -264,8 +237,9 @@ async def get_player_scores(
     )
 
     response = [
-        PlayerScore.model_validate(row.score).model_copy(
-            update={
+        PlayerScore.model_validate(
+            {
+                **dataclasses.asdict(row.score),
                 "beatmap": (
                     ScoreBeatmap.model_validate(row.beatmap)
                     if row.beatmap is not None
@@ -290,7 +264,7 @@ async def get_player_scores(
 async def get_player_most_played(
     player_id: int,
     *,
-    mode: int = Query(0, ge=0, le=11),
+    mode: GameModeParam = Query(0),
     limit: int = Query(25, ge=1, le=100),
     players_service: Annotated[
         PlayersService,
@@ -301,12 +275,6 @@ async def get_player_most_played(
         Depends(api_dependencies.get_scores_service),
     ],
 ) -> Success[list[MostPlayedMap]] | Failure:
-    if mode not in GameMode.valid_gamemodes():
-        return responses.failure(
-            message="Invalid gamemode.",
-            status_code=status.HTTP_400_BAD_REQUEST,
-        )
-
     player = await players_service.fetch_player(player_id)
     if player is None:
         return responses.failure(

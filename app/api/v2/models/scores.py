@@ -92,7 +92,7 @@ class PlayerScore(BaseModel):
     time_elapsed: int
     perfect: bool
 
-    beatmap: ScoreBeatmap | None = None
+    beatmap: ScoreBeatmap | None
 
 
 class ScorePlayer(BaseModel):
@@ -132,4 +132,4 @@ class MapScore(BaseModel):
     time_elapsed: int
     perfect: bool
 
-    player: ScorePlayer | None = None
+    player: ScorePlayer
