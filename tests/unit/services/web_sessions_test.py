@@ -28,47 +28,51 @@ class _FakeUsersRepository:
         return self.user if self.user is not None and self.user.id == id else None
 
 
-class _FakeTokenStore:
+class _FakeWebSessionsRepository:
     def __init__(self) -> None:
-        self.values: dict[str, str] = {}
+        self.sessions: dict[str, int] = {}
 
-    async def set_with_expiry(
+    async def create(
         self,
-        key: str,
-        value: str,
+        token: str,
+        user_id: int,
         expiry_seconds: int,
     ) -> None:
-        self.values[key] = value
+        self.sessions[token] = user_id
 
-    async def get(self, key: str) -> str | None:
-        return self.values.get(key)
+    async def fetch_user_id(self, token: str) -> int | None:
+        return self.sessions.get(token)
 
-    async def delete(self, key: str) -> None:
-        self.values.pop(key, None)
+    async def delete(self, token: str) -> None:
+        self.sessions.pop(token, None)
 
 
 def _service(
     *,
     user: SimpleNamespace | None,
-    token_store: _FakeTokenStore | None = None,
+    web_sessions_repo: _FakeWebSessionsRepository | None = None,
 ) -> web_sessions.WebSessionsService:
     return web_sessions.WebSessionsService(
         authentication=_FakeAuthenticationService(user),
         users=_FakeUsersRepository(user),
-        token_store=token_store if token_store is not None else _FakeTokenStore(),
+        web_sessions=(
+            web_sessions_repo
+            if web_sessions_repo is not None
+            else _FakeWebSessionsRepository()
+        ),
         generate_token=lambda: "test-token",
     )
 
 
 async def test_web_sessions_login_stores_a_session_token() -> None:
-    token_store = _FakeTokenStore()
+    web_sessions_repo = _FakeWebSessionsRepository()
     user = SimpleNamespace(id=3, name="cmyui")
-    service = _service(user=user, token_store=token_store)
+    service = _service(user=user, web_sessions_repo=web_sessions_repo)
 
     session = await service.login(username="cmyui", password="myPassword321$")
 
     assert session == web_sessions.WebSession(token="test-token", user_id=3)
-    assert token_store.values == {"bancho:web_sessions:test-token": "3"}
+    assert web_sessions_repo.sessions == {"test-token": 3}
 
     # the authentication layer receives the md5 of the plaintext password
     expected_md5 = hashlib.md5(b"myPassword321$").hexdigest().encode()
@@ -76,13 +80,13 @@ async def test_web_sessions_login_stores_a_session_token() -> None:
 
 
 async def test_web_sessions_login_rejects_invalid_credentials() -> None:
-    token_store = _FakeTokenStore()
-    service = _service(user=None, token_store=token_store)
+    web_sessions_repo = _FakeWebSessionsRepository()
+    service = _service(user=None, web_sessions_repo=web_sessions_repo)
 
     session = await service.login(username="cmyui", password="wrong")
 
     assert session is None
-    assert token_store.values == {}
+    assert web_sessions_repo.sessions == {}
 
 
 async def test_web_sessions_fetch_session_user_roundtrip() -> None:

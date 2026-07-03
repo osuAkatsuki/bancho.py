@@ -3,26 +3,13 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Protocol
 
 from app.repositories.users import User
 from app.repositories.users import UsersRepository
+from app.repositories.web_sessions import WebSessionsRepository
 from app.services.bancho import BanchoAuthenticationService
 
 WEB_SESSION_EXPIRY_SECONDS = 60 * 60 * 24 * 30  # 30 days
-
-
-class SessionTokenStore(Protocol):
-    async def set_with_expiry(
-        self,
-        key: str,
-        value: str,
-        expiry_seconds: int,
-    ) -> None: ...
-
-    async def get(self, key: str) -> str | None: ...
-
-    async def delete(self, key: str) -> None: ...
 
 
 @dataclass(frozen=True)
@@ -31,15 +18,11 @@ class WebSession:
     user_id: int
 
 
-def _session_key(token: str) -> str:
-    return f"bancho:web_sessions:{token}"
-
-
 @dataclass(frozen=True)
 class WebSessionsService:
     authentication: BanchoAuthenticationService
     users: UsersRepository
-    token_store: SessionTokenStore
+    web_sessions: WebSessionsRepository
     generate_token: Callable[[], str]
 
     async def login(self, *, username: str, password: str) -> WebSession | None:
@@ -56,20 +39,20 @@ class WebSessionsService:
             return None
 
         token = self.generate_token()
-        await self.token_store.set_with_expiry(
-            _session_key(token),
-            str(user.id),
+        await self.web_sessions.create(
+            token,
+            user.id,
             WEB_SESSION_EXPIRY_SECONDS,
         )
         return WebSession(token=token, user_id=user.id)
 
     async def fetch_session_user(self, token: str) -> User | None:
         """Fetch the player that a session token belongs to, if valid."""
-        user_id = await self.token_store.get(_session_key(token))
+        user_id = await self.web_sessions.fetch_user_id(token)
         if user_id is None:
             return None
 
-        return await self.users.fetch_one(id=int(user_id))
+        return await self.users.fetch_one(id=user_id)
 
     async def logout(self, token: str) -> None:
-        await self.token_store.delete(_session_key(token))
+        await self.web_sessions.delete(token)

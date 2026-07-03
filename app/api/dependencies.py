@@ -36,6 +36,7 @@ from app.repositories.tourney_pool_maps import TourneyPoolMapsRepository
 from app.repositories.tourney_pools import TourneyPoolsRepository
 from app.repositories.user_achievements import UserAchievementsRepository
 from app.repositories.users import UsersRepository
+from app.repositories.web_sessions import WebSessionsRepository
 from app.services.accounts import AccountRegistrationService
 from app.services.bancho import BanchoAuthenticationService
 from app.services.bancho import BanchoLoginService
@@ -115,25 +116,6 @@ async def _post_captcha_siteverify(url: str, data: dict[str, str]) -> dict[str, 
     return cast("dict[str, Any]", response.json())
 
 
-class _RedisSessionTokenStore:
-    async def set_with_expiry(
-        self,
-        key: str,
-        value: str,
-        expiry_seconds: int,
-    ) -> None:
-        await app.state.services.redis.setex(key, expiry_seconds, value)
-
-    async def get(self, key: str) -> str | None:
-        value = await app.state.services.redis.get(key)
-        if value is None:
-            return None
-        return value.decode() if isinstance(value, bytes) else str(value)
-
-    async def delete(self, key: str) -> None:
-        await app.state.services.redis.delete(key)
-
-
 def _generate_web_session_token() -> str:
     return secrets.token_urlsafe(32)
 
@@ -200,6 +182,10 @@ def get_user_achievements_repository() -> UserAchievementsRepository:
 
 def get_users_repository() -> UsersRepository:
     return UsersRepository(app.state.services.database)
+
+
+def get_web_sessions_repository() -> WebSessionsRepository:
+    return WebSessionsRepository(app.state.services.redis)
 
 
 def get_clans_service(
@@ -490,10 +476,14 @@ def get_web_sessions_service(
         Depends(get_bancho_authentication_service),
     ],
     users: Annotated[UsersRepository, Depends(get_users_repository)],
+    web_sessions: Annotated[
+        WebSessionsRepository,
+        Depends(get_web_sessions_repository),
+    ],
 ) -> WebSessionsService:
     return WebSessionsService(
         authentication=bancho_authentication,
         users=users,
-        token_store=_RedisSessionTokenStore(),
+        web_sessions=web_sessions,
         generate_token=_generate_web_session_token,
     )
