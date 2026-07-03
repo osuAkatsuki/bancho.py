@@ -71,7 +71,7 @@ async def test_web_sessions_login_stores_a_session_token() -> None:
 
     session = await service.login(username="cmyui", password="myPassword321$")
 
-    assert session == web_sessions.WebSession(token="test-token", user_id=3)
+    assert session == web_sessions.WebSession(token="test-token", user=user)
     assert web_sessions_repo.sessions == {"test-token": 3}
 
     # the authentication layer receives the md5 of the plaintext password

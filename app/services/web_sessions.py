@@ -15,7 +15,7 @@ WEB_SESSION_EXPIRY_SECONDS = 60 * 60 * 24 * 30  # 30 days
 @dataclass(frozen=True)
 class WebSession:
     token: str
-    user_id: int
+    user: User
 
 
 @dataclass(frozen=True)
@@ -44,7 +44,7 @@ class WebSessionsService:
             user.id,
             WEB_SESSION_EXPIRY_SECONDS,
         )
-        return WebSession(token=token, user_id=user.id)
+        return WebSession(token=token, user=user)
 
     async def fetch_session_user(self, token: str) -> User | None:
         """Fetch the player that a session token belongs to, if valid."""

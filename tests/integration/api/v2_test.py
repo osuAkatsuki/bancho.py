@@ -431,27 +431,34 @@ async def test_v2_account_registration_and_session_lifecycle(
         json={"username": username, "password": password},
     )
     assert login_response.status_code == status.HTTP_201_CREATED
-    login_body = login_response.json()
-    assert login_body["data"]["player_id"] == player_id
-    token = login_body["data"]["token"]
+    assert login_response.json()["data"]["id"] == player_id
 
-    session_headers = {**API_HEADERS, "Authorization": f"Bearer {token}"}
+    # the session token is transported via an http-only cookie only;
+    # it must never appear in the response body.
+    assert "token" not in login_response.json()["data"]
+    session_cookie = login_response.headers["set-cookie"]
+    assert session_cookie.startswith("bancho_session=")
+    assert "HttpOnly" in session_cookie
+    assert "SameSite=lax" in session_cookie
+
+    # the client's cookie jar now authenticates subsequent requests
     whoami_response = await http_client.get(
         "/v2/sessions/current",
-        headers=session_headers,
+        headers=API_HEADERS,
     )
     assert whoami_response.status_code == status.HTTP_200_OK
     assert whoami_response.json()["data"]["id"] == player_id
 
     logout_response = await http_client.delete(
         "/v2/sessions/current",
-        headers=session_headers,
+        headers=API_HEADERS,
     )
     assert logout_response.status_code == status.HTTP_200_OK
 
     expired_response = await http_client.get(
         "/v2/sessions/current",
-        headers=session_headers,
+        headers=API_HEADERS,
+        cookies={"bancho_session": "expired-or-revoked"},
     )
     assert expired_response.status_code == status.HTTP_401_UNAUTHORIZED
 

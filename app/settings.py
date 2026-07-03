@@ -61,6 +61,12 @@ DISALLOW_INGAME_REGISTRATION = read_bool(os.environ["DISALLOW_INGAME_REGISTRATIO
 CAPTCHA_PROVIDER = os.environ.get("CAPTCHA_PROVIDER") or None
 CAPTCHA_SECRET = os.environ.get("CAPTCHA_SECRET") or None
 
+# whether web session cookies are marked Secure (https-only).
+# should only be disabled for plain-http local development.
+WEB_SESSION_COOKIE_SECURE = read_bool(
+    os.environ.get("WEB_SESSION_COOKIE_SECURE", "true"),
+)
+
 DISCORD_AUDIT_LOG_WEBHOOK = os.environ["DISCORD_AUDIT_LOG_WEBHOOK"]
 DISCORD_INVITE = os.environ["DISCORD_INVITE"]
 

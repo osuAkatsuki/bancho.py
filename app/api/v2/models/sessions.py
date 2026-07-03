@@ -11,8 +11,3 @@ class LoginRequest(BaseModel):
 
 
 # output models
-
-
-class Session(BaseModel):
-    token: str
-    player_id: int
