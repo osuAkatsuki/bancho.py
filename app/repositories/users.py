@@ -287,6 +287,7 @@ class UsersRepository:
         custom_badge_icon: str | None | _UnsetSentinel = UNSET,
         userpage_content: str | None | _UnsetSentinel = UNSET,
         api_key: str | None | _UnsetSentinel = UNSET,
+        pw_bcrypt: bytes | _UnsetSentinel = UNSET,
     ) -> User | None:
         """Update a user in the database."""
         update_stmt = update(UsersTable).where(UsersTable.id == id)
@@ -322,6 +323,8 @@ class UsersRepository:
             update_stmt = update_stmt.values(userpage_content=userpage_content)
         if not isinstance(api_key, _UnsetSentinel):
             update_stmt = update_stmt.values(api_key=api_key)
+        if not isinstance(pw_bcrypt, _UnsetSentinel):
+            update_stmt = update_stmt.values(pw_bcrypt=pw_bcrypt)
 
         await self._database.execute(update_stmt)
 

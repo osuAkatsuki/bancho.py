@@ -37,3 +37,28 @@ class LeaderboardRanksRepository:
             ),
         )
         return rank + 1 if rank is not None else None
+
+    async def add_to_country_leaderboard(
+        self,
+        player_id: int,
+        mode: int,
+        country: str,
+        pp: float,
+    ) -> None:
+        """Add or update a player's entry on a country leaderboard."""
+        await self._redis.zadd(
+            f"bancho:leaderboard:{mode}:{country}",
+            {str(player_id): pp},
+        )
+
+    async def remove_from_country_leaderboard(
+        self,
+        player_id: int,
+        mode: int,
+        country: str,
+    ) -> None:
+        """Remove a player's entry from a country leaderboard."""
+        await self._redis.zrem(
+            f"bancho:leaderboard:{mode}:{country}",
+            str(player_id),
+        )

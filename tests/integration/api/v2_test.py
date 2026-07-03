@@ -565,3 +565,143 @@ async def test_v2_player_avatar_upload_lifecycle(
 
     avatar_path = Path.cwd() / ".data/avatars" / f"{player_id}.png"
     assert avatar_path.read_bytes() == _PNG_AVATAR
+
+
+async def test_v2_profile_update_lifecycle(
+    http_client: AsyncClient,
+    respx_mock: respx.MockRouter,
+) -> None:
+    _mock_out_geolocation(respx_mock)
+    username = f"web-{secrets.token_hex(4)}"
+    password = "myPassword321$"
+    player_id = await _register_account(
+        http_client,
+        username=username,
+        password=password,
+    )
+
+    # updating requires authentication
+    response = await http_client.patch(
+        f"/v2/players/{player_id}",
+        headers=API_HEADERS,
+        json={"userpage_content": "hello"},
+    )
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    login_response = await http_client.post(
+        "/v2/sessions",
+        headers=API_HEADERS,
+        json={"username": username, "password": password},
+    )
+    assert login_response.status_code == status.HTTP_201_CREATED
+
+    # players may only update their own profile
+    response = await http_client.patch(
+        f"/v2/players/{player_id + 1}",
+        headers=API_HEADERS,
+        json={"userpage_content": "hello"},
+    )
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    # invalid values are rejected with a descriptive message
+    response = await http_client.patch(
+        f"/v2/players/{player_id}",
+        headers=API_HEADERS,
+        json={"country": "zz"},
+    )
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert "country" in response.json()["error"].lower()
+
+    taken = await factories.create_user()
+    response = await http_client.patch(
+        f"/v2/players/{player_id}",
+        headers=API_HEADERS,
+        json={"username": taken.name},
+    )
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert "taken" in response.json()["error"].lower()
+
+    # a full profile update is applied and returned
+    new_username = f"web-{secrets.token_hex(4)}"
+    response = await http_client.patch(
+        f"/v2/players/{player_id}",
+        headers=API_HEADERS,
+        json={
+            "username": new_username,
+            "country": "de",
+            "preferred_mode": 4,
+            "userpage_content": "hello from the integration tests",
+        },
+    )
+    assert response.status_code == status.HTTP_200_OK
+    body = response.json()
+    assert body["data"]["name"] == new_username
+    assert body["data"]["country"] == "de"
+    assert body["data"]["preferred_mode"] == 4
+    assert body["data"]["userpage_content"] == "hello from the integration tests"
+
+    # the country change moved the player onto their new country leaderboard
+    zscore = await app.state.services.redis.zscore(
+        "bancho:leaderboard:0:de",
+        str(player_id),
+    )
+    assert zscore is not None
+
+
+async def test_v2_password_change_lifecycle(
+    http_client: AsyncClient,
+    respx_mock: respx.MockRouter,
+) -> None:
+    _mock_out_geolocation(respx_mock)
+    username = f"web-{secrets.token_hex(4)}"
+    password = "myPassword321$"
+    player_id = await _register_account(
+        http_client,
+        username=username,
+        password=password,
+    )
+
+    login_response = await http_client.post(
+        "/v2/sessions",
+        headers=API_HEADERS,
+        json={"username": username, "password": password},
+    )
+    assert login_response.status_code == status.HTTP_201_CREATED
+
+    # the current password must be correct
+    response = await http_client.put(
+        f"/v2/players/{player_id}/password",
+        headers=API_HEADERS,
+        json={"current_password": "wrong", "new_password": "myNewPassword321$"},
+    )
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    # the new password must pass validation
+    response = await http_client.put(
+        f"/v2/players/{player_id}/password",
+        headers=API_HEADERS,
+        json={"current_password": password, "new_password": "aaaa"},
+    )
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    response = await http_client.put(
+        f"/v2/players/{player_id}/password",
+        headers=API_HEADERS,
+        json={"current_password": password, "new_password": "myNewPassword321$"},
+    )
+    assert response.status_code == status.HTTP_200_OK
+
+    # the old password no longer works; the new one does
+    response = await http_client.post(
+        "/v2/sessions",
+        headers=API_HEADERS,
+        json={"username": username, "password": password},
+    )
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    response = await http_client.post(
+        "/v2/sessions",
+        headers=API_HEADERS,
+        json={"username": username, "password": "myNewPassword321$"},
+    )
+    assert response.status_code == status.HTTP_201_CREATED

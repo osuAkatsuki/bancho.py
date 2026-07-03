@@ -30,6 +30,50 @@ class RegistrationErrors(dict[str, list[str]]):
     pass
 
 
+def validate_username(username: str, disallowed_names: Sequence[str]) -> list[str]:
+    """Validate a (new) username, returning any rule violations.
+
+    Usernames must:
+    - be within 2-15 characters in length
+    - not contain both ' ' and '_', one is fine
+    - not be in the config's `disallowed_names` list
+    """
+    errors: list[str] = []
+
+    if not regexes.USERNAME.match(username):
+        errors.append("Must be 2-15 characters in length.")
+
+    if "_" in username and " " in username:
+        errors.append('May contain "_" and " ", but not both.')
+
+    if username in disallowed_names:
+        errors.append("Disallowed username; pick another.")
+
+    return errors
+
+
+def validate_password(password: str, disallowed_passwords: Sequence[str]) -> list[str]:
+    """Validate a (new) password, returning any rule violations.
+
+    Passwords must:
+    - be within 8-32 characters in length
+    - have more than 3 unique characters
+    - not be in the config's `disallowed_passwords` list
+    """
+    errors: list[str] = []
+
+    if not 8 <= len(password) <= 32:
+        errors.append("Must be 8-32 characters in length.")
+
+    if len(set(password)) <= 3:
+        errors.append("Must have more than 3 unique characters.")
+
+    if password.lower() in disallowed_passwords:
+        errors.append("That password was deemed too simple.")
+
+    return errors
+
+
 @dataclass(frozen=True)
 class RegisteredAccount:
     player: User
@@ -122,25 +166,10 @@ class AccountRegistrationService:
     ) -> RegistrationErrors:
         errors: RegistrationErrors = RegistrationErrors()
 
-        # Usernames must:
-        # - be within 2-15 characters in length
-        # - not contain both ' ' and '_', one is fine
-        # - not be in the config's `disallowed_names` list
-        # - not already be taken by another player
-        if not regexes.USERNAME.match(username):
-            errors.setdefault("username", []).append(
-                "Must be 2-15 characters in length.",
-            )
-
-        if "_" in username and " " in username:
-            errors.setdefault("username", []).append(
-                'May contain "_" and " ", but not both.',
-            )
-
-        if username in self.disallowed_names:
-            errors.setdefault("username", []).append(
-                "Disallowed username; pick another.",
-            )
+        # usernames must also not already be taken by another player
+        username_errors = validate_username(username, self.disallowed_names)
+        if username_errors:
+            errors["username"] = username_errors
 
         if "username" not in errors:
             if await self.users.fetch_one(name=username):
@@ -159,24 +188,9 @@ class AccountRegistrationService:
                     "Email already taken by another player.",
                 )
 
-        # Passwords must:
-        # - be within 8-32 characters in length
-        # - have more than 3 unique characters
-        # - not be in the config's `disallowed_passwords` list
-        if not 8 <= len(password) <= 32:
-            errors.setdefault("password", []).append(
-                "Must be 8-32 characters in length.",
-            )
-
-        if len(set(password)) <= 3:
-            errors.setdefault("password", []).append(
-                "Must have more than 3 unique characters.",
-            )
-
-        if password.lower() in self.disallowed_passwords:
-            errors.setdefault("password", []).append(
-                "That password was deemed too simple.",
-            )
+        password_errors = validate_password(password, self.disallowed_passwords)
+        if password_errors:
+            errors["password"] = password_errors
 
         return errors
 

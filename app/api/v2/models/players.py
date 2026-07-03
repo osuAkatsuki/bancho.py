@@ -1,8 +1,25 @@
 from __future__ import annotations
 
+from app.api.v2.common.parameters import GameModeParam
+
 from . import BaseModel
 
 # input models
+
+
+class ProfileUpdate(BaseModel):
+    """Fields the authenticated player may change about themselves;
+    omitted fields are left untouched."""
+
+    username: str | None = None
+    country: str | None = None
+    preferred_mode: GameModeParam | None = None
+    userpage_content: str | None = None
+
+
+class PasswordUpdate(BaseModel):
+    current_password: str
+    new_password: str
 
 
 # output models

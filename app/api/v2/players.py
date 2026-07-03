@@ -20,13 +20,17 @@ from app.api.v2.common.parameters import SessionCookie
 from app.api.v2.common.responses import Failure
 from app.api.v2.common.responses import Success
 from app.api.v2.models.maps import MostPlayedMap
+from app.api.v2.models.players import PasswordUpdate
 from app.api.v2.models.players import Player
 from app.api.v2.models.players import PlayerStats
 from app.api.v2.models.players import PlayerStatus
+from app.api.v2.models.players import ProfileUpdate
 from app.api.v2.models.players import SearchPlayer
 from app.api.v2.models.scores import PlayerScore
 from app.api.v2.models.scores import ScoreBeatmap
 from app.constants.gamemodes import GameMode
+from app.services.account_settings import AccountSettingsService
+from app.services.account_settings import PasswordChangeResultCode
 from app.services.avatars import MAX_AVATAR_SIZE_BYTES
 from app.services.avatars import AvatarsService
 from app.services.avatars import AvatarUploadResultCode
@@ -160,6 +164,121 @@ async def update_player_avatar(
     if result is AvatarUploadResultCode.INVALID_FILE_TYPE:
         return responses.failure(
             message="Avatars must be png or jpeg images.",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    return responses.success(None)
+
+
+@router.patch("/players/{player_id}")
+async def update_player_profile(
+    player_id: int,
+    args: ProfileUpdate,
+    session_token: SessionCookie = None,
+    *,
+    web_sessions_service: Annotated[
+        WebSessionsService,
+        Depends(api_dependencies.get_web_sessions_service),
+    ],
+    account_settings_service: Annotated[
+        AccountSettingsService,
+        Depends(api_dependencies.get_account_settings_service),
+    ],
+) -> Success[Player] | Failure:
+    if session_token is None:
+        return responses.failure(
+            message="Authentication required.",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+        )
+
+    user = await web_sessions_service.fetch_session_user(session_token)
+    if user is None:
+        return responses.failure(
+            message="Invalid or expired session.",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+        )
+
+    if user.id != player_id:
+        return responses.failure(
+            message="You may only update your own profile.",
+            status_code=status.HTTP_403_FORBIDDEN,
+        )
+
+    errors = await account_settings_service.validate_profile_update(
+        user,
+        username=args.username,
+        country=args.country,
+        userpage_content=args.userpage_content,
+    )
+    if errors:
+        message = " ".join(
+            error for field_errors in errors.values() for error in field_errors
+        )
+        return responses.failure(
+            message=message,
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    updated_user = await account_settings_service.update_profile(
+        user,
+        username=args.username,
+        country=args.country,
+        preferred_mode=args.preferred_mode,
+        userpage_content=args.userpage_content,
+    )
+
+    response = Player.model_validate(updated_user)
+    return responses.success(response)
+
+
+@router.put("/players/{player_id}/password")
+async def update_player_password(
+    player_id: int,
+    args: PasswordUpdate,
+    session_token: SessionCookie = None,
+    *,
+    web_sessions_service: Annotated[
+        WebSessionsService,
+        Depends(api_dependencies.get_web_sessions_service),
+    ],
+    account_settings_service: Annotated[
+        AccountSettingsService,
+        Depends(api_dependencies.get_account_settings_service),
+    ],
+) -> Success[None] | Failure:
+    if session_token is None:
+        return responses.failure(
+            message="Authentication required.",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+        )
+
+    user = await web_sessions_service.fetch_session_user(session_token)
+    if user is None:
+        return responses.failure(
+            message="Invalid or expired session.",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+        )
+
+    if user.id != player_id:
+        return responses.failure(
+            message="You may only change your own password.",
+            status_code=status.HTTP_403_FORBIDDEN,
+        )
+
+    result = await account_settings_service.change_password(
+        user,
+        current_password=args.current_password,
+        new_password=args.new_password,
+    )
+    if result.code is PasswordChangeResultCode.INCORRECT_CURRENT_PASSWORD:
+        return responses.failure(
+            message="Incorrect current password.",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+    if result.code is PasswordChangeResultCode.VALIDATION_FAILED:
+        assert result.errors is not None
+        return responses.failure(
+            message=" ".join(result.errors),
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 

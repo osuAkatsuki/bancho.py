@@ -37,6 +37,7 @@ from app.repositories.tourney_pools import TourneyPoolsRepository
 from app.repositories.user_achievements import UserAchievementsRepository
 from app.repositories.users import UsersRepository
 from app.repositories.web_sessions import WebSessionsRepository
+from app.services.account_settings import AccountSettingsService
 from app.services.accounts import AccountRegistrationService
 from app.services.avatars import AvatarsService
 from app.services.bancho import BanchoAuthenticationService
@@ -251,6 +252,30 @@ def get_account_registration_service(
         fetch_geoloc=app.state.services.fetch_geoloc,
         increment_metric=_increment_metric,
         ingame_registration_disallowed=settings.DISALLOW_INGAME_REGISTRATION,
+        disallowed_names=settings.DISALLOWED_NAMES,
+        disallowed_passwords=settings.DISALLOWED_PASSWORDS,
+    )
+
+
+def get_account_settings_service(
+    users: Annotated[UsersRepository, Depends(get_users_repository)],
+    stats: Annotated[StatsRepository, Depends(get_stats_repository)],
+    leaderboard_ranks: Annotated[
+        LeaderboardRanksRepository,
+        Depends(get_leaderboard_ranks_repository),
+    ],
+    bancho_authentication: Annotated[
+        BanchoAuthenticationService,
+        Depends(get_bancho_authentication_service),
+    ],
+) -> AccountSettingsService:
+    return AccountSettingsService(
+        users=users,
+        stats=stats,
+        leaderboard_ranks=leaderboard_ranks,
+        authentication=bancho_authentication,
+        online_players=app.state.sessions.players,
+        password_cache=state.cache.bcrypt,
         disallowed_names=settings.DISALLOWED_NAMES,
         disallowed_passwords=settings.DISALLOWED_PASSWORDS,
     )
