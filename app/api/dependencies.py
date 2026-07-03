@@ -38,6 +38,7 @@ from app.repositories.user_achievements import UserAchievementsRepository
 from app.repositories.users import UsersRepository
 from app.repositories.web_sessions import WebSessionsRepository
 from app.services.accounts import AccountRegistrationService
+from app.services.avatars import AvatarsService
 from app.services.bancho import BanchoAuthenticationService
 from app.services.bancho import BanchoLoginService
 from app.services.beatmap_leaderboards import BeatmapLeaderboardService
@@ -65,6 +66,7 @@ from app.services.screenshots import ScreenshotService
 from app.services.tourney_pools import TourneyPoolsService
 from app.services.web_sessions import WebSessionsService
 
+AVATARS_PATH = Path.cwd() / ".data/avatars"
 SCREENSHOTS_PATH = Path.cwd() / ".data/ss"
 REPLAYS_PATH = Path.cwd() / ".data/osr"
 
@@ -252,6 +254,10 @@ def get_account_registration_service(
         disallowed_names=settings.DISALLOWED_NAMES,
         disallowed_passwords=settings.DISALLOWED_PASSWORDS,
     )
+
+
+def get_avatars_service() -> AvatarsService:
+    return AvatarsService(avatars_path=AVATARS_PATH)
 
 
 def get_screenshot_service() -> ScreenshotService:

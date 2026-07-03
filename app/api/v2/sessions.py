@@ -6,7 +6,6 @@ from typing import Annotated
 from typing import cast
 
 from fastapi import APIRouter
-from fastapi import Cookie
 from fastapi import Depends
 from fastapi import Response
 from fastapi import status
@@ -14,6 +13,8 @@ from fastapi import status
 from app import settings
 from app.api import dependencies as api_dependencies
 from app.api.v2.common import responses
+from app.api.v2.common.parameters import WEB_SESSION_COOKIE_NAME
+from app.api.v2.common.parameters import SessionCookie
 from app.api.v2.common.responses import Failure
 from app.api.v2.common.responses import Success
 from app.api.v2.models.players import Player
@@ -22,12 +23,6 @@ from app.services.web_sessions import WEB_SESSION_EXPIRY_SECONDS
 from app.services.web_sessions import WebSessionsService
 
 router = APIRouter()
-
-WEB_SESSION_COOKIE_NAME = "bancho_session"
-
-# the session token is transported exclusively via an http-only cookie,
-# so that scripts running in the browser can never read it.
-SessionCookie = Annotated[str | None, Cookie(alias=WEB_SESSION_COOKIE_NAME)]
 
 
 def _set_session_cookie(response: Response, token: str) -> None:

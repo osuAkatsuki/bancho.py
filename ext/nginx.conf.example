@@ -11,6 +11,7 @@ upstream bancho {
 # and logins are limited to slow down credential stuffing.
 limit_req_zone $binary_remote_addr zone=bancho_registrations:10m rate=1r/m;
 limit_req_zone $binary_remote_addr zone=bancho_logins:10m rate=10r/m;
+limit_req_zone $binary_remote_addr zone=bancho_avatar_uploads:10m rate=10r/m;
 
 server {
 	listen 443 ssl;
@@ -36,6 +37,18 @@ server {
 	# login (POST /v2/sessions on api.${DOMAIN})
 	location = /v2/sessions {
 		limit_req zone=bancho_logins burst=5 nodelay;
+		limit_req_status 429;
+		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+		proxy_set_header X-Real-IP  $remote_addr;
+		proxy_set_header Host $http_host;
+		add_header Access-Control-Allow-Origin *;
+		proxy_redirect off;
+		proxy_pass http://bancho;
+	}
+
+	# avatar uploads (PUT /v2/players/{id}/avatar on api.${DOMAIN})
+	location ~ ^/v2/players/\d+/avatar$ {
+		limit_req zone=bancho_avatar_uploads burst=5 nodelay;
 		limit_req_status 429;
 		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
 		proxy_set_header X-Real-IP  $remote_addr;
