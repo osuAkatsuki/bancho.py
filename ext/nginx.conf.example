@@ -6,6 +6,12 @@ upstream bancho {
     server 127.0.0.1:${APP_PORT};
 }
 
+# rate limits protecting the web authentication endpoints from abuse;
+# registration is limited strictly to prevent automated account creation,
+# and logins are limited to slow down credential stuffing.
+limit_req_zone $binary_remote_addr zone=bancho_registrations:10m rate=1r/m;
+limit_req_zone $binary_remote_addr zone=bancho_logins:10m rate=10r/m;
+
 server {
 	listen 443 ssl;
 	server_name c.${DOMAIN} ce.${DOMAIN} c4.${DOMAIN} osu.${DOMAIN} b.${DOMAIN} api.${DOMAIN};
@@ -14,6 +20,30 @@ server {
 	ssl_certificate     ${SSL_CERT_PATH};
 	ssl_certificate_key ${SSL_KEY_PATH};
 	ssl_ciphers "EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH:@SECLEVEL=1";
+
+	# account registration (POST /v2/accounts on api.${DOMAIN})
+	location = /v2/accounts {
+		limit_req zone=bancho_registrations burst=3 nodelay;
+		limit_req_status 429;
+		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+		proxy_set_header X-Real-IP  $remote_addr;
+		proxy_set_header Host $http_host;
+		add_header Access-Control-Allow-Origin *;
+		proxy_redirect off;
+		proxy_pass http://bancho;
+	}
+
+	# login (POST /v2/sessions on api.${DOMAIN})
+	location = /v2/sessions {
+		limit_req zone=bancho_logins burst=5 nodelay;
+		limit_req_status 429;
+		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+		proxy_set_header X-Real-IP  $remote_addr;
+		proxy_set_header Host $http_host;
+		add_header Access-Control-Allow-Origin *;
+		proxy_redirect off;
+		proxy_pass http://bancho;
+	}
 
 	location / {
 		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
