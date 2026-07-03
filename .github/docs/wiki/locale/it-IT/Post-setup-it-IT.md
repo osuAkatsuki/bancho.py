@@ -99,3 +99,15 @@ sudo certbot certonly \
 Devi andare sul dashboard di Cloudflare e accedere a Regole > Regole di trasformazione. Dopo di che, clicca su trasformazioni gestite e attiva `aggiungi intestazioni di posizione del visitatore`.
 
 ![Abilitare i dati di geolocalizzazione CF](https://github.com/osuAkatsuki/bancho.py/blob/master/.github/images/cf_geoloc.png)
+
+## Aggiungere un sito web
+
+bancho.py è un backend: non include un sito web. Per abbinarne uno:
+
+- [bancho-web.ts](https://github.com/osuAkatsuki/bancho-web.ts) (consigliato) — un
+  frontend moderno in React + TypeScript costruito sulla api v2 di bancho.py, con
+  classifiche, profili dei giocatori, pagine delle beatmap, clan, ricerca dei giocatori
+  e registrazione e accesso dal sito (con supporto captcha opzionale). Mantenuto dal
+  team di bancho.py.
+- [guweb](https://github.com/varkaria/guweb) (alternativa) — lo storico frontend
+  in python mantenuto dalla community, che comunica direttamente con il database di bancho.py.

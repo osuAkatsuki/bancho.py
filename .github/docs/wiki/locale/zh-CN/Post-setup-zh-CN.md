@@ -99,3 +99,14 @@ sudo certbot certonly \
 前往 Cloudflare 控制台，进入 `Rules > Transform rules`，然后点击 managed transforms，并启用 `add visitor location headers`。
 
 ![启用 CF 地理位置数据](https://github.com/osuAkatsuki/bancho.py/blob/master/.github/images/cf_geoloc.png)
+
+## 添加网站
+
+bancho.py 是一个后端服务，本身不包含网站。可以搭配以下前端使用：
+
+- [bancho-web.ts](https://github.com/osuAkatsuki/bancho-web.ts)（推荐）——
+  基于 bancho.py v2 api 构建的现代 React + TypeScript 前端，包含排行榜、
+  玩家个人主页、谱面页面、战队、玩家搜索，以及网页注册和登录
+  （支持可选的人机验证）。由 bancho.py 团队维护。
+- [guweb](https://github.com/varkaria/guweb)（备选）——
+  由社区长期维护的 python 前端，直接读写 bancho.py 的数据库。

@@ -99,3 +99,14 @@ sudo certbot certonly \
 Gehe im Cloudflare-Dashboard zu `Rules > Transform rules`, klicke anschließend auf managed transforms und aktiviere `add visitor location headers`.
 
 ![CF-Geolokalisierungsdaten aktivieren](https://github.com/osuAkatsuki/bancho.py/blob/master/.github/images/cf_geoloc.png)
+
+## Eine Website hinzufügen
+
+bancho.py ist ein Backend — eine Website ist nicht enthalten. Passende Frontends:
+
+- [bancho-web.ts](https://github.com/osuAkatsuki/bancho-web.ts) (empfohlen) — ein modernes
+  React + TypeScript-Frontend auf Basis der v2-api von bancho.py, mit Ranglisten,
+  Spielerprofilen, Beatmap-Seiten, Clans, Spielersuche sowie Registrierung und Anmeldung
+  über die Website (mit optionaler Captcha-Unterstützung). Gepflegt vom bancho.py-Team.
+- [guweb](https://github.com/varkaria/guweb) (Alternative) — das langjährige, von der
+  Community gepflegte Python-Frontend, das direkt mit der Datenbank von bancho.py kommuniziert.

@@ -1,11 +1,10 @@
-# Willkommen bei der osu!bancho.py Wiki
+# Willkommen im bancho.py-Wiki
 
-**bancho.py** ist eine in Arbeit befindliche osu!-Server-Implementierung für
-Entwickler aller Erfahrungsstufen, die daran interessiert sind, ihre eigene(n)
-private(n) osu-Server-Instanz(en) zu hosten.
+**bancho.py** ist ein Backend für private osu!-Server, gedacht für Entwickler aller
+Erfahrungsstufen, die ihre eigene(n) private(n) osu!-Server-Instanz(en) hosten möchten.
 
 Das Projekt wird hauptsächlich vom [Akatsuki](https://akatsuki.gg/)-Team entwickelt,
 und unser Ziel ist es, die am einfachsten zu wartende, zuverlässigste und
-funktionsreichste osu!-Server-Implementierung auf dem Markt zu schaffen.
+funktionsreichste osu!-Server-Implementierung zu schaffen.
 
-## Bitte schauen Sie in die Seitenleiste für Anleitungen zur Einrichtung
+## Anleitungen zur Einrichtung findest du in der Seitenleiste
