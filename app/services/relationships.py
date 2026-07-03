@@ -6,6 +6,7 @@ from typing import Protocol
 
 from app.objects.player import Player
 from app.repositories.relationships import RelationshipsRepository
+from app.repositories.relationships import RelationshipType
 from app.repositories.users import User
 from app.repositories.users import UsersRepository
 
@@ -35,7 +36,7 @@ class RelationshipsService:
     async def fetch_friends(self, player_id: int) -> list[User]:
         relationships = await self.relationships.fetch_all(
             user1=player_id,
-            type="friend",
+            type=RelationshipType.FRIEND,
         )
         friend_ids = [relationship.user2 for relationship in relationships]
         if not friend_ids:
@@ -51,12 +52,16 @@ class RelationshipsService:
 
         existing = await self.relationships.fetch_one(player_id, target_id)
         if existing is not None:
-            if existing.type == "friend":
+            if existing.type is RelationshipType.FRIEND:
                 return AddFriendResult.ALREADY_FRIENDS
             # replace a block with a friendship
             await self.relationships.delete(player_id, target_id)
 
-        await self.relationships.create(player_id, target_id, type="friend")
+        await self.relationships.create(
+            player_id,
+            target_id,
+            type=RelationshipType.FRIEND,
+        )
 
         # the game server caches friends in memory for online players
         online_player = self.online_players.get(id=player_id)
@@ -67,7 +72,7 @@ class RelationshipsService:
 
     async def remove_friend(self, player_id: int, target_id: int) -> None:
         existing = await self.relationships.fetch_one(player_id, target_id)
-        if existing is None or existing.type != "friend":
+        if existing is None or existing.type is not RelationshipType.FRIEND:
             return
 
         await self.relationships.delete(player_id, target_id)

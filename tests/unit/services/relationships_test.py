@@ -4,23 +4,29 @@ from types import SimpleNamespace
 
 import app.services.relationships as relationships
 from app.repositories.relationships import Relationship
+from app.repositories.relationships import RelationshipType
 
 
 class _FakeRelationshipsRepository:
     def __init__(self) -> None:
         self.rows: dict[tuple[int, int], str] = {}
 
-    async def create(self, user1: int, user2: int, type: str) -> Relationship:
+    async def create(
+        self,
+        user1: int,
+        user2: int,
+        type: RelationshipType,
+    ) -> Relationship:
         self.rows[(user1, user2)] = type
         return Relationship(user1=user1, user2=user2, type=type)
 
     async def fetch_all(
         self,
         user1: int,
-        type: str | None = None,
+        type: RelationshipType | None = None,
     ) -> list[Relationship]:
         return [
-            Relationship(user1=u1, user2=u2, type=row_type)
+            Relationship(user1=u1, user2=u2, type=RelationshipType(row_type))
             for (u1, u2), row_type in self.rows.items()
             if u1 == user1 and (type is None or row_type == type)
         ]
@@ -29,7 +35,11 @@ class _FakeRelationshipsRepository:
         row_type = self.rows.get((user1, user2))
         if row_type is None:
             return None
-        return Relationship(user1=user1, user2=user2, type=row_type)
+        return Relationship(
+            user1=user1,
+            user2=user2,
+            type=RelationshipType(row_type),
+        )
 
     async def delete(self, user1: int, user2: int) -> None:
         self.rows.pop((user1, user2), None)

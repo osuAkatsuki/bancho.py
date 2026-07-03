@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 
 from sqlalchemy import Column
+from sqlalchemy import Enum
 from sqlalchemy import Integer
-from sqlalchemy import String
 from sqlalchemy import delete
 from sqlalchemy import insert
 from sqlalchemy import select
@@ -14,12 +15,17 @@ from app.adapters.database import MySQLRow
 from app.repositories import Base
 
 
+class RelationshipType(StrEnum):
+    FRIEND = "friend"
+    BLOCK = "block"
+
+
 class RelationshipsTable(Base):
     __tablename__ = "relationships"
 
     user1 = Column("user1", Integer, nullable=False, primary_key=True)
     user2 = Column("user2", Integer, nullable=False, primary_key=True)
-    type = Column("type", String(6), nullable=False)
+    type = Column("type", Enum(RelationshipType, name="type"), nullable=False)
 
 
 READ_PARAMS = (
@@ -33,7 +39,7 @@ READ_PARAMS = (
 class Relationship:
     user1: int
     user2: int
-    type: str
+    type: RelationshipType
 
 
 class RelationshipsRepository:
@@ -44,10 +50,15 @@ class RelationshipsRepository:
         return Relationship(
             user1=row["user1"],
             user2=row["user2"],
-            type=row["type"],
+            type=RelationshipType(row["type"]),
         )
 
-    async def create(self, user1: int, user2: int, type: str) -> Relationship:
+    async def create(
+        self,
+        user1: int,
+        user2: int,
+        type: RelationshipType,
+    ) -> Relationship:
         """Create a new relationship between two users."""
         insert_stmt = insert(RelationshipsTable).values(
             user1=user1,
@@ -69,7 +80,7 @@ class RelationshipsRepository:
     async def fetch_all(
         self,
         user1: int,
-        type: str | None = None,
+        type: RelationshipType | None = None,
     ) -> list[Relationship]:
         """Fetch all of a user's relationships, optionally of a single type."""
         select_stmt = select(*READ_PARAMS).where(RelationshipsTable.user1 == user1)
