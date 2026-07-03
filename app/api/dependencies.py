@@ -4,6 +4,8 @@ import random
 import secrets
 from pathlib import Path
 from typing import Annotated
+from typing import Any
+from typing import cast
 
 import httpx
 from fastapi import Depends
@@ -34,10 +36,13 @@ from app.repositories.tourney_pool_maps import TourneyPoolMapsRepository
 from app.repositories.tourney_pools import TourneyPoolsRepository
 from app.repositories.user_achievements import UserAchievementsRepository
 from app.repositories.users import UsersRepository
+from app.repositories.web_sessions import WebSessionsRepository
 from app.services.accounts import AccountRegistrationService
 from app.services.bancho import BanchoAuthenticationService
 from app.services.bancho import BanchoLoginService
 from app.services.beatmap_leaderboards import BeatmapLeaderboardService
+from app.services.captcha import CAPTCHA_VERIFY_URLS
+from app.services.captcha import CaptchaService
 from app.services.clans import ClansService
 from app.services.client_integrity import ClientIntegrityService
 from app.services.comments import CommentsService
@@ -58,6 +63,7 @@ from app.services.score_submission import ScoreSubmissionService
 from app.services.scores import ScoresService
 from app.services.screenshots import ScreenshotService
 from app.services.tourney_pools import TourneyPoolsService
+from app.services.web_sessions import WebSessionsService
 
 SCREENSHOTS_PATH = Path.cwd() / ".data/ss"
 REPLAYS_PATH = Path.cwd() / ".data/osr"
@@ -102,6 +108,16 @@ async def _record_strange_occurrence_stacktrace() -> None:
 
 def _schedule_replay_view_increment(score: Score) -> None:
     _ = app.state.loop.create_task(score.increment_replay_views())
+
+
+async def _post_captcha_siteverify(url: str, data: dict[str, str]) -> dict[str, Any]:
+    response = await app.state.services.http_client.post(url, data=data)
+    response.raise_for_status()
+    return cast("dict[str, Any]", response.json())
+
+
+def _generate_web_session_token() -> str:
+    return secrets.token_urlsafe(32)
 
 
 def get_achievements_repository() -> AchievementsRepository:
@@ -166,6 +182,10 @@ def get_user_achievements_repository() -> UserAchievementsRepository:
 
 def get_users_repository() -> UsersRepository:
     return UsersRepository(app.state.services.database)
+
+
+def get_web_sessions_repository() -> WebSessionsRepository:
+    return WebSessionsRepository(app.state.services.redis)
 
 
 def get_clans_service(
@@ -431,3 +451,39 @@ def get_scores_service(
     scores: Annotated[ScoresRepository, Depends(get_scores_repository)],
 ) -> ScoresService:
     return ScoresService(scores=scores, fetch_beatmap=Beatmap.from_md5)
+
+
+def get_captcha_service() -> CaptchaService:
+    if (
+        settings.CAPTCHA_PROVIDER is not None
+        and settings.CAPTCHA_PROVIDER not in CAPTCHA_VERIFY_URLS
+    ):
+        raise ValueError(
+            f"Unsupported CAPTCHA_PROVIDER {settings.CAPTCHA_PROVIDER!r}; "
+            f"must be one of {', '.join(CAPTCHA_VERIFY_URLS)}.",
+        )
+
+    return CaptchaService(
+        provider=settings.CAPTCHA_PROVIDER,
+        secret=settings.CAPTCHA_SECRET,
+        post_siteverify=_post_captcha_siteverify,
+    )
+
+
+def get_web_sessions_service(
+    bancho_authentication: Annotated[
+        BanchoAuthenticationService,
+        Depends(get_bancho_authentication_service),
+    ],
+    users: Annotated[UsersRepository, Depends(get_users_repository)],
+    web_sessions: Annotated[
+        WebSessionsRepository,
+        Depends(get_web_sessions_repository),
+    ],
+) -> WebSessionsService:
+    return WebSessionsService(
+        authentication=bancho_authentication,
+        users=users,
+        web_sessions=web_sessions,
+        generate_token=_generate_web_session_token,
+    )

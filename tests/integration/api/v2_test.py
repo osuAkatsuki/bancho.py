@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import secrets
 
+import httpx
+import respx
 from fastapi import status
 from httpx import AsyncClient
 
@@ -366,3 +368,140 @@ async def test_v2_server_stats_reports_player_counts(
     body = response.json()
     assert body["data"]["total_players"] >= 1
     assert body["data"]["online_players"] >= 0
+
+
+REGISTRATION_HEADERS = {
+    **API_HEADERS,
+    "X-Forwarded-For": "127.0.0.1",
+    "X-Real-IP": "127.0.0.1",
+}
+
+
+def _mock_out_geolocation(respx_mock: respx.MockRouter) -> None:
+    respx_mock.get("http://ip-api.com/line/").mock(
+        return_value=httpx.Response(
+            status_code=status.HTTP_200_OK,
+            content=b"\n".join((b"success", b"CA", b"43.6485", b"-79.4054")),
+        ),
+    )
+
+
+async def _register_account(
+    http_client: AsyncClient,
+    *,
+    username: str,
+    password: str,
+) -> int:
+    response = await http_client.post(
+        "/v2/accounts",
+        headers=REGISTRATION_HEADERS,
+        json={
+            "username": username,
+            "email": f"{username}@akatsuki.pw",
+            "password": password,
+        },
+    )
+    assert response.status_code == status.HTTP_201_CREATED
+    return int(response.json()["data"]["id"])
+
+
+async def test_v2_account_registration_and_session_lifecycle(
+    http_client: AsyncClient,
+    respx_mock: respx.MockRouter,
+) -> None:
+    _mock_out_geolocation(respx_mock)
+
+    username = f"web-{secrets.token_hex(4)}"
+    email = f"{username}@akatsuki.pw"
+    password = "myPassword321$"
+
+    register_response = await http_client.post(
+        "/v2/accounts",
+        headers=REGISTRATION_HEADERS,
+        json={"username": username, "email": email, "password": password},
+    )
+    assert register_response.status_code == status.HTTP_201_CREATED
+    register_body = register_response.json()
+    assert register_body["data"]["name"] == username
+    player_id = register_body["data"]["id"]
+
+    login_response = await http_client.post(
+        "/v2/sessions",
+        headers=API_HEADERS,
+        json={"username": username, "password": password},
+    )
+    assert login_response.status_code == status.HTTP_201_CREATED
+    assert login_response.json()["data"]["id"] == player_id
+
+    # the session token is transported via an http-only cookie only;
+    # it must never appear in the response body.
+    assert "token" not in login_response.json()["data"]
+    session_cookie = login_response.headers["set-cookie"]
+    assert session_cookie.startswith("bancho_session=")
+    assert "HttpOnly" in session_cookie
+    assert "SameSite=lax" in session_cookie
+
+    # the client's cookie jar now authenticates subsequent requests
+    whoami_response = await http_client.get(
+        "/v2/sessions/current",
+        headers=API_HEADERS,
+    )
+    assert whoami_response.status_code == status.HTTP_200_OK
+    assert whoami_response.json()["data"]["id"] == player_id
+
+    logout_response = await http_client.delete(
+        "/v2/sessions/current",
+        headers=API_HEADERS,
+    )
+    assert logout_response.status_code == status.HTTP_200_OK
+
+    expired_response = await http_client.get(
+        "/v2/sessions/current",
+        headers=API_HEADERS,
+        cookies={"bancho_session": "expired-or-revoked"},
+    )
+    assert expired_response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+async def test_v2_account_registration_rejects_taken_usernames(
+    http_client: AsyncClient,
+) -> None:
+    user = await factories.create_user()
+
+    response = await http_client.post(
+        "/v2/accounts",
+        headers=API_HEADERS,
+        json={
+            "username": user.name,
+            "email": f"other-{secrets.token_hex(4)}@akatsuki.pw",
+            "password": "myPassword321$",
+        },
+    )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert "taken" in response.json()["error"]
+
+
+async def test_v2_session_creation_rejects_invalid_credentials(
+    http_client: AsyncClient,
+    respx_mock: respx.MockRouter,
+) -> None:
+    _mock_out_geolocation(respx_mock)
+    username = f"web-{secrets.token_hex(4)}"
+    await _register_account(
+        http_client,
+        username=username,
+        password="myPassword321$",
+    )
+
+    response = await http_client.post(
+        "/v2/sessions",
+        headers=API_HEADERS,
+        json={"username": username, "password": "not-the-password"},
+    )
+
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+    assert response.json() == {
+        "status": "error",
+        "error": "Incorrect username or password.",
+    }
