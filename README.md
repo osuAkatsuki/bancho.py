@@ -5,7 +5,7 @@
 [![pre-commit.ci status](https://results.pre-commit.ci/badge/github/osuAkatsuki/bancho.py/master.svg)](https://results.pre-commit.ci/latest/github/osuAkatsuki/bancho.py/master)
 [![Discord](https://discordapp.com/api/guilds/748687781605408908/widget.png?style=shield)](https://discord.gg/ShEQgUx)
 
-English · [简体中文](README_CN.md) · [Italiano](README_IT.md) · [Deutsch](README_DE.md) · [Русский](README_RU.md)
+English · [简体中文](README_CN.md) · [Italiano](README_IT.md) · [Deutsch](README_DE.md) · [Русский](README_RU.md) · [Español](README_ES.md)
 
 **bancho.py** is a private osu! server backend for developers of all levels
 of experience interested in hosting their own osu private server instance(s).

@@ -110,3 +110,21 @@ bancho.py ist ein Backend — eine Website ist nicht enthalten. Passende Fronten
   über die Website (mit optionaler Captcha-Unterstützung). Gepflegt vom bancho.py-Team.
 - [guweb](https://github.com/varkaria/guweb) (Alternative) — das langjährige, von der
   Community gepflegte Python-Frontend, das direkt mit der Datenbank von bancho.py kommuniziert.
+
+## Deinen Server aktualisieren
+
+So aktualisierst du deine Instanz auf die neueste bancho.py-Version:
+
+```sh
+git pull
+
+# das Anwendungs-Image mit dem neuen Code neu bauen
+make build
+
+# mit dem neuen Image neu starten
+make run  # oder `make run-bg` für den Hintergrundbetrieb
+```
+
+Neue Datenbank-Migrationen werden beim nächsten Serverstart automatisch
+angewendet. Deine Daten (MySQL, Redis, Replays, Screenshots, Avatare)
+liegen außerhalb des Anwendungs-Images und bleiben bei Updates erhalten.

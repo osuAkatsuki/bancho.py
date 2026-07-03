@@ -5,7 +5,7 @@
 [![pre-commit.ci status](https://results.pre-commit.ci/badge/github/osuAkatsuki/bancho.py/master.svg)](https://results.pre-commit.ci/latest/github/osuAkatsuki/bancho.py/master)
 [![Discord](https://discordapp.com/api/guilds/748687781605408908/widget.png?style=shield)](https://discord.gg/ShEQgUx)
 
-[English](README.md) · 简体中文 · [Italiano](README_IT.md) · [Deutsch](README_DE.md) · [Русский](README_RU.md)
+[English](README.md) · 简体中文 · [Italiano](README_IT.md) · [Deutsch](README_DE.md) · [Русский](README_RU.md) · [Español](README_ES.md)
 
 **bancho.py** 是一个 osu! 私服后端，面向各种经验水平、
 想要搭建自己的 osu! 私服实例的开发者。

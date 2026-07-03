@@ -110,3 +110,21 @@ bancho.py is a backend server — it does not include a website. to pair it with
   (with optional captcha support). maintained by the bancho.py team.
 - [guweb](https://github.com/varkaria/guweb) (alternative) — the long-standing
   community-maintained python frontend, which talks directly to bancho.py's database.
+
+## updating your server
+
+to update your instance to the latest bancho.py:
+
+```sh
+git pull
+
+# rebuild the application image with the new code
+make build
+
+# restart with the new image
+make run  # or `make run-bg` to run in the background
+```
+
+any new database migrations run automatically the next time the server
+starts. your data (mysql, redis, replays, screenshots, avatars) lives
+outside the application image, so it's preserved across updates.
