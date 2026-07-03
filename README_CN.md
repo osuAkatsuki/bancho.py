@@ -1,24 +1,35 @@
-# bancho.py - 中文文档
+# bancho.py
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/ambv/black)
 [![pre-commit.ci status](https://results.pre-commit.ci/badge/github/osuAkatsuki/bancho.py/master.svg)](https://results.pre-commit.ci/latest/github/osuAkatsuki/bancho.py/master)
 [![Discord](https://discordapp.com/api/guilds/748687781605408908/widget.png?style=shield)](https://discord.gg/ShEQgUx)
 
-The English version: [[English]](https://github.com/osuAkatsuki/bancho.py/blob/master/README.md)
+[English](README.md) · 简体中文 · [Italiano](README_IT.md) · [Deutsch](README_DE.md)
 
-这是中文翻译哦~由 [hedgehog-qd](https://github.com/hedgehog-qd) 在根据原英语文档部署成功后翻译的。这里
-我根据我当时遇到的问题补充了一些提示，如有错误请指正，谢谢！
+*中文翻译最初由 [hedgehog-qd](https://github.com/hedgehog-qd) 提供。*
 
-bancho.py 是一个还在被不断维护的osu!后端项目，不论你的水平如何，都
-可以去使用他来开一个自己的osu!私服！
+**bancho.py** 是一个 osu! 私服后端，面向各种经验水平、
+想要搭建自己的 osu! 私服实例的开发者。
 
-这个项目最初是由 [Akatsuki](https://akatsuki.pw/) 团队开发的,我们的目标是创建一个非常容易
-维护并且功能很丰富的osu!私服的服务端！
+本项目主要由 [Akatsuki](https://akatsuki.gg/) 团队开发，
+我们的目标是打造最易维护、最可靠、功能最丰富的 osu! 服务端实现。
+它旨在比 Akatsuki.gg 所使用的技术栈更易于部署和修改，
+在保留全部核心功能的同时，仍然能够支撑大量玩家同时在线。
 
-注意：bancho.py是一个后端！当你跟着下面的步骤部署完成后你可以正常登录
-并游玩。这个项目自带api，但是没有前端(就是网页)，前端的话你也可以去看
-他们团队开发的前端项目。
-api文档(英语)：<https://github.com/JKBGL/gulag-api-docs>
-推荐前端(bancho-web.ts)：<https://github.com/osuAkatsuki/bancho-web.ts>
-备选前端(guweb)：<https://github.com/Varkaria/guweb>
+如果你有兴趣运行 **bancho.py** 或参与贡献，请前往 **[bancho.py wiki](https://github.com/osuAkatsuki/bancho.py/wiki)**。
+
+## 网页前端
+
+**bancho.py** 是一个后端服务，本身不包含网站。可以搭配以下前端使用：
+
+- **[bancho-web.ts](https://github.com/osuAkatsuki/bancho-web.ts)**（推荐）——
+  基于 bancho.py v2 api 构建的现代 React + TypeScript 前端，包含排行榜、
+  玩家个人主页、谱面页面、战队、玩家搜索，以及网页注册和登录
+  （支持可选的人机验证）。由 bancho.py 团队维护。
+- **[guweb](https://github.com/varkaria/guweb)**（备选）——
+  由社区长期维护的 python 前端，直接读写 bancho.py 的数据库。
+
+## 许可证
+
+**bancho.py** 基于 [MIT 许可证](https://opensource.org/license/mit/) 发布。详情请参阅 [LICENSE](https://github.com/osuAkatsuki/bancho.py/blob/master/LICENSE) 文件。

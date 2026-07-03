@@ -5,13 +5,29 @@
 [![pre-commit.ci status](https://results.pre-commit.ci/badge/github/osuAkatsuki/bancho.py/master.svg)](https://results.pre-commit.ci/latest/github/osuAkatsuki/bancho.py/master)
 [![Discord](https://discordapp.com/api/guilds/748687781605408908/widget.png?style=shield)](https://discord.gg/ShEQgUx)
 
-**bancho.py** è un'implementazione in corso di un server osu! per sviluppatori di tutti i livelli
-di esperienza interessati a ospitare la propria istanza di server privato osu!.
+[English](README.md) · [简体中文](README_CN.md) · Italiano · [Deutsch](README_DE.md)
 
-Il progetto è sviluppato principalmente dal team [Akatsuki](https://akatsuki.gg/),
-e il nostro obiettivo è creare l'implementazione di server osu! più facile da mantenere, affidabile e ricca di funzionalità disponibile.
+**bancho.py** è un backend per server osu! privati, rivolto a sviluppatori di ogni livello
+di esperienza interessati a ospitare le proprie istanze di server privati osu!.
 
-Se sei interessato a eseguire o contribuire a **bancho.py**, dovresti visitare il **[wiki di bancho.py](https://github.com/osuAkatsuki/bancho.py/wiki)**.
+Il progetto è sviluppato principalmente dal team di [Akatsuki](https://akatsuki.gg/),
+e il nostro obiettivo è creare l'implementazione di server osu! più facile da mantenere,
+affidabile e ricca di funzionalità disponibile. Punta a essere più semplice da installare
+e modificare rispetto allo stack tecnologico usato da Akatsuki.gg, mantenendo tutte le
+funzionalità principali e la capacità di gestire un gran numero di utenti online simultanei.
+
+Se sei interessato a eseguire o contribuire a **bancho.py**, visita la **[wiki di bancho.py](https://github.com/osuAkatsuki/bancho.py/wiki)**.
+
+## Frontend web
+
+**bancho.py** è un backend: non include un sito web. Per abbinarne uno:
+
+- **[bancho-web.ts](https://github.com/osuAkatsuki/bancho-web.ts)** (consigliato) — un
+  frontend moderno in React + TypeScript costruito sulla api v2 di bancho.py, con classifiche,
+  profili dei giocatori, pagine delle beatmap, clan, ricerca dei giocatori e registrazione e
+  accesso dal sito (con supporto captcha opzionale). Mantenuto dal team di bancho.py.
+- **[guweb](https://github.com/varkaria/guweb)** (alternativa) — lo storico frontend
+  in python mantenuto dalla community, che comunica direttamente con il database di bancho.py.
 
 ## Licenza
 
