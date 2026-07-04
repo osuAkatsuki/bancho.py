@@ -956,7 +956,8 @@ class ScoresRepository:
         status: int | None = None,
         mode: int | None = None,
         user_id: int | None = None,
-        include_hidden_players: bool = True,
+        *,
+        include_hidden_players: bool,
         always_visible_player_id: int | None = None,
     ) -> int:
         select_stmt = select(func.count().label("count")).select_from(ScoresTable)
@@ -989,7 +990,8 @@ class ScoresRepository:
         user_id: int | None = None,
         page: int | None = None,
         page_size: int | None = None,
-        include_hidden_players: bool = True,
+        *,
+        include_hidden_players: bool,
         always_visible_player_id: int | None = None,
     ) -> list[Score]:
         select_stmt = select(*READ_PARAMS)

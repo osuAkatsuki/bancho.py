@@ -244,6 +244,7 @@ async def test_score_submission(
     assert response.status_code == status.HTTP_200_OK
     submitted_scores = await ScoresRepository(app.state.services.database).fetch_many(
         user_id=user.id,
+        include_hidden_players=True,
     )
     assert len(submitted_scores) == 1
     submitted_score = submitted_scores[0]

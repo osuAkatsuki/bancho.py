@@ -60,8 +60,16 @@ class _FakeUsersRepository:
     async def fetch_one(self, id: int | None = None) -> SimpleNamespace | None:
         return self.users.get(id) if id is not None else None
 
-    async def fetch_many(self, ids: list[int]) -> list[SimpleNamespace]:
-        return [self.users[id] for id in ids if id in self.users]
+    async def fetch_many(
+        self,
+        ids: list[int],
+        *,
+        include_hidden: bool,
+    ) -> list[SimpleNamespace]:
+        users = [self.users[id] for id in ids if id in self.users]
+        if not include_hidden:
+            users = [user for user in users if user.priv & VISIBLE_PRIV == VISIBLE_PRIV]
+        return users
 
 
 class _FakeOnlinePlayers:

@@ -26,7 +26,8 @@ class _FakeScoresRepository:
         status: int | None = None,
         mode: int | None = None,
         user_id: int | None = None,
-        include_hidden_players: bool = True,
+        *,
+        include_hidden_players: bool,
         always_visible_player_id: int | None = None,
     ) -> int:
         return 0
@@ -40,7 +41,8 @@ class _FakeScoresRepository:
         user_id: int | None = None,
         page: int | None = None,
         page_size: int | None = None,
-        include_hidden_players: bool = True,
+        *,
+        include_hidden_players: bool,
         always_visible_player_id: int | None = None,
     ) -> list[Score]:
         return []

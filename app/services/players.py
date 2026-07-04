@@ -136,7 +136,8 @@ class PlayersService:
         return len(self.online_players.unrestricted) - 1
 
     async def fetch_total_player_count(self) -> int:
-        return await self.users.fetch_count()
+        # an identity-free total of all registrations
+        return await self.users.fetch_count(include_hidden=True)
 
     async def fetch_players(
         self,

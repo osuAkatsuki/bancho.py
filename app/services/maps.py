@@ -106,6 +106,7 @@ class BeatmapInfoService:
                 user_id=player_id,
                 mode=vanilla_mode,
                 status=SubmissionStatus.BEST,
+                include_hidden_players=True,
             ):
                 grades[score.mode] = score.grade
 

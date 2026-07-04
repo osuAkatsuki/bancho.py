@@ -56,6 +56,7 @@ class _FakeScoresRepository:
         user_id: int,
         mode: int,
         status: SubmissionStatus,
+        include_hidden_players: bool,
     ) -> list[Score]:
         return [
             Score(

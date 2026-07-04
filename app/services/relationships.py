@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Protocol
 
+from app.constants.privileges import Privileges
 from app.objects.player import Player
 from app.repositories.relationships import RelationshipsRepository
 from app.repositories.relationships import RelationshipType
@@ -42,18 +43,14 @@ class RelationshipsService:
         friend_ids = [relationship.user2 for relationship in relationships]
         if not friend_ids:
             return []
-        friends = await self.users.fetch_many(ids=friend_ids)
         # friends who have since become hidden (restricted or unverified)
-        # are omitted, matching their visibility everywhere else
-        return [
-            friend
-            for friend in friends
-            if can_view_player(
-                viewer=viewer,
-                target_id=friend.id,
-                target_priv=friend.priv,
-            )
-        ]
+        # are omitted unless the viewer is staff, matching their
+        # visibility everywhere else
+        viewer_is_staff = viewer.priv & Privileges.STAFF.value != 0
+        return await self.users.fetch_many(
+            ids=friend_ids,
+            include_hidden=viewer_is_staff,
+        )
 
     async def add_friend(self, viewer: User, target_id: int) -> AddFriendResult:
         player_id = viewer.id

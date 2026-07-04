@@ -223,7 +223,8 @@ class UsersRepository:
         clan_priv: int | None = None,
         preferred_mode: int | None = None,
         play_style: int | None = None,
-        include_hidden: bool = True,
+        *,
+        include_hidden: bool,
         always_visible_id: int | None = None,
     ) -> int:
         """Fetch the number of users in the database."""
@@ -293,7 +294,8 @@ class UsersRepository:
         play_style: int | None = None,
         page: int | None = None,
         page_size: int | None = None,
-        include_hidden: bool = True,
+        *,
+        include_hidden: bool,
         always_visible_id: int | None = None,
     ) -> list[User]:
         """Fetch multiple users from the database."""

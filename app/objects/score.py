@@ -328,6 +328,7 @@ class Score:
             map_md5=self.bmap.md5,
             mode=self.mode,
             status=SubmissionStatus.BEST,
+            include_hidden_players=True,
         )
 
         if recs:

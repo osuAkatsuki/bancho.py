@@ -2423,6 +2423,7 @@ async def clan_disband(ctx: Context) -> str | None:
         clan_member.id
         for clan_member in await get_legacy_repositories().users.fetch_many(
             clan_id=clan.id,
+            include_hidden=True,
         )
     ]
     for member_id in clan_member_ids:
@@ -2462,9 +2463,12 @@ async def clan_info(ctx: Context) -> str | None:
     clan_display_name = f"[{clan.tag}] {clan.name}"
     msg = [f"{clan_display_name} | Founded {clan.created_at:%b %d, %Y}."]
 
-    # get members privs from sql
+    # get members privs from sql; hidden (restricted or unverified)
+    # members are only listed for staff and for themselves
     clan_members = await get_legacy_repositories().users.fetch_many(
         clan_id=clan.id,
+        include_hidden=ctx.player.priv & Privileges.STAFF != 0,
+        always_visible_id=ctx.player.id,
     )
     for member in sorted(clan_members, key=lambda m: m.clan_priv, reverse=True):
         priv_str = ("Member", "Officer", "Owner")[member.clan_priv - 1]
@@ -2489,6 +2493,7 @@ async def clan_leave(ctx: Context) -> str | None:
 
     clan_members = await get_legacy_repositories().users.fetch_many(
         clan_id=clan.id,
+        include_hidden=True,
     )
 
     await get_legacy_repositories().users.partial_update(
