@@ -848,11 +848,6 @@ async def api_get_match(
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
-    # NOTE: hidden (restricted or unverified) players can never be in a
-    # match: restricted players can't create or join them (and are logged
-    # out when restricted mid-match), and every online player is verified.
-    # We intentionally don't filter here; if that invariant ever breaks,
-    # it should be loudly visible rather than quietly masked.
     return ORJSONResponse(
         {
             "status": "success",
