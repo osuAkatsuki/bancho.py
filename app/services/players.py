@@ -4,6 +4,7 @@ from collections.abc import Collection
 from dataclasses import dataclass
 from typing import Protocol
 
+from app.constants.privileges import Privileges
 from app.objects.player import Player
 from app.repositories.stats import Stat
 from app.repositories.stats import StatsRepository
@@ -113,8 +114,22 @@ class PlayersService:
     online_players: OnlinePlayers
     player_leaderboards: PlayerLeaderboardsService
 
-    async def search_public_players(self, search: str | None) -> list[SearchUser]:
-        return await self.users.search_public(name=search)
+    async def search_players(
+        self,
+        search: str | None,
+        *,
+        viewer: User | None,
+    ) -> list[SearchUser]:
+        """Search players by name. Staff see hidden (restricted or
+        unverified) players; any signed-in player can find themselves."""
+        viewer_is_staff = (
+            viewer is not None and viewer.priv & Privileges.STAFF.value != 0
+        )
+        return await self.users.search_public(
+            name=search,
+            include_hidden=viewer_is_staff,
+            always_visible_id=viewer.id if viewer is not None else None,
+        )
 
     def fetch_online_player_count(self) -> int:
         # The bot is always online and not included in the public count.

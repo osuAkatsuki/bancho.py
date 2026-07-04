@@ -8,6 +8,7 @@ from sqlalchemy import Integer
 from sqlalchemy import String
 from sqlalchemy import func
 from sqlalchemy import insert
+from sqlalchemy import or_
 from sqlalchemy import select
 from sqlalchemy import update
 from sqlalchemy.dialects.mysql import TINYINT
@@ -240,17 +241,23 @@ class UsersRepository:
         assert rec is not None
         return int(rec["count"])
 
-    async def search_public(self, name: str | None = None) -> list[SearchUser]:
-        select_stmt = (
-            select(UsersTable.id, UsersTable.name)
-            .where(
-                UsersTable.priv.bitwise_and(
-                    Privileges.UNRESTRICTED.value | Privileges.VERIFIED.value,
-                )
-                == (Privileges.UNRESTRICTED.value | Privileges.VERIFIED.value),
-            )
-            .order_by(UsersTable.id.asc())
+    async def search_public(
+        self,
+        name: str | None = None,
+        include_hidden: bool = False,
+        always_visible_id: int | None = None,
+    ) -> list[SearchUser]:
+        select_stmt = select(UsersTable.id, UsersTable.name).order_by(
+            UsersTable.id.asc(),
         )
+
+        if not include_hidden:
+            public_mask = Privileges.UNRESTRICTED.value | Privileges.VERIFIED.value
+            visibility = UsersTable.priv.bitwise_and(public_mask) == public_mask
+            if always_visible_id is not None:
+                # players can always find themselves, even while hidden
+                visibility = or_(visibility, UsersTable.id == always_visible_id)
+            select_stmt = select_stmt.where(visibility)
 
         if name is not None:
             select_stmt = select_stmt.where(UsersTable.name.like(f"%{name}%"))

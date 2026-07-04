@@ -9,6 +9,8 @@ from fastapi import status
 from httpx import AsyncClient
 
 import app.state.services
+from app.constants.privileges import Privileges
+from app.repositories.users import UsersRepository
 from tests import factories
 
 API_HEADERS = {"Host": "api.cmyui.xyz"}
@@ -942,14 +944,17 @@ async def test_v2_score_replay_download(
     beatmap = await factories.create_map()
     score = await factories.create_score(player_id=user.id, map_md5=beatmap.md5)
 
-    # no replay file on disk yet
+    # no replay file on disk yet (the id may collide with leftovers from
+    # local development, since the data volume outlives the database)
+    replay_path = Path.cwd() / ".data/osr" / f"{score.id}.osr"
+    replay_path.unlink(missing_ok=True)
+
     response = await http_client.get(
         f"/v2/scores/{score.id}/replay",
         headers=API_HEADERS,
     )
     assert response.status_code == status.HTTP_404_NOT_FOUND
 
-    replay_path = Path.cwd() / ".data/osr" / f"{score.id}.osr"
     replay_path.write_bytes(b"raw replay frames")
 
     response = await http_client.get(
@@ -962,3 +967,84 @@ async def test_v2_score_replay_download(
     # the osu!-format replay embeds the frames and header metadata
     assert b"raw replay frames" in response.content
     assert user.name.encode() in response.content
+
+
+async def test_v2_player_search_visibility(
+    http_client: AsyncClient,
+    respx_mock: respx.MockRouter,
+) -> None:
+    _mock_out_geolocation(respx_mock)
+    username = f"web-{secrets.token_hex(4)}"
+    password = "myPassword321$"
+    # web registrations are unrestricted but not yet verified (that
+    # happens on first in-game login), so they're hidden from search
+    player_id = await _register_account(
+        http_client,
+        username=username,
+        password=password,
+    )
+
+    response = await http_client.get(
+        "/v2/players/search",
+        headers=API_HEADERS,
+        params={"q": username},
+    )
+    assert response.json()["data"] == []
+
+    # ...but they can always find themselves once signed in
+    login_response = await http_client.post(
+        "/v2/sessions",
+        headers=API_HEADERS,
+        json={"username": username, "password": password},
+    )
+    assert login_response.status_code == status.HTTP_201_CREATED
+
+    response = await http_client.get(
+        "/v2/players/search",
+        headers=API_HEADERS,
+        params={"q": username},
+    )
+    assert [rec["id"] for rec in response.json()["data"]] == [player_id]
+
+    # ...and staff can see everyone
+    hidden = await factories.create_user(priv=1)  # unverified
+    staff_username = f"web-{secrets.token_hex(4)}"
+    staff_id = await _register_account(
+        http_client,
+        username=staff_username,
+        password=password,
+    )
+    users = UsersRepository(app.state.services.database)
+    await users.partial_update(
+        id=staff_id,
+        priv=int(Privileges.UNRESTRICTED | Privileges.ADMINISTRATOR),
+    )
+    login_response = await http_client.post(
+        "/v2/sessions",
+        headers=API_HEADERS,
+        json={"username": staff_username, "password": password},
+    )
+    assert login_response.status_code == status.HTTP_201_CREATED
+
+    response = await http_client.get(
+        "/v2/players/search",
+        headers=API_HEADERS,
+        params={"q": hidden.name},
+    )
+    assert [rec["id"] for rec in response.json()["data"]] == [hidden.id]
+
+
+async def test_v2_player_lookup_by_name(
+    http_client: AsyncClient,
+) -> None:
+    user = await factories.create_user()
+
+    response = await http_client.get(f"/v2/players/{user.name}", headers=API_HEADERS)
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()["data"]["id"] == user.id
+
+    response = await http_client.get(
+        "/v2/players/some-missing-name",
+        headers=API_HEADERS,
+    )
+    assert response.status_code == status.HTTP_404_NOT_FOUND

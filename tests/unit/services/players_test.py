@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 import app.services.players as players
+from app.constants.privileges import Privileges
 
 
 def _stat(mode: int = 0) -> SimpleNamespace:
@@ -30,11 +31,22 @@ def _stat(mode: int = 0) -> SimpleNamespace:
 
 class _FakeUsersRepository:
     def __init__(self) -> None:
-        self.searches: list[str | None] = []
+        self.searches: list[dict[str, object | None]] = []
         self.fetch_one_calls: list[dict[str, object | None]] = []
 
-    async def search_public(self, name: str | None = None) -> list[dict[str, object]]:
-        self.searches.append(name)
+    async def search_public(
+        self,
+        name: str | None = None,
+        include_hidden: bool = False,
+        always_visible_id: int | None = None,
+    ) -> list[dict[str, object]]:
+        self.searches.append(
+            {
+                "name": name,
+                "include_hidden": include_hidden,
+                "always_visible_id": always_visible_id,
+            },
+        )
         return [{"id": 3, "name": "cmyui"}]
 
     async def fetch_count(self) -> int:
@@ -130,11 +142,35 @@ def _service(
 async def test_players_service_searches_public_players_and_counts_players() -> None:
     service = _service()
 
-    assert await service.search_public_players("cm") == [{"id": 3, "name": "cmyui"}]
+    assert await service.search_players("cm", viewer=None) == [
+        {"id": 3, "name": "cmyui"},
+    ]
     assert service.fetch_online_player_count() == 2
     assert await service.fetch_total_player_count() == 123
 
-    assert service.users.searches == ["cm"]
+    assert service.users.searches == [
+        {"name": "cm", "include_hidden": False, "always_visible_id": None},
+    ]
+
+
+async def test_players_service_search_visibility_rules() -> None:
+    service = _service()
+
+    # regular signed-in players can always find themselves
+    regular = SimpleNamespace(id=5, priv=int(Privileges.UNRESTRICTED))
+    await service.search_players("cm", viewer=regular)
+
+    # staff see hidden players
+    staff = SimpleNamespace(
+        id=6,
+        priv=int(Privileges.UNRESTRICTED | Privileges.ADMINISTRATOR),
+    )
+    await service.search_players("cm", viewer=staff)
+
+    assert service.users.searches == [
+        {"name": "cm", "include_hidden": False, "always_visible_id": 5},
+        {"name": "cm", "include_hidden": True, "always_visible_id": 6},
+    ]
 
 
 async def test_players_service_fetches_player_by_id_or_name() -> None:

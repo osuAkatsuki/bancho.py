@@ -87,12 +87,22 @@ async def get_players(
 async def search_players(
     *,
     query: str = Query(..., alias="q", min_length=2, max_length=32),
+    session_token: SessionCookie = None,
+    web_sessions_service: Annotated[
+        WebSessionsService,
+        Depends(api_dependencies.get_web_sessions_service),
+    ],
     players_service: Annotated[
         PlayersService,
         Depends(api_dependencies.get_players_service),
     ],
 ) -> Success[list[SearchPlayer]] | Failure:
-    players = await players_service.search_public_players(query)
+    # staff see hidden players, and players can always find themselves
+    viewer = None
+    if session_token is not None:
+        viewer = await web_sessions_service.fetch_session_user(session_token)
+
+    players = await players_service.search_players(query, viewer=viewer)
 
     response = [SearchPlayer.model_validate(rec) for rec in players]
     return responses.success(
@@ -101,15 +111,21 @@ async def search_players(
     )
 
 
-@router.get("/players/{player_id}")
+@router.get("/players/{player_id_or_name}")
 async def get_player(
-    player_id: int,
+    player_id_or_name: str,
     players_service: Annotated[
         PlayersService,
         Depends(api_dependencies.get_players_service),
     ],
 ) -> Success[Player] | Failure:
-    data = await players_service.fetch_player(player_id)
+    if player_id_or_name.isdecimal():
+        data = await players_service.fetch_player(int(player_id_or_name))
+    else:
+        data = await players_service.fetch_player_by_id_or_name(
+            user_id=None,
+            username=player_id_or_name,
+        )
     if data is None:
         return responses.failure(
             message="Player not found.",

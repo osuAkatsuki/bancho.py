@@ -194,7 +194,7 @@ async def api_search_players(
     ],
 ) -> Response:
     """Search for users on the server by name."""
-    rows = await players_service.search_public_players(search)
+    rows = await players_service.search_players(search, viewer=None)
 
     return ORJSONResponse(
         {
