@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 def _default_processor(data: Any) -> Any:
     if isinstance(data, BaseModel):
-        return _default_processor(data.dict())
+        return _default_processor(data.model_dump())
     elif isinstance(data, dict):
         return {k: _default_processor(v) for k, v in data.items()}
     elif isinstance(data, list):

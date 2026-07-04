@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 from typing import Annotated
 
 from fastapi import APIRouter
@@ -14,6 +15,9 @@ from app.api.v2.common import responses
 from app.api.v2.common.responses import Failure
 from app.api.v2.common.responses import Success
 from app.api.v2.models.scores import Score
+from app.api.v2.models.scores import ScoreBeatmap
+from app.api.v2.models.scores import ScoreDetail
+from app.api.v2.models.scores import ScorePlayer
 from app.services.scores import ScoresService
 
 router = APIRouter()
@@ -63,13 +67,26 @@ async def get_score(
         ScoresService,
         Depends(api_dependencies.get_scores_service),
     ],
-) -> Success[Score] | Failure:
-    data = await scores_service.fetch_score(score_id)
+) -> Success[ScoreDetail] | Failure:
+    data = await scores_service.fetch_score_with_context(score_id)
     if data is None:
         return responses.failure(
             message="Score not found.",
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
-    response = Score.model_validate(data)
+    response = ScoreDetail.model_validate(
+        {
+            **dataclasses.asdict(data.score),
+            "beatmap": ScoreBeatmap.model_validate(data.beatmap),
+            "player": ScorePlayer(
+                id=data.player.id,
+                name=data.player.name,
+                country=data.player.country,
+                clan_id=data.player.clan_id or None,
+                clan_name=data.clan.name if data.clan is not None else None,
+                clan_tag=data.clan.tag if data.clan is not None else None,
+            ),
+        },
+    )
     return responses.success(response)

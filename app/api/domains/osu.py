@@ -20,7 +20,6 @@ from fastapi.param_functions import Path
 from fastapi.param_functions import Query
 from fastapi.requests import Request
 from fastapi.responses import FileResponse
-from fastapi.responses import ORJSONResponse
 from fastapi.responses import RedirectResponse
 from fastapi.responses import Response
 from fastapi.routing import APIRouter
@@ -32,6 +31,7 @@ import app.state
 import app.utils
 from app import encryption
 from app.api import dependencies as api_dependencies
+from app.api.v2.common.json import ORJSONResponse
 from app.constants.privileges import Privileges
 from app.logging import Ansi
 from app.logging import log

@@ -12,7 +12,6 @@ from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import status
 from fastapi.param_functions import Query
-from fastapi.responses import ORJSONResponse
 from fastapi.responses import Response
 from fastapi.security import HTTPAuthorizationCredentials as HTTPCredentials
 from fastapi.security import HTTPBearer
@@ -20,6 +19,7 @@ from fastapi.security import HTTPBearer
 import app.packets
 import app.state
 from app.api import dependencies as api_dependencies
+from app.api.v2.common.json import ORJSONResponse
 from app.constants import regexes
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods

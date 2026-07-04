@@ -158,6 +158,7 @@ class _FakeScoresRepository:
         )
         return [
             MapScoreListingRow(
+                id=1,
                 map_md5=map_md5,
                 score=123,
                 pp=12.3,
@@ -249,13 +250,28 @@ class _FakeBeatmapFetcher:
         return None
 
 
+class _FakeUsersRepository:
+    async def fetch_one(self, id: int | None = None) -> None:
+        return None
+
+
+class _FakeClansRepository:
+    async def fetch_one(self, id: int | None = None) -> None:
+        return None
+
+
 def _service() -> (
     tuple[scores.ScoresService, _FakeScoresRepository, _FakeBeatmapFetcher]
 ):
     scores_repo = _FakeScoresRepository()
     beatmap_fetcher = _FakeBeatmapFetcher()
     return (
-        scores.ScoresService(scores=scores_repo, fetch_beatmap=beatmap_fetcher),
+        scores.ScoresService(
+            scores=scores_repo,
+            users=_FakeUsersRepository(),
+            clans=_FakeClansRepository(),
+            fetch_beatmap=beatmap_fetcher,
+        ),
         scores_repo,
         beatmap_fetcher,
     )
@@ -354,6 +370,7 @@ async def test_scores_service_fetches_map_score_listing_rows() -> None:
 
     assert rows == [
         MapScoreListingRow(
+            id=1,
             map_md5="map-md5",
             score=123,
             pp=12.3,

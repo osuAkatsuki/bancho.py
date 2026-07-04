@@ -17,9 +17,11 @@ from app.api.v2.common.parameters import GameModeParam
 from app.api.v2.common.responses import Failure
 from app.api.v2.common.responses import Success
 from app.api.v2.models.maps import Map
+from app.api.v2.models.maps import MapRating
 from app.api.v2.models.scores import MapScore
 from app.api.v2.models.scores import ScorePlayer
 from app.constants.gamemodes import GameMode
+from app.services.maps import BeatmapRatingService
 from app.services.maps import MapsService
 from app.services.scores import ScoresService
 
@@ -85,6 +87,30 @@ async def get_map(
         )
 
     response = Map.model_validate(data)
+    return responses.success(response)
+
+
+@router.get("/maps/{map_id}/rating")
+async def get_map_rating(
+    map_id: int,
+    maps_service: Annotated[
+        MapsService,
+        Depends(api_dependencies.get_maps_service),
+    ],
+    beatmap_rating_service: Annotated[
+        BeatmapRatingService,
+        Depends(api_dependencies.get_beatmap_rating_service),
+    ],
+) -> Success[MapRating] | Failure:
+    beatmap = await maps_service.fetch_map(map_id)
+    if beatmap is None:
+        return responses.failure(
+            message="Map not found.",
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+
+    stats = await beatmap_rating_service.fetch_map_rating_stats(beatmap.md5)
+    response = MapRating(average=stats.average, count=stats.count)
     return responses.success(response)
 
 

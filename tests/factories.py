@@ -9,6 +9,8 @@ from app.repositories.clans import ClansRepository
 from app.repositories.maps import Map
 from app.repositories.maps import MapServer
 from app.repositories.maps import MapsRepository
+from app.repositories.ratings import Rating
+from app.repositories.ratings import RatingsRepository
 from app.repositories.scores import Score
 from app.repositories.scores import ScoresRepository
 from app.repositories.stats import Stat
@@ -157,4 +159,17 @@ async def create_score(
         user_id=player_id,
         perfect=0,
         online_checksum=secrets.token_hex(16),
+    )
+
+
+async def create_rating(
+    *,
+    user_id: int,
+    map_md5: str,
+    rating: int,
+) -> Rating:
+    return await RatingsRepository(app.state.services.database).create(
+        userid=user_id,
+        map_md5=map_md5,
+        rating=rating,
     )

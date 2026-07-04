@@ -16,7 +16,6 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.openapi.utils import get_openapi
 from fastapi.requests import Request
-from fastapi.responses import ORJSONResponse
 from fastapi.responses import Response
 from starlette.middleware.base import RequestResponseEndpoint
 from starlette.requests import ClientDisconnect
@@ -28,6 +27,7 @@ import app.utils
 from app.api import api_router  # type: ignore[attr-defined]
 from app.api import domains
 from app.api import middlewares
+from app.api.v2.common.json import ORJSONResponse
 from app.logging import Ansi
 from app.logging import log
 from app.objects import collections
@@ -135,7 +135,7 @@ def init_exception_handlers(asgi_app: BanchoAPI) -> None:
 
         return ORJSONResponse(
             content={"detail": jsonable_encoder(exc.errors())},
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         )
 
 

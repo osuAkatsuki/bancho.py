@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from sqlalchemy import Column
 from sqlalchemy import Integer
+from sqlalchemy import delete
 from sqlalchemy import func
 from sqlalchemy import insert
 from sqlalchemy import select
@@ -84,3 +85,12 @@ class FavouritesRepository:
         )
         favourite = await self._database.fetch_one(select_stmt)
         return self._deserialize_favourite(favourite) if favourite is not None else None
+
+    async def delete(self, userid: int, setid: int) -> None:
+        """Delete a favourite mapset entry from the database."""
+        delete_stmt = (
+            delete(FavouritesTable)
+            .where(FavouritesTable.userid == userid)
+            .where(FavouritesTable.setid == setid)
+        )
+        await self._database.execute(delete_stmt)

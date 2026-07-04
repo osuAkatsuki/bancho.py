@@ -106,9 +106,17 @@ class ScorePlayer(BaseModel):
     clan_tag: str | None
 
 
+class ScoreDetail(Score):
+    """A single score with its beatmap and player embedded."""
+
+    beatmap: ScoreBeatmap
+    player: ScorePlayer
+
+
 class MapScore(BaseModel):
     """A score on a map's leaderboard, including who set it."""
 
+    id: int
     map_md5: str
 
     score: int

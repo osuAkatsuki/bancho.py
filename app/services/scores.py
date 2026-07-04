@@ -7,12 +7,16 @@ from typing import Protocol
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
 from app.objects.beatmap import Beatmap
+from app.repositories.clans import Clan
+from app.repositories.clans import ClansRepository
 from app.repositories.scores import MapScoreListingRow
 from app.repositories.scores import MostPlayedMapRow
 from app.repositories.scores import PlayerScoreListingRow
 from app.repositories.scores import ReplayHeader
 from app.repositories.scores import Score
 from app.repositories.scores import ScoresRepository
+from app.repositories.users import User
+from app.repositories.users import UsersRepository
 
 
 class BeatmapFetcher(Protocol):
@@ -32,8 +36,18 @@ class ScoresListing:
 
 
 @dataclass(frozen=True)
+class ScoreWithContext:
+    score: Score
+    beatmap: Beatmap
+    player: User
+    clan: Clan | None
+
+
+@dataclass(frozen=True)
 class ScoresService:
     scores: ScoresRepository
+    users: UsersRepository
+    clans: ClansRepository
     fetch_beatmap: BeatmapFetcher
 
     async def fetch_scores(
@@ -68,6 +82,37 @@ class ScoresService:
 
     async def fetch_score(self, score_id: int) -> Score | None:
         return await self.scores.fetch_one(id=score_id)
+
+    async def fetch_score_with_context(
+        self,
+        score_id: int,
+    ) -> ScoreWithContext | None:
+        score = await self.scores.fetch_one(id=score_id)
+        if score is None:
+            return None
+
+        player = await self.users.fetch_one(id=score.userid)
+        if player is None:
+            return None
+
+        # scores are only displayed while the map version they were set
+        # on still exists; a map update invalidates them everywhere else
+        # (profile & map leaderboard queries inner join maps), so their
+        # permalinks are treated as gone too.
+        beatmap = await self.fetch_beatmap(score.map_md5)
+        if beatmap is None:
+            return None
+
+        clan = None
+        if player.clan_id:
+            clan = await self.clans.fetch_one(id=player.clan_id)
+
+        return ScoreWithContext(
+            score=score,
+            beatmap=beatmap,
+            player=player,
+            clan=clan,
+        )
 
     async def fetch_player_scores(
         self,

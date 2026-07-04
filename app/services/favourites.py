@@ -30,3 +30,11 @@ class FavouritesService:
 
         await self.favourites.create(userid=player_id, setid=map_set_id)
         return AddFavouriteResult.ADDED
+
+    async def remove_favourite(
+        self,
+        *,
+        player_id: int,
+        map_set_id: int,
+    ) -> None:
+        await self.favourites.delete(userid=player_id, setid=map_set_id)

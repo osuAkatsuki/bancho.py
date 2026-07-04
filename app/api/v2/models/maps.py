@@ -48,3 +48,8 @@ class MostPlayedMap(BaseModel):
 
     # the number of times the player has played the map
     plays: int
+
+
+class MapRating(BaseModel):
+    average: float | None
+    count: int
