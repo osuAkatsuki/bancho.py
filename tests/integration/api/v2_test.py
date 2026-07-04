@@ -867,13 +867,13 @@ async def test_v2_profile_update_lifecycle(
     assert response.json()["data"]["userpage_content"] is None
     assert response.json()["data"]["name"] == new_username
 
-    # but the other fields cannot be unset
+    # but the other fields cannot be unset (rejected by request validation)
     response = await http_client.patch(
         f"/v2/players/{player_id}",
         headers=API_HEADERS,
         json={"username": None},
     )
-    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
 
 async def test_v2_password_change_lifecycle(

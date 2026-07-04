@@ -9,11 +9,15 @@ from . import BaseModel
 
 class ProfileUpdate(BaseModel):
     """Fields the authenticated player may change about themselves;
-    omitted fields are left untouched."""
+    omitted fields are left untouched.
 
-    username: str | None = None
-    country: str | None = None
-    preferred_mode: GameModeParam | None = None
+    Only the userpage may be null (unset); the defaults on the other
+    fields are placeholders, never read - whether a field was provided
+    is determined via `model_fields_set`."""
+
+    username: str = ""
+    country: str = ""
+    preferred_mode: GameModeParam = 0
     userpage_content: str | None = None
 
 

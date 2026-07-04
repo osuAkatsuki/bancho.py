@@ -71,30 +71,21 @@ class AccountSettingsService:
         self,
         user: User,
         *,
-        username: str | None | _UnsetSentinel = UNSET,
-        country: str | None | _UnsetSentinel = UNSET,
-        preferred_mode: int | None | _UnsetSentinel = UNSET,
+        username: str | _UnsetSentinel = UNSET,
+        country: str | _UnsetSentinel = UNSET,
         userpage_content: str | None | _UnsetSentinel = UNSET,
     ) -> ProfileUpdateErrors:
         errors = ProfileUpdateErrors()
 
-        # of the editable fields, only the userpage may be unset (null)
-        if username is None:
-            errors["username"] = ["Cannot be unset."]
-        elif isinstance(username, str) and username != user.name:
+        if isinstance(username, str) and username != user.name:
             username_errors = validate_username(username, self.disallowed_names)
             if username_errors:
                 errors["username"] = username_errors
             elif await self.users.fetch_one(name=username):
                 errors["username"] = ["Username already taken by another player."]
 
-        if country is None:
-            errors["country"] = ["Cannot be unset."]
-        elif isinstance(country, str) and country not in ISO_COUNTRY_CODES:
+        if isinstance(country, str) and country not in ISO_COUNTRY_CODES:
             errors["country"] = ["Invalid country code."]
-
-        if preferred_mode is None:
-            errors["preferred_mode"] = ["Cannot be unset."]
 
         if isinstance(userpage_content, str):
             if len(userpage_content) > MAX_USERPAGE_LENGTH:

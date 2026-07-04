@@ -422,8 +422,8 @@ async def update_player_profile(
             status_code=status.HTTP_403_FORBIDDEN,
         )
 
-    # distinguish omitted fields (left untouched) from explicit nulls
-    # (a request to unset, where the field allows it)
+    # distinguish omitted fields (left untouched) from provided ones;
+    # explicit null is only a valid input for the nullable userpage
     username = args.username if "username" in args.model_fields_set else UNSET
     country = args.country if "country" in args.model_fields_set else UNSET
     preferred_mode = (
@@ -437,7 +437,6 @@ async def update_player_profile(
         user,
         username=username,
         country=country,
-        preferred_mode=preferred_mode,
         userpage_content=userpage_content,
     )
     if errors:
@@ -448,11 +447,6 @@ async def update_player_profile(
             message=message,
             status_code=status.HTTP_400_BAD_REQUEST,
         )
-
-    # validation rejects nulls for everything except the userpage
-    assert username is not None
-    assert country is not None
-    assert preferred_mode is not None
 
     updated_user = await account_settings_service.update_profile(
         user,

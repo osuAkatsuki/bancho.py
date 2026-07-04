@@ -222,20 +222,6 @@ async def test_profile_update_allows_clearing_the_userpage() -> None:
     ]
 
 
-async def test_profile_validation_rejects_unsetting_required_fields() -> None:
-    user = _user()
-    service = _service(user=user)
-
-    errors = await service.validate_profile_update(
-        user,
-        username=None,
-        country=None,
-        preferred_mode=None,
-    )
-
-    assert set(errors) == {"username", "country", "preferred_mode"}
-
-
 async def test_profile_update_renames_the_online_session() -> None:
     user = _user()
     online = SimpleNamespace(
