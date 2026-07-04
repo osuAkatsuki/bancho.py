@@ -44,9 +44,12 @@ class BanchoAuthenticationService:
         if user_info is None:
             return None
 
-        if user_info.pw_bcrypt is None:
+        # the password hash is intentionally kept off the user model
+        # and must be fetched explicitly for verification
+        password_hash = await self.users.fetch_password_hash(id=user_info.id)
+        if password_hash is None:
             return None
-        trusted_hashword = user_info.pw_bcrypt.encode()
+        trusted_hashword = password_hash.encode()
 
         # in-memory bcrypt lookup cache for performance
         if trusted_hashword in self.password_cache:  # ~0.01 ms

@@ -9,6 +9,7 @@ from typing import Protocol
 import bcrypt
 
 from app._typing import UNSET
+from app._typing import _UnsetSentinel
 from app.constants.countries import ISO_COUNTRY_CODES
 from app.constants.privileges import Privileges
 from app.objects.player import Player
@@ -70,23 +71,32 @@ class AccountSettingsService:
         self,
         user: User,
         *,
-        username: str | None = None,
-        country: str | None = None,
-        userpage_content: str | None = None,
+        username: str | None | _UnsetSentinel = UNSET,
+        country: str | None | _UnsetSentinel = UNSET,
+        preferred_mode: int | None | _UnsetSentinel = UNSET,
+        userpage_content: str | None | _UnsetSentinel = UNSET,
     ) -> ProfileUpdateErrors:
         errors = ProfileUpdateErrors()
 
-        if username is not None and username != user.name:
+        # of the editable fields, only the userpage may be unset (null)
+        if username is None:
+            errors["username"] = ["Cannot be unset."]
+        elif isinstance(username, str) and username != user.name:
             username_errors = validate_username(username, self.disallowed_names)
             if username_errors:
                 errors["username"] = username_errors
             elif await self.users.fetch_one(name=username):
                 errors["username"] = ["Username already taken by another player."]
 
-        if country is not None and country not in ISO_COUNTRY_CODES:
+        if country is None:
+            errors["country"] = ["Cannot be unset."]
+        elif isinstance(country, str) and country not in ISO_COUNTRY_CODES:
             errors["country"] = ["Invalid country code."]
 
-        if userpage_content is not None:
+        if preferred_mode is None:
+            errors["preferred_mode"] = ["Cannot be unset."]
+
+        if isinstance(userpage_content, str):
             if len(userpage_content) > MAX_USERPAGE_LENGTH:
                 errors["userpage_content"] = [
                     f"Must be at most {MAX_USERPAGE_LENGTH} characters in length.",
@@ -98,34 +108,32 @@ class AccountSettingsService:
         self,
         user: User,
         *,
-        username: str | None = None,
-        country: str | None = None,
-        preferred_mode: int | None = None,
-        userpage_content: str | None = None,
+        username: str | _UnsetSentinel = UNSET,
+        country: str | _UnsetSentinel = UNSET,
+        preferred_mode: int | _UnsetSentinel = UNSET,
+        userpage_content: str | None | _UnsetSentinel = UNSET,
     ) -> User:
         """Apply a validated profile update, keeping the game server's
         session cache and the redis country leaderboards consistent."""
         updated_user = await self.users.partial_update(
             id=user.id,
-            name=username if username is not None else UNSET,
-            country=country if country is not None else UNSET,
-            preferred_mode=preferred_mode if preferred_mode is not None else UNSET,
-            userpage_content=(
-                userpage_content if userpage_content is not None else UNSET
-            ),
+            name=username,
+            country=country,
+            preferred_mode=preferred_mode,
+            userpage_content=userpage_content,
         )
         assert updated_user is not None
 
         # the game server caches profile data in memory for online players
         online_player = self.online_players.get(id=user.id)
         if online_player is not None:
-            if username is not None:
+            if isinstance(username, str):
                 online_player.name = username
-            if country is not None:
+            if isinstance(country, str):
                 online_player.geoloc["country"]["acronym"] = country
 
         # a country change moves the player between country leaderboards
-        if country is not None and country != user.country:
+        if isinstance(country, str) and country != user.country:
             is_unrestricted = user.priv & Privileges.UNRESTRICTED != 0
             for stat in await self.stats.fetch_many(player_id=user.id):
                 await self.leaderboard_ranks.remove_from_country_leaderboard(
@@ -172,11 +180,15 @@ class AccountSettingsService:
         new_password_md5 = hashlib.md5(new_password.encode()).hexdigest().encode()
         new_password_bcrypt = bcrypt.hashpw(new_password_md5, bcrypt.gensalt())
 
+        # the previous hash's cache entry must be evicted below; the
+        # successful authentication above guarantees one exists
+        old_password_hash = await self.users.fetch_password_hash(id=user.id)
+        assert old_password_hash is not None
+
         await self.users.partial_update(id=user.id, pw_bcrypt=new_password_bcrypt)
 
         # keep the bcrypt verification cache consistent with the change
-        if user.pw_bcrypt is not None:
-            self.password_cache.pop(user.pw_bcrypt.encode(), None)
+        self.password_cache.pop(old_password_hash.encode(), None)
         self.password_cache[new_password_bcrypt] = new_password_md5
 
         return PasswordChangeResult(code=PasswordChangeResultCode.OK)

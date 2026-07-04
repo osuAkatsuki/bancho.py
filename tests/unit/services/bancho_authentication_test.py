@@ -8,8 +8,13 @@ from app.services.bancho import BanchoAuthenticationService
 
 
 class _FakeUsers:
-    def __init__(self, user: object | None) -> None:
+    def __init__(
+        self,
+        user: object | None,
+        password_hash: str | None = None,
+    ) -> None:
         self.user = user
+        self.password_hash = password_hash
         self.calls: list[dict[str, object]] = []
 
     async def fetch_one(
@@ -25,6 +30,13 @@ class _FakeUsers:
             },
         )
         return self.user
+
+    async def fetch_password_hash(
+        self,
+        id: int | None = None,
+        name: str | None = None,
+    ) -> str | None:
+        return self.password_hash
 
 
 class _FakeOnlinePlayers:
@@ -113,8 +125,8 @@ async def test_authenticate_online_player_rejects_missing_cached_password_hash()
 async def test_authenticate_login_credentials_returns_user_from_cached_password() -> (
     None
 ):
-    user = SimpleNamespace(pw_bcrypt="bcrypt-hash")
-    users = _FakeUsers(user)
+    user = SimpleNamespace(id=3)
+    users = _FakeUsers(user, password_hash="bcrypt-hash")
     service = BanchoAuthenticationService(
         users=users,
         online_players=_FakeOnlinePlayers(None),
@@ -131,9 +143,9 @@ async def test_authenticate_login_credentials_returns_user_from_cached_password(
 
 
 async def test_authenticate_login_credentials_rejects_wrong_cached_password() -> None:
-    user = SimpleNamespace(pw_bcrypt="bcrypt-hash")
+    user = SimpleNamespace(id=3)
     service = BanchoAuthenticationService(
-        users=_FakeUsers(user),
+        users=_FakeUsers(user, password_hash="bcrypt-hash"),
         online_players=_FakeOnlinePlayers(None),
         password_cache={b"bcrypt-hash": b"password-md5"},
     )
@@ -149,10 +161,10 @@ async def test_authenticate_login_credentials_rejects_wrong_cached_password() ->
 async def test_authenticate_login_credentials_caches_valid_bcrypt_password() -> None:
     password_md5 = b"password-md5"
     password_bcrypt = bcrypt.hashpw(password_md5, bcrypt.gensalt(rounds=4))
-    user = SimpleNamespace(pw_bcrypt=password_bcrypt.decode())
+    user = SimpleNamespace(id=3)
     password_cache: dict[bytes, bytes] = {}
     service = BanchoAuthenticationService(
-        users=_FakeUsers(user),
+        users=_FakeUsers(user, password_hash=password_bcrypt.decode()),
         online_players=_FakeOnlinePlayers(None),
         password_cache=password_cache,
     )
@@ -169,6 +181,22 @@ async def test_authenticate_login_credentials_caches_valid_bcrypt_password() -> 
 async def test_authenticate_login_credentials_rejects_missing_user() -> None:
     service = BanchoAuthenticationService(
         users=_FakeUsers(None),
+        online_players=_FakeOnlinePlayers(None),
+        password_cache={},
+    )
+
+    authenticated_user = await service.authenticate_login_credentials(
+        "cmyui",
+        b"password-md5",
+    )
+
+    assert authenticated_user is None
+
+
+async def test_authenticate_login_credentials_rejects_user_without_a_hash() -> None:
+    user = SimpleNamespace(id=3)
+    service = BanchoAuthenticationService(
+        users=_FakeUsers(user, password_hash=None),
         online_players=_FakeOnlinePlayers(None),
         password_cache={},
     )

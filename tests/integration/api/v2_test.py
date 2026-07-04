@@ -857,6 +857,24 @@ async def test_v2_profile_update_lifecycle(
     )
     assert zscore is not None
 
+    # an explicit null clears the userpage; omitted fields stay untouched
+    response = await http_client.patch(
+        f"/v2/players/{player_id}",
+        headers=API_HEADERS,
+        json={"userpage_content": None},
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()["data"]["userpage_content"] is None
+    assert response.json()["data"]["name"] == new_username
+
+    # but the other fields cannot be unset
+    response = await http_client.patch(
+        f"/v2/players/{player_id}",
+        headers=API_HEADERS,
+        json={"username": None},
+    )
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
 
 async def test_v2_password_change_lifecycle(
     http_client: AsyncClient,

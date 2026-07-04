@@ -18,7 +18,6 @@ def _user(**overrides: Any) -> User:
         "safe_name": "cmyui",
         "email": "cmyui@akatsuki.pw",
         "priv": 3,
-        "pw_bcrypt": None,
         "country": "ca",
         "silence_end": 0,
         "donor_end": 0,
@@ -38,10 +37,23 @@ def _user(**overrides: Any) -> User:
 
 
 class _FakeUsersRepository:
-    def __init__(self, user: User, taken_names: set[str] | None = None) -> None:
+    def __init__(
+        self,
+        user: User,
+        taken_names: set[str] | None = None,
+        password_hash: str | None = None,
+    ) -> None:
         self.user = user
         self.taken_names = taken_names or set()
+        self.password_hash = password_hash
         self.partial_updates: list[dict[str, Any]] = []
+
+    async def fetch_password_hash(
+        self,
+        id: int | None = None,
+        name: str | None = None,
+    ) -> str | None:
+        return self.password_hash
 
     async def fetch_one(self, name: str | None = None) -> User | None:
         return self.user if name in self.taken_names else None
@@ -195,6 +207,35 @@ async def test_profile_update_only_touches_provided_fields() -> None:
     ]
 
 
+async def test_profile_update_allows_clearing_the_userpage() -> None:
+    user = _user(userpage_content="hello world")
+    users_repo = _FakeUsersRepository(user)
+    service = _service(user=user, users_repo=users_repo)
+
+    errors = await service.validate_profile_update(user, userpage_content=None)
+    assert errors == {}
+
+    await service.update_profile(user, userpage_content=None)
+
+    assert users_repo.partial_updates == [
+        {"id": user.id, "userpage_content": None},
+    ]
+
+
+async def test_profile_validation_rejects_unsetting_required_fields() -> None:
+    user = _user()
+    service = _service(user=user)
+
+    errors = await service.validate_profile_update(
+        user,
+        username=None,
+        country=None,
+        preferred_mode=None,
+    )
+
+    assert set(errors) == {"username", "country", "preferred_mode"}
+
+
 async def test_profile_update_renames_the_online_session() -> None:
     user = _user()
     online = SimpleNamespace(
@@ -272,8 +313,8 @@ async def test_password_change_rejects_weak_new_passwords() -> None:
 async def test_password_change_updates_the_hash_and_cache() -> None:
     old_md5 = hashlib.md5(b"myPassword321$").hexdigest().encode()
     old_bcrypt = bcrypt.hashpw(old_md5, bcrypt.gensalt())
-    user = _user(pw_bcrypt=old_bcrypt.decode())
-    users_repo = _FakeUsersRepository(user)
+    user = _user()
+    users_repo = _FakeUsersRepository(user, password_hash=old_bcrypt.decode())
     password_cache = {old_bcrypt: old_md5}
     service = _service(
         user=user,

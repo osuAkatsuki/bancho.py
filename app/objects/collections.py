@@ -199,7 +199,10 @@ class Players(list[Player]):
             clan_id = player.clan_id
             clan_priv = ClanPrivileges(player.clan_priv)
 
-        assert player.pw_bcrypt is not None
+        password_hash = await get_legacy_repositories().users.fetch_password_hash(
+            id=player.id,
+        )
+        assert password_hash is not None
         geoloc: Geolocation = {
             "latitude": 0.0,
             "longitude": 0.0,
@@ -213,7 +216,7 @@ class Players(list[Player]):
             id=player.id,
             name=player.name,
             priv=Privileges(player.priv),
-            pw_bcrypt=player.pw_bcrypt.encode(),
+            pw_bcrypt=password_hash.encode(),
             token=Player.generate_token(),
             clan_id=clan_id,
             clan_priv=clan_priv,

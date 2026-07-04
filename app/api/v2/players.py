@@ -13,6 +13,7 @@ from fastapi.datastructures import UploadFile
 from fastapi.param_functions import File
 from fastapi.param_functions import Query
 
+from app._typing import UNSET
 from app.api import dependencies as api_dependencies
 from app.api.v2.common import responses
 from app.api.v2.common.parameters import GameModeParam
@@ -421,11 +422,23 @@ async def update_player_profile(
             status_code=status.HTTP_403_FORBIDDEN,
         )
 
+    # distinguish omitted fields (left untouched) from explicit nulls
+    # (a request to unset, where the field allows it)
+    username = args.username if "username" in args.model_fields_set else UNSET
+    country = args.country if "country" in args.model_fields_set else UNSET
+    preferred_mode = (
+        args.preferred_mode if "preferred_mode" in args.model_fields_set else UNSET
+    )
+    userpage_content = (
+        args.userpage_content if "userpage_content" in args.model_fields_set else UNSET
+    )
+
     errors = await account_settings_service.validate_profile_update(
         user,
-        username=args.username,
-        country=args.country,
-        userpage_content=args.userpage_content,
+        username=username,
+        country=country,
+        preferred_mode=preferred_mode,
+        userpage_content=userpage_content,
     )
     if errors:
         message = " ".join(
@@ -436,12 +449,17 @@ async def update_player_profile(
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
+    # validation rejects nulls for everything except the userpage
+    assert username is not None
+    assert country is not None
+    assert preferred_mode is not None
+
     updated_user = await account_settings_service.update_profile(
         user,
-        username=args.username,
-        country=args.country,
-        preferred_mode=args.preferred_mode,
-        userpage_content=args.userpage_content,
+        username=username,
+        country=country,
+        preferred_mode=preferred_mode,
+        userpage_content=userpage_content,
     )
 
     response = Player.model_validate(updated_user)

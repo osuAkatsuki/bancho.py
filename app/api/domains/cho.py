@@ -840,12 +840,15 @@ async def handle_osu_login_request(
         ip=ip,
     )
 
-    assert user_info.pw_bcrypt is not None
+    password_hash = await get_legacy_repositories().users.fetch_password_hash(
+        id=user_info.id,
+    )
+    assert password_hash is not None
     player = Player(
         id=user_info.id,
         name=user_info.name,
         priv=Privileges(user_info.priv),
-        pw_bcrypt=user_info.pw_bcrypt.encode(),
+        pw_bcrypt=password_hash.encode(),
         token=Player.generate_token(),
         clan_id=clan_id,
         clan_priv=clan_priv,

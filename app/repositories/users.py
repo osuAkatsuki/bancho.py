@@ -83,7 +83,6 @@ class User:
     safe_name: str
     email: str | None
     priv: int
-    pw_bcrypt: str | None
     country: str
     silence_end: int
     donor_end: int
@@ -116,7 +115,6 @@ class UsersRepository:
             safe_name=row["safe_name"],
             email=row.get("email"),
             priv=row["priv"],
-            pw_bcrypt=row.get("pw_bcrypt"),
             country=row["country"],
             silence_end=row["silence_end"],
             donor_end=row["donor_end"],
@@ -189,6 +187,30 @@ class UsersRepository:
 
         user = await self._database.fetch_one(select_stmt)
         return self._deserialize_user(user) if user is not None else None
+
+    async def fetch_password_hash(
+        self,
+        id: int | None = None,
+        name: str | None = None,
+    ) -> str | None:
+        """Fetch a user's password hash.
+
+        Intentionally separate from the user model so the hash can never
+        ride along into general-purpose flows; access must be explicit.
+        """
+        if id is None and name is None:
+            raise ValueError("Must provide at least one parameter.")
+
+        select_stmt = select(UsersTable.pw_bcrypt)
+        if id is not None:
+            select_stmt = select_stmt.where(UsersTable.id == id)
+        if name is not None:
+            select_stmt = select_stmt.where(
+                UsersTable.safe_name == make_safe_name(name),
+            )
+
+        user = await self._database.fetch_one(select_stmt)
+        return user["pw_bcrypt"] if user is not None else None
 
     async def fetch_count(
         self,
