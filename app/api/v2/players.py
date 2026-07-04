@@ -14,9 +14,9 @@ from fastapi.param_functions import File
 from fastapi.param_functions import Query
 
 from app.api import dependencies as api_dependencies
+from app.api.v2.common import actors
 from app.api.v2.common import responses
 from app.api.v2.common.parameters import GameModeParam
-from app.api.v2.common.parameters import OptionalSessionUser
 from app.api.v2.common.parameters import SessionCookie
 from app.api.v2.common.responses import Failure
 from app.api.v2.common.responses import Success
@@ -30,6 +30,7 @@ from app.api.v2.models.players import SearchPlayer
 from app.api.v2.models.scores import PlayerScore
 from app.api.v2.models.scores import ScoreBeatmap
 from app.constants.gamemodes import GameMode
+from app.repositories.users import User
 from app.services.account_settings import AccountSettingsService
 from app.services.account_settings import PasswordChangeResultCode
 from app.services.avatars import MAX_AVATAR_SIZE_BYTES
@@ -57,7 +58,10 @@ async def get_players(
     play_style: int | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
-    viewer: OptionalSessionUser,
+    actor: Annotated[
+        User | None,
+        Depends(actors.get_optional_actor),
+    ],
     players_service: Annotated[
         PlayersService,
         Depends(api_dependencies.get_players_service),
@@ -72,7 +76,7 @@ async def get_players(
         play_style=play_style,
         page=page,
         page_size=page_size,
-        viewer=viewer,
+        viewer=actor,
     )
 
     response = [Player.model_validate(rec) for rec in listing.players]
@@ -91,14 +95,17 @@ async def get_players(
 async def search_players(
     *,
     query: str = Query(..., alias="q", min_length=2, max_length=32),
-    viewer: OptionalSessionUser,
+    actor: Annotated[
+        User | None,
+        Depends(actors.get_optional_actor),
+    ],
     players_service: Annotated[
         PlayersService,
         Depends(api_dependencies.get_players_service),
     ],
 ) -> Success[list[SearchPlayer]] | Failure:
     # staff see hidden players, and players can always find themselves
-    players = await players_service.search_players(query, viewer=viewer)
+    players = await players_service.search_players(query, viewer=actor)
 
     response = [SearchPlayer.model_validate(rec) for rec in players]
     return responses.success(
@@ -112,7 +119,10 @@ async def get_player(
     player_id_or_name: str,
     key: Literal["id", "username"] | None = None,
     *,
-    viewer: OptionalSessionUser,
+    actor: Annotated[
+        User | None,
+        Depends(actors.get_optional_actor),
+    ],
     players_service: Annotated[
         PlayersService,
         Depends(api_dependencies.get_players_service),
@@ -141,7 +151,7 @@ async def get_player(
             username=player_id_or_name,
         )
     if data is None or not can_view_player(
-        viewer=viewer,
+        viewer=actor,
         target_id=data.id,
         target_priv=data.priv,
     ):
@@ -338,7 +348,10 @@ async def remove_player_friend(
 async def get_player_favourites(
     player_id: int,
     *,
-    viewer: OptionalSessionUser,
+    actor: Annotated[
+        User | None,
+        Depends(actors.get_optional_actor),
+    ],
     players_service: Annotated[
         PlayersService,
         Depends(api_dependencies.get_players_service),
@@ -350,7 +363,7 @@ async def get_player_favourites(
 ) -> Success[list[int]] | Failure:
     player = await players_service.fetch_player(player_id)
     if player is None or not can_view_player(
-        viewer=viewer,
+        viewer=actor,
         target_id=player.id,
         target_priv=player.priv,
     ):
@@ -559,7 +572,10 @@ async def update_player_password(
 async def get_player_status(
     player_id: int,
     *,
-    viewer: OptionalSessionUser,
+    actor: Annotated[
+        User | None,
+        Depends(actors.get_optional_actor),
+    ],
     players_service: Annotated[
         PlayersService,
         Depends(api_dependencies.get_players_service),
@@ -567,7 +583,7 @@ async def get_player_status(
 ) -> Success[PlayerStatus] | Failure:
     player = await players_service.fetch_player(player_id)
     if player is None or not can_view_player(
-        viewer=viewer,
+        viewer=actor,
         target_id=player.id,
         target_priv=player.priv,
     ):
@@ -599,7 +615,10 @@ async def get_player_mode_stats(
     player_id: int,
     mode: int,
     *,
-    viewer: OptionalSessionUser,
+    actor: Annotated[
+        User | None,
+        Depends(actors.get_optional_actor),
+    ],
     players_service: Annotated[
         PlayersService,
         Depends(api_dependencies.get_players_service),
@@ -607,7 +626,7 @@ async def get_player_mode_stats(
 ) -> Success[PlayerStats] | Failure:
     player = await players_service.fetch_player(player_id)
     if player is None or not can_view_player(
-        viewer=viewer,
+        viewer=actor,
         target_id=player.id,
         target_priv=player.priv,
     ):
@@ -637,7 +656,10 @@ async def get_player_stats(
     *,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
-    viewer: OptionalSessionUser,
+    actor: Annotated[
+        User | None,
+        Depends(actors.get_optional_actor),
+    ],
     players_service: Annotated[
         PlayersService,
         Depends(api_dependencies.get_players_service),
@@ -645,7 +667,7 @@ async def get_player_stats(
 ) -> Success[list[PlayerStats]] | Failure:
     player = await players_service.fetch_player(player_id)
     if player is None or not can_view_player(
-        viewer=viewer,
+        viewer=actor,
         target_id=player.id,
         target_priv=player.priv,
     ):
@@ -682,7 +704,10 @@ async def get_player_scores(
     limit: int = Query(25, ge=1, le=100),
     include_loved: bool = False,
     include_failed: bool = True,
-    viewer: OptionalSessionUser,
+    actor: Annotated[
+        User | None,
+        Depends(actors.get_optional_actor),
+    ],
     players_service: Annotated[
         PlayersService,
         Depends(api_dependencies.get_players_service),
@@ -694,7 +719,7 @@ async def get_player_scores(
 ) -> Success[list[PlayerScore]] | Failure:
     player = await players_service.fetch_player(player_id)
     if player is None or not can_view_player(
-        viewer=viewer,
+        viewer=actor,
         target_id=player.id,
         target_priv=player.priv,
     ):
@@ -744,7 +769,10 @@ async def get_player_most_played(
     *,
     mode: GameModeParam = Query(0),
     limit: int = Query(25, ge=1, le=100),
-    viewer: OptionalSessionUser,
+    actor: Annotated[
+        User | None,
+        Depends(actors.get_optional_actor),
+    ],
     players_service: Annotated[
         PlayersService,
         Depends(api_dependencies.get_players_service),
@@ -756,7 +784,7 @@ async def get_player_most_played(
 ) -> Success[list[MostPlayedMap]] | Failure:
     player = await players_service.fetch_player(player_id)
     if player is None or not can_view_player(
-        viewer=viewer,
+        viewer=actor,
         target_id=player.id,
         target_priv=player.priv,
     ):
