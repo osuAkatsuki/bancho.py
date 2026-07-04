@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import dataclasses
 from typing import Annotated
+from typing import cast
+from urllib.parse import quote
 
 from fastapi import APIRouter
 from fastapi import Depends
+from fastapi import Response
 from fastapi import status
 from fastapi.param_functions import Query
 
@@ -18,6 +21,7 @@ from app.api.v2.models.scores import Score
 from app.api.v2.models.scores import ScoreBeatmap
 from app.api.v2.models.scores import ScoreDetail
 from app.api.v2.models.scores import ScorePlayer
+from app.services.replays import ReplayService
 from app.services.scores import ScoresService
 
 router = APIRouter()
@@ -90,3 +94,35 @@ async def get_score(
         },
     )
     return responses.success(response)
+
+
+@router.get("/scores/{score_id}/replay")
+async def download_score_replay(
+    score_id: int,
+    replay_service: Annotated[
+        ReplayService,
+        Depends(api_dependencies.get_replay_service),
+    ],
+) -> Response:
+    replay = await replay_service.build_full_replay(score_id)
+    if replay is None:
+        return cast(
+            Response,
+            responses.failure(
+                message="Replay not found.",
+                status_code=status.HTTP_404_NOT_FOUND,
+            ),
+        )
+
+    # both the plain (ascii) and RFC 5987 encodings, for unicode metadata
+    ascii_filename = replay.filename.encode("ascii", "replace").decode()
+    return Response(
+        replay.data,
+        media_type="application/x-osu-replay",
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{ascii_filename}"; '
+                f"filename*=UTF-8''{quote(replay.filename)}"
+            ),
+        },
+    )

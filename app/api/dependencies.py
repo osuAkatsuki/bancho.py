@@ -357,10 +357,13 @@ def get_mail_read_service(
     )
 
 
-def get_replay_service() -> ReplayService:
+def get_replay_service(
+    scores: Annotated[ScoresRepository, Depends(get_scores_repository)],
+) -> ReplayService:
     return ReplayService(
         replays_path=REPLAYS_PATH,
         fetch_score=Score.from_sql,
+        fetch_replay_header=scores.fetch_replay_header,
         schedule_replay_view_increment=_schedule_replay_view_increment,
     )
 

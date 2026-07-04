@@ -933,3 +933,32 @@ async def test_v2_password_change_lifecycle(
         json={"username": username, "password": "myNewPassword321$"},
     )
     assert response.status_code == status.HTTP_201_CREATED
+
+
+async def test_v2_score_replay_download(
+    http_client: AsyncClient,
+) -> None:
+    user = await factories.create_user()
+    beatmap = await factories.create_map()
+    score = await factories.create_score(player_id=user.id, map_md5=beatmap.md5)
+
+    # no replay file on disk yet
+    response = await http_client.get(
+        f"/v2/scores/{score.id}/replay",
+        headers=API_HEADERS,
+    )
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    replay_path = Path.cwd() / ".data/osr" / f"{score.id}.osr"
+    replay_path.write_bytes(b"raw replay frames")
+
+    response = await http_client.get(
+        f"/v2/scores/{score.id}/replay",
+        headers=API_HEADERS,
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert response.headers["content-disposition"].startswith("attachment;")
+    assert ".osr" in response.headers["content-disposition"]
+    # the osu!-format replay embeds the frames and header metadata
+    assert b"raw replay frames" in response.content
+    assert user.name.encode() in response.content
