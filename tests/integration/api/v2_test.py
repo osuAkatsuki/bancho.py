@@ -1090,3 +1090,204 @@ async def test_v2_player_lookup_key_disambiguates_digit_names(
         params={"key": "email"},
     )
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+
+async def test_v2_hidden_player_resources_are_not_exposed(
+    http_client: AsyncClient,
+) -> None:
+    # a hidden (unverified) player with stats, a score & a replay on disk
+    marker = secrets.randbelow(1_000_000) + 10_000
+    hidden = await factories.create_user(
+        priv=int(Privileges.UNRESTRICTED),
+        preferred_mode=marker,
+    )
+    await factories.create_player_stats(player_id=hidden.id)
+    beatmap = await factories.create_map()
+    score = await factories.create_score(player_id=hidden.id, map_md5=beatmap.md5)
+    replay_path = Path.cwd() / ".data/osr" / f"{score.id}.osr"
+    replay_path.write_bytes(b"raw replay frames")
+    try:
+        # anonymously, none of their resources exist
+        for url in (
+            f"/v2/players/{hidden.id}",
+            f"/v2/players/{hidden.name}",
+            f"/v2/players/{hidden.id}/stats",
+            f"/v2/players/{hidden.id}/stats/0",
+            f"/v2/players/{hidden.id}/status",
+            f"/v2/players/{hidden.id}/scores",
+            f"/v2/players/{hidden.id}/most_played",
+            f"/v2/players/{hidden.id}/favourites",
+            f"/v2/scores/{score.id}",
+            f"/v2/scores/{score.id}/replay",
+        ):
+            response = await http_client.get(url, headers=API_HEADERS)
+            assert response.status_code == status.HTTP_404_NOT_FOUND, url
+
+        # ...and they're excluded from listings
+        response = await http_client.get(
+            "/v2/players",
+            headers=API_HEADERS,
+            params={"preferred_mode": marker},
+        )
+        assert response.json()["meta"]["total"] == 0
+
+        response = await http_client.get(
+            "/v2/scores",
+            headers=API_HEADERS,
+            params={"user_id": hidden.id},
+        )
+        assert response.json()["data"] == []
+    finally:
+        replay_path.unlink(missing_ok=True)
+
+
+async def test_v2_hidden_players_can_view_their_own_resources(
+    http_client: AsyncClient,
+    respx_mock: respx.MockRouter,
+) -> None:
+    _mock_out_geolocation(respx_mock)
+    username = f"web-{secrets.token_hex(4)}"
+    password = "myPassword321$"
+    # web registrations are unrestricted but not yet verified, so hidden
+    player_id = await _register_account(
+        http_client,
+        username=username,
+        password=password,
+    )
+    beatmap = await factories.create_map()
+    score = await factories.create_score(player_id=player_id, map_md5=beatmap.md5)
+    replay_path = Path.cwd() / ".data/osr" / f"{score.id}.osr"
+    replay_path.write_bytes(b"raw replay frames")
+    try:
+        # anonymously, they don't exist...
+        response = await http_client.get(
+            f"/v2/players/{player_id}",
+            headers=API_HEADERS,
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+        # ...but they can see themselves & their resources once signed in
+        login_response = await http_client.post(
+            "/v2/sessions",
+            headers=API_HEADERS,
+            json={"username": username, "password": password},
+        )
+        assert login_response.status_code == status.HTTP_201_CREATED
+
+        for url in (
+            f"/v2/players/{player_id}",
+            f"/v2/scores/{score.id}",
+            f"/v2/scores/{score.id}/replay",
+        ):
+            response = await http_client.get(url, headers=API_HEADERS)
+            assert response.status_code == status.HTTP_200_OK, url
+
+        response = await http_client.get(
+            "/v2/scores",
+            headers=API_HEADERS,
+            params={"user_id": player_id},
+        )
+        assert [rec["id"] for rec in response.json()["data"]] == [score.id]
+    finally:
+        replay_path.unlink(missing_ok=True)
+
+
+async def test_v2_staff_can_view_hidden_player_resources(
+    http_client: AsyncClient,
+    respx_mock: respx.MockRouter,
+) -> None:
+    _mock_out_geolocation(respx_mock)
+    marker = secrets.randbelow(1_000_000) + 10_000
+    hidden = await factories.create_user(
+        priv=int(Privileges.UNRESTRICTED),
+        preferred_mode=marker,
+    )
+    beatmap = await factories.create_map()
+    score = await factories.create_score(player_id=hidden.id, map_md5=beatmap.md5)
+    replay_path = Path.cwd() / ".data/osr" / f"{score.id}.osr"
+    replay_path.write_bytes(b"raw replay frames")
+
+    staff_username = f"web-{secrets.token_hex(4)}"
+    password = "myPassword321$"
+    staff_id = await _register_account(
+        http_client,
+        username=staff_username,
+        password=password,
+    )
+    users = UsersRepository(app.state.services.database)
+    await users.partial_update(
+        id=staff_id,
+        priv=int(Privileges.UNRESTRICTED | Privileges.ADMINISTRATOR),
+    )
+    login_response = await http_client.post(
+        "/v2/sessions",
+        headers=API_HEADERS,
+        json={"username": staff_username, "password": password},
+    )
+    assert login_response.status_code == status.HTTP_201_CREATED
+
+    try:
+        for url in (
+            f"/v2/players/{hidden.id}",
+            f"/v2/scores/{score.id}",
+            f"/v2/scores/{score.id}/replay",
+        ):
+            response = await http_client.get(url, headers=API_HEADERS)
+            assert response.status_code == status.HTTP_200_OK, url
+
+        response = await http_client.get(
+            "/v2/players",
+            headers=API_HEADERS,
+            params={"preferred_mode": marker},
+        )
+        assert response.json()["meta"]["total"] == 1
+        assert response.json()["data"][0]["id"] == hidden.id
+    finally:
+        replay_path.unlink(missing_ok=True)
+
+
+async def test_v2_hidden_players_are_omitted_from_friends_lists(
+    http_client: AsyncClient,
+    respx_mock: respx.MockRouter,
+) -> None:
+    _mock_out_geolocation(respx_mock)
+    username = f"web-{secrets.token_hex(4)}"
+    password = "myPassword321$"
+    player_id = await _register_account(
+        http_client,
+        username=username,
+        password=password,
+    )
+    login_response = await http_client.post(
+        "/v2/sessions",
+        headers=API_HEADERS,
+        json={"username": username, "password": password},
+    )
+    assert login_response.status_code == status.HTTP_201_CREATED
+
+    friend = await factories.create_user()
+    hidden = await factories.create_user(priv=int(Privileges.UNRESTRICTED))
+
+    # hidden players can't be friended (reported as missing)
+    response = await http_client.put(
+        f"/v2/players/{player_id}/friends/{hidden.id}",
+        headers=API_HEADERS,
+    )
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    # a visible friend who later becomes hidden is omitted from the list
+    response = await http_client.put(
+        f"/v2/players/{player_id}/friends/{friend.id}",
+        headers=API_HEADERS,
+    )
+    assert response.status_code == status.HTTP_200_OK
+
+    users = UsersRepository(app.state.services.database)
+    await users.partial_update(id=friend.id, priv=int(Privileges.VERIFIED))
+
+    response = await http_client.get(
+        f"/v2/players/{player_id}/friends",
+        headers=API_HEADERS,
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()["data"] == []

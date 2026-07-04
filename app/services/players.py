@@ -149,7 +149,14 @@ class PlayersService:
         play_style: int | None,
         page: int,
         page_size: int,
+        viewer: User | None,
     ) -> PlayersListing:
+        """Fetch a page of players. Hidden (restricted or unverified)
+        players are excluded unless the viewer is staff; players can
+        always see themselves."""
+        viewer_is_staff = (
+            viewer is not None and viewer.priv & Privileges.STAFF.value != 0
+        )
         players = await self.users.fetch_many(
             priv=priv,
             country=country,
@@ -159,6 +166,8 @@ class PlayersService:
             play_style=play_style,
             page=page,
             page_size=page_size,
+            include_hidden=viewer_is_staff,
+            always_visible_id=viewer.id if viewer is not None else None,
         )
         total_players = await self.users.fetch_count(
             priv=priv,
@@ -167,6 +176,8 @@ class PlayersService:
             clan_priv=clan_priv,
             preferred_mode=preferred_mode,
             play_style=play_style,
+            include_hidden=viewer_is_staff,
+            always_visible_id=viewer.id if viewer is not None else None,
         )
 
         return PlayersListing(players=players, total_players=total_players)

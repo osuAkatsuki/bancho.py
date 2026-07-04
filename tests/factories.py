@@ -4,6 +4,7 @@ import secrets
 from datetime import datetime
 
 import app.state.services
+from app.constants.privileges import Privileges
 from app.repositories.clans import Clan
 from app.repositories.clans import ClansRepository
 from app.repositories.maps import Map
@@ -23,7 +24,9 @@ async def create_user(
     *,
     country: str = "ca",
     preferred_mode: int = 0,
-    priv: int | None = None,
+    # publicly visible (unrestricted & verified) by default; pass a
+    # lower priv to create hidden (restricted/unverified) players
+    priv: int = int(Privileges.UNRESTRICTED | Privileges.VERIFIED),
 ) -> User:
     suffix = secrets.token_hex(4)
     users = UsersRepository(app.state.services.database)
@@ -42,7 +45,7 @@ async def create_user(
         assert updated_user is not None
         user = updated_user
 
-    if priv is not None:
+    if priv != user.priv:
         updated_user = await users.partial_update(id=user.id, priv=priv)
         assert updated_user is not None
         user = updated_user

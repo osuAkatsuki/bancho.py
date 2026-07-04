@@ -12,6 +12,8 @@ import app.packets
 from app.constants.gamemodes import GameMode
 from app.objects.score import Score
 from app.repositories.scores import ReplayHeader
+from app.services.visibility import PlayerIdentity
+from app.services.visibility import can_view_player
 
 DATETIME_OFFSET = 0x89F7FF5F7B58000
 
@@ -52,9 +54,17 @@ class ReplayService:
     fetch_replay_header: ReplayHeaderFetcher
     schedule_replay_view_increment: ReplayViewScheduler
 
-    async def build_full_replay(self, score_id: int) -> FullReplay | None:
+    async def build_full_replay(
+        self,
+        score_id: int,
+        *,
+        viewer: PlayerIdentity | None,
+    ) -> FullReplay | None:
         """Build a complete .osr file (headers + frames) for a score,
-        as the osu! client exports them."""
+        as the osu! client exports them.
+
+        Replays of hidden (restricted or unverified) players are only
+        available to staff and to the players themselves."""
         replay_path = self.replays_path / f"{score_id}.osr"
         if not replay_path.exists():
             return None
@@ -62,6 +72,13 @@ class ReplayService:
 
         row = await self.fetch_replay_header(score_id)
         if row is None:
+            return None
+
+        if not can_view_player(
+            viewer,
+            target_id=row.user_id,
+            target_priv=row.user_priv,
+        ):
             return None
 
         replay_md5 = hashlib.md5(
@@ -119,10 +136,31 @@ class ReplayService:
         )
         return FullReplay(data=bytes(replay_data), filename=filename)
 
+    async def fetch_raw_replay(
+        self,
+        score_id: int,
+        *,
+        viewer: PlayerIdentity | None,
+    ) -> bytes | None:
+        """Fetch a replay's raw frame data (no .osr headers), subject to
+        the same visibility rules as full replays."""
+        row = await self.fetch_replay_header(score_id)
+        if row is None or not can_view_player(
+            viewer,
+            target_id=row.user_id,
+            target_priv=row.user_priv,
+        ):
+            return None
+
+        replay_path = self.replays_path / f"{score_id}.osr"
+        if not replay_path.exists():
+            return None
+        return replay_path.read_bytes()
+
     async def fetch_replay_file(
         self,
         *,
-        viewer_id: int,
+        viewer: PlayerIdentity,
         score_id: int,
     ) -> ReplayResult:
         score = await self.fetch_score(score_id)
@@ -133,8 +171,15 @@ class ReplayService:
         if not replay_path.exists():
             return ReplayResult(code=ReplayResultCode.NOT_FOUND)
 
-        player = getattr(score, "player", None)
-        if player is not None and viewer_id != player.id:
+        player = score.player
+        if player is not None and not can_view_player(
+            viewer,
+            target_id=player.id,
+            target_priv=int(player.priv),
+        ):
+            return ReplayResult(code=ReplayResultCode.NOT_FOUND)
+
+        if player is not None and viewer.id != player.id:
             self.schedule_replay_view_increment(score)
 
         return ReplayResult(code=ReplayResultCode.FOUND, path=replay_path)

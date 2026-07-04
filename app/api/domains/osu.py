@@ -726,7 +726,7 @@ async def getReplay(
         return Response(status_code=status.HTTP_401_UNAUTHORIZED)
 
     replay = await replay_service.fetch_replay_file(
-        viewer_id=player.id,
+        viewer=player,
         score_id=score_id,
     )
     if replay.code is ReplayResultCode.NOT_FOUND:

@@ -15,6 +15,7 @@ from fastapi.param_functions import Query
 
 from app.api import dependencies as api_dependencies
 from app.api.v2.common import responses
+from app.api.v2.common.parameters import OptionalSessionUser
 from app.api.v2.common.responses import Failure
 from app.api.v2.common.responses import Success
 from app.api.v2.models.scores import Score
@@ -37,6 +38,7 @@ async def get_all_scores(
     user_id: int | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
+    viewer: OptionalSessionUser,
     scores_service: Annotated[
         ScoresService,
         Depends(api_dependencies.get_scores_service),
@@ -50,6 +52,7 @@ async def get_all_scores(
         user_id=user_id,
         page=page,
         page_size=page_size,
+        viewer=viewer,
     )
 
     response = [Score.model_validate(rec) for rec in listing.scores]
@@ -67,12 +70,14 @@ async def get_all_scores(
 @router.get("/scores/{score_id}")
 async def get_score(
     score_id: int,
+    *,
+    viewer: OptionalSessionUser,
     scores_service: Annotated[
         ScoresService,
         Depends(api_dependencies.get_scores_service),
     ],
 ) -> Success[ScoreDetail] | Failure:
-    data = await scores_service.fetch_score_with_context(score_id)
+    data = await scores_service.fetch_score_with_context(score_id, viewer=viewer)
     if data is None:
         return responses.failure(
             message="Score not found.",
@@ -99,12 +104,14 @@ async def get_score(
 @router.get("/scores/{score_id}/replay")
 async def download_score_replay(
     score_id: int,
+    *,
+    viewer: OptionalSessionUser,
     replay_service: Annotated[
         ReplayService,
         Depends(api_dependencies.get_replay_service),
     ],
 ) -> Response:
-    replay = await replay_service.build_full_replay(score_id)
+    replay = await replay_service.build_full_replay(score_id, viewer=viewer)
     if replay is None:
         return cast(
             Response,

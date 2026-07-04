@@ -287,7 +287,12 @@ class StatsRepository:
             .outerjoin(ClansTable, ClansTable.id == UsersTable.clan_id)
             .where(
                 StatsTable.mode == mode,
-                UsersTable.priv.bitwise_and(Privileges.UNRESTRICTED.value) != 0,
+                # only publicly visible (unrestricted & verified) players
+                # are ranked on the global leaderboards
+                UsersTable.priv.bitwise_and(
+                    Privileges.UNRESTRICTED.value | Privileges.VERIFIED.value,
+                )
+                == Privileges.UNRESTRICTED.value | Privileges.VERIFIED.value,
                 sort_column > 0,
             )
             .order_by(sort_column.desc())

@@ -33,6 +33,8 @@ class _FakeUsersRepository:
     def __init__(self) -> None:
         self.searches: list[dict[str, object | None]] = []
         self.fetch_one_calls: list[dict[str, object | None]] = []
+        self.fetch_many_calls: list[dict[str, object]] = []
+        self.fetch_count_calls: list[dict[str, object]] = []
 
     async def search_public(
         self,
@@ -49,7 +51,8 @@ class _FakeUsersRepository:
         )
         return [{"id": 3, "name": "cmyui"}]
 
-    async def fetch_count(self) -> int:
+    async def fetch_count(self, **kwargs: object) -> int:
+        self.fetch_count_calls.append(kwargs)
         return 123
 
     async def fetch_one(
@@ -60,8 +63,9 @@ class _FakeUsersRepository:
         self.fetch_one_calls.append({"id": id, "name": name})
         return {"id": id or 3, "name": name or "cmyui"}
 
-    async def fetch_many(self, clan_id: int | None = None) -> list[dict[str, object]]:
-        return [{"id": 4, "clan_id": clan_id}]
+    async def fetch_many(self, **kwargs: object) -> list[dict[str, object]]:
+        self.fetch_many_calls.append(kwargs)
+        return [{"id": 4}]
 
 
 class _FakeStatsRepository:
@@ -170,6 +174,50 @@ async def test_players_service_search_visibility_rules() -> None:
     assert service.users.searches == [
         {"name": "cm", "include_hidden": False, "always_visible_id": 5},
         {"name": "cm", "include_hidden": True, "always_visible_id": 6},
+    ]
+
+
+async def test_players_service_listing_visibility_rules() -> None:
+    service = _service()
+    listing_filters: dict[str, object] = {
+        "priv": None,
+        "country": None,
+        "clan_id": None,
+        "clan_priv": None,
+        "preferred_mode": None,
+        "play_style": None,
+    }
+
+    # anonymous viewers only see public players
+    await service.fetch_players(page=1, page_size=50, viewer=None, **listing_filters)
+    # signed-in players additionally see themselves
+    regular = SimpleNamespace(id=5, priv=int(Privileges.UNRESTRICTED))
+    await service.fetch_players(page=1, page_size=50, viewer=regular, **listing_filters)
+    # staff see everyone
+    staff = SimpleNamespace(
+        id=6,
+        priv=int(Privileges.UNRESTRICTED | Privileges.ADMINISTRATOR),
+    )
+    await service.fetch_players(page=1, page_size=50, viewer=staff, **listing_filters)
+
+    visibility_args = [
+        {
+            "include_hidden": call["include_hidden"],
+            "always_visible_id": call["always_visible_id"],
+        }
+        for call in service.users.fetch_many_calls
+    ]
+    assert visibility_args == [
+        {"include_hidden": False, "always_visible_id": None},
+        {"include_hidden": False, "always_visible_id": 5},
+        {"include_hidden": True, "always_visible_id": 6},
+    ]
+    assert visibility_args == [
+        {
+            "include_hidden": call["include_hidden"],
+            "always_visible_id": call["always_visible_id"],
+        }
+        for call in service.users.fetch_count_calls
     ]
 
 

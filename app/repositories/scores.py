@@ -16,6 +16,8 @@ from sqlalchemy import select
 from sqlalchemy import update
 from sqlalchemy.dialects.mysql import FLOAT
 from sqlalchemy.dialects.mysql import TINYINT
+from sqlalchemy.sql import ColumnElement
+from sqlalchemy.types import Boolean
 
 from app._typing import UNSET
 from app._typing import _UnsetSentinel
@@ -241,6 +243,8 @@ class MapScoreListingRow:
 
 @dataclass(frozen=True, slots=True)
 class ReplayHeader:
+    user_id: int
+    user_priv: int
     username: str
     map_md5: str
     artist: str
@@ -263,6 +267,21 @@ class ReplayHeader:
 class ScoresRepository:
     def __init__(self, database: Database) -> None:
         self._database = database
+
+    @staticmethod
+    def _player_visibility_clause(
+        always_visible_player_id: int | None,
+    ) -> ColumnElement[Boolean]:
+        """Filter to scores owned by publicly visible (unrestricted &
+        verified) players, with an optional exception so players can
+        always see their own scores. Requires a join on UsersTable."""
+        public_mask = Privileges.UNRESTRICTED.value | Privileges.VERIFIED.value
+        visibility: ColumnElement[Boolean] = (
+            UsersTable.priv.bitwise_and(public_mask) == public_mask
+        )
+        if always_visible_player_id is not None:
+            visibility = or_(visibility, UsersTable.id == always_visible_player_id)
+        return visibility
 
     def _deserialize_score(self, row: MySQLRow) -> Score:
         return Score(
@@ -418,6 +437,8 @@ class ScoresRepository:
 
     def _deserialize_replay_header(self, row: MySQLRow) -> ReplayHeader:
         return ReplayHeader(
+            user_id=row["user_id"],
+            user_priv=row["user_priv"],
             username=row["username"],
             map_md5=row["map_md5"],
             artist=row["artist"],
@@ -890,6 +911,8 @@ class ScoresRepository:
     async def fetch_replay_header(self, score_id: int) -> ReplayHeader | None:
         select_stmt = (
             select(
+                UsersTable.id.label("user_id"),
+                UsersTable.priv.label("user_priv"),
                 UsersTable.name.label("username"),
                 MapsTable.md5.label("map_md5"),
                 MapsTable.artist,
@@ -933,8 +956,15 @@ class ScoresRepository:
         status: int | None = None,
         mode: int | None = None,
         user_id: int | None = None,
+        include_hidden_players: bool = True,
+        always_visible_player_id: int | None = None,
     ) -> int:
         select_stmt = select(func.count().label("count")).select_from(ScoresTable)
+        if not include_hidden_players:
+            select_stmt = select_stmt.join(
+                UsersTable,
+                UsersTable.id == ScoresTable.userid,
+            ).where(self._player_visibility_clause(always_visible_player_id))
         if map_md5 is not None:
             select_stmt = select_stmt.where(ScoresTable.map_md5 == map_md5)
         if mods is not None:
@@ -959,8 +989,15 @@ class ScoresRepository:
         user_id: int | None = None,
         page: int | None = None,
         page_size: int | None = None,
+        include_hidden_players: bool = True,
+        always_visible_player_id: int | None = None,
     ) -> list[Score]:
         select_stmt = select(*READ_PARAMS)
+        if not include_hidden_players:
+            select_stmt = select_stmt.join(
+                UsersTable,
+                UsersTable.id == ScoresTable.userid,
+            ).where(self._player_visibility_clause(always_visible_player_id))
         if map_md5 is not None:
             select_stmt = select_stmt.where(ScoresTable.map_md5 == map_md5)
         if mods is not None:

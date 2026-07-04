@@ -12,6 +12,8 @@ from sqlalchemy import or_
 from sqlalchemy import select
 from sqlalchemy import update
 from sqlalchemy.dialects.mysql import TINYINT
+from sqlalchemy.sql import ColumnElement
+from sqlalchemy.types import Boolean
 
 from app._typing import UNSET
 from app._typing import _UnsetSentinel
@@ -221,9 +223,15 @@ class UsersRepository:
         clan_priv: int | None = None,
         preferred_mode: int | None = None,
         play_style: int | None = None,
+        include_hidden: bool = True,
+        always_visible_id: int | None = None,
     ) -> int:
         """Fetch the number of users in the database."""
         select_stmt = select(func.count().label("count")).select_from(UsersTable)
+        if not include_hidden:
+            select_stmt = select_stmt.where(
+                self._visibility_clause(always_visible_id),
+            )
         if priv is not None:
             select_stmt = select_stmt.where(UsersTable.priv == priv)
         if country is not None:
@@ -241,6 +249,18 @@ class UsersRepository:
         assert rec is not None
         return int(rec["count"])
 
+    @staticmethod
+    def _visibility_clause(always_visible_id: int | None) -> ColumnElement[Boolean]:
+        """Filter to publicly visible (unrestricted & verified) users,
+        with an optional exception so players can always see themselves."""
+        public_mask = Privileges.UNRESTRICTED.value | Privileges.VERIFIED.value
+        visibility: ColumnElement[Boolean] = (
+            UsersTable.priv.bitwise_and(public_mask) == public_mask
+        )
+        if always_visible_id is not None:
+            visibility = or_(visibility, UsersTable.id == always_visible_id)
+        return visibility
+
     async def search_public(
         self,
         name: str | None = None,
@@ -252,12 +272,9 @@ class UsersRepository:
         )
 
         if not include_hidden:
-            public_mask = Privileges.UNRESTRICTED.value | Privileges.VERIFIED.value
-            visibility = UsersTable.priv.bitwise_and(public_mask) == public_mask
-            if always_visible_id is not None:
-                # players can always find themselves, even while hidden
-                visibility = or_(visibility, UsersTable.id == always_visible_id)
-            select_stmt = select_stmt.where(visibility)
+            select_stmt = select_stmt.where(
+                self._visibility_clause(always_visible_id),
+            )
 
         if name is not None:
             select_stmt = select_stmt.where(UsersTable.name.like(f"%{name}%"))
@@ -276,9 +293,15 @@ class UsersRepository:
         play_style: int | None = None,
         page: int | None = None,
         page_size: int | None = None,
+        include_hidden: bool = True,
+        always_visible_id: int | None = None,
     ) -> list[User]:
         """Fetch multiple users from the database."""
         select_stmt = select(*READ_PARAMS)
+        if not include_hidden:
+            select_stmt = select_stmt.where(
+                self._visibility_clause(always_visible_id),
+            )
         if ids is not None:
             select_stmt = select_stmt.where(UsersTable.id.in_(ids))
         if priv is not None:

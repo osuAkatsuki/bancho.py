@@ -9,6 +9,7 @@ from app.repositories.relationships import RelationshipsRepository
 from app.repositories.relationships import RelationshipType
 from app.repositories.users import User
 from app.repositories.users import UsersRepository
+from app.services.visibility import can_view_player
 
 
 class OnlinePlayers(Protocol):
@@ -33,21 +34,35 @@ class RelationshipsService:
     users: UsersRepository
     online_players: OnlinePlayers
 
-    async def fetch_friends(self, player_id: int) -> list[User]:
+    async def fetch_friends(self, viewer: User) -> list[User]:
         relationships = await self.relationships.fetch_all(
-            user1=player_id,
+            user1=viewer.id,
             type=RelationshipType.FRIEND,
         )
         friend_ids = [relationship.user2 for relationship in relationships]
         if not friend_ids:
             return []
-        return await self.users.fetch_many(ids=friend_ids)
+        friends = await self.users.fetch_many(ids=friend_ids)
+        # friends who have since become hidden (restricted or unverified)
+        # are omitted, matching their visibility everywhere else
+        return [
+            friend
+            for friend in friends
+            if can_view_player(viewer, target_id=friend.id, target_priv=friend.priv)
+        ]
 
-    async def add_friend(self, player_id: int, target_id: int) -> AddFriendResult:
+    async def add_friend(self, viewer: User, target_id: int) -> AddFriendResult:
+        player_id = viewer.id
         if target_id == player_id:
             return AddFriendResult.CANNOT_FRIEND_SELF
 
-        if await self.users.fetch_one(id=target_id) is None:
+        target = await self.users.fetch_one(id=target_id)
+        if target is None or not can_view_player(
+            viewer,
+            target_id=target.id,
+            target_priv=target.priv,
+        ):
+            # hidden players are reported as missing, not revealed
             return AddFriendResult.TARGET_NOT_FOUND
 
         existing = await self.relationships.fetch_one(player_id, target_id)

@@ -6,6 +6,7 @@ from typing import Protocol
 
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
+from app.constants.privileges import Privileges
 from app.objects.beatmap import Beatmap
 from app.repositories.clans import Clan
 from app.repositories.clans import ClansRepository
@@ -17,6 +18,7 @@ from app.repositories.scores import Score
 from app.repositories.scores import ScoresRepository
 from app.repositories.users import User
 from app.repositories.users import UsersRepository
+from app.services.visibility import can_view_player
 
 
 class BeatmapFetcher(Protocol):
@@ -60,7 +62,14 @@ class ScoresService:
         user_id: int | None,
         page: int,
         page_size: int,
+        viewer: User | None,
     ) -> ScoresListing:
+        """Fetch a page of scores. Scores of hidden (restricted or
+        unverified) players are excluded unless the viewer is staff;
+        players can always see their own scores."""
+        viewer_is_staff = (
+            viewer is not None and viewer.priv & Privileges.STAFF.value != 0
+        )
         scores = await self.scores.fetch_many(
             map_md5=map_md5,
             mods=mods,
@@ -69,6 +78,8 @@ class ScoresService:
             user_id=user_id,
             page=page,
             page_size=page_size,
+            include_hidden_players=viewer_is_staff,
+            always_visible_player_id=viewer.id if viewer is not None else None,
         )
         total_scores = await self.scores.fetch_count(
             map_md5=map_md5,
@@ -76,6 +87,8 @@ class ScoresService:
             status=status,
             mode=mode,
             user_id=user_id,
+            include_hidden_players=viewer_is_staff,
+            always_visible_player_id=viewer.id if viewer is not None else None,
         )
 
         return ScoresListing(scores=scores, total_scores=total_scores)
@@ -86,6 +99,8 @@ class ScoresService:
     async def fetch_score_with_context(
         self,
         score_id: int,
+        *,
+        viewer: User | None,
     ) -> ScoreWithContext | None:
         score = await self.scores.fetch_one(id=score_id)
         if score is None:
@@ -93,6 +108,11 @@ class ScoresService:
 
         player = await self.users.fetch_one(id=score.userid)
         if player is None:
+            return None
+
+        # scores of hidden (restricted or unverified) players are only
+        # visible to staff and to the players themselves
+        if not can_view_player(viewer, target_id=player.id, target_priv=player.priv):
             return None
 
         # scores are only displayed while the map version they were set

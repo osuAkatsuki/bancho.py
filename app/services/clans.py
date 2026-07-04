@@ -29,4 +29,5 @@ class ClansService:
         return await self.clans.fetch_one(id=clan_id)
 
     async def fetch_clan_members(self, clan_id: int) -> list[User]:
-        return await self.users.fetch_many(clan_id=clan_id)
+        # hidden (restricted or unverified) members are not listed
+        return await self.users.fetch_many(clan_id=clan_id, include_hidden=False)
