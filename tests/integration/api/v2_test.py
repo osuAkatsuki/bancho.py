@@ -1048,3 +1048,45 @@ async def test_v2_player_lookup_by_name(
         headers=API_HEADERS,
     )
     assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+async def test_v2_player_lookup_key_disambiguates_digit_names(
+    http_client: AsyncClient,
+) -> None:
+    # an all-digit username is shadowed by the id namespace by default;
+    # ?key forces the interpretation, as in osu!api v2
+    user = await factories.create_user()
+    users = UsersRepository(app.state.services.database)
+    digit_name = str(user.id + 1_000_000)
+    await users.partial_update(id=user.id, name=digit_name)
+
+    # numeric identifiers default to id interpretation
+    response = await http_client.get(
+        f"/v2/players/{digit_name}",
+        headers=API_HEADERS,
+    )
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    response = await http_client.get(
+        f"/v2/players/{digit_name}",
+        headers=API_HEADERS,
+        params={"key": "username"},
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()["data"]["id"] == user.id
+
+    # and key=id refuses to treat a non-numeric string as an id
+    response = await http_client.get(
+        "/v2/players/clearly-a-name",
+        headers=API_HEADERS,
+        params={"key": "id"},
+    )
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    # unknown keys are rejected by request validation
+    response = await http_client.get(
+        f"/v2/players/{digit_name}",
+        headers=API_HEADERS,
+        params={"key": "email"},
+    )
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT

@@ -114,12 +114,29 @@ async def search_players(
 @router.get("/players/{player_id_or_name}")
 async def get_player(
     player_id_or_name: str,
+    key: Literal["id", "username"] | None = None,
+    *,
     players_service: Annotated[
         PlayersService,
         Depends(api_dependencies.get_players_service),
     ],
 ) -> Success[Player] | Failure:
-    if player_id_or_name.isdecimal():
+    # `key` forces how the identifier is interpreted (usernames may be
+    # all digits, shadowed by the id namespace); left unspecified,
+    # numeric identifiers are treated as ids.
+    if key == "username":
+        interpret_as_id = False
+    elif key == "id":
+        interpret_as_id = True
+    else:
+        interpret_as_id = player_id_or_name.isdecimal()
+
+    if interpret_as_id:
+        if not player_id_or_name.isdecimal():
+            return responses.failure(
+                message="Player not found.",
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
         data = await players_service.fetch_player(int(player_id_or_name))
     else:
         data = await players_service.fetch_player_by_id_or_name(
