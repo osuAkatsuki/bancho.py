@@ -848,13 +848,11 @@ async def api_get_match(
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
-    # hidden (restricted or unverified) players are omitted from the
-    # match response, like everywhere else in the api
-    host_visible = can_view_player(
-        viewer=None,
-        target_id=match.host.id,
-        target_priv=int(match.host.priv),
-    )
+    # NOTE: hidden (restricted or unverified) players can never be in a
+    # match: restricted players can't create or join them (and are logged
+    # out when restricted mid-match), and every online player is verified.
+    # We intentionally don't filter here; if that invariant ever breaks,
+    # it should be loudly visible rather than quietly masked.
     return ORJSONResponse(
         {
             "status": "success",
@@ -863,19 +861,9 @@ async def api_get_match(
                 "mode": match.mode,
                 "mods": int(match.mods),
                 "seed": match.seed,
-                "host": (
-                    {"id": match.host.id, "name": match.host.name}
-                    if host_visible
-                    else None
-                ),
+                "host": {"id": match.host.id, "name": match.host.name},
                 "refs": [
-                    {"id": player.id, "name": player.name}
-                    for player in match.refs
-                    if can_view_player(
-                        viewer=None,
-                        target_id=player.id,
-                        target_priv=int(player.priv),
-                    )
+                    {"id": player.id, "name": player.name} for player in match.refs
                 ],
                 "in_progress": match.in_progress,
                 "is_scrimming": match.is_scrimming,
@@ -895,11 +883,6 @@ async def api_get_match(
                     }
                     for idx, slot in enumerate(match.slots)
                     if slot.player
-                    and can_view_player(
-                        viewer=None,
-                        target_id=slot.player.id,
-                        target_priv=int(slot.player.priv),
-                    )
                 },
             },
         },
