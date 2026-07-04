@@ -223,7 +223,7 @@ async def test_v2_leaderboard_route_rejects_invalid_gamemodes(
             headers=API_HEADERS,
         )
 
-        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
         assert "invalid gamemode" in str(response.json()["detail"])
 
 
@@ -457,10 +457,11 @@ async def test_v2_account_registration_and_session_lifecycle(
     )
     assert logout_response.status_code == status.HTTP_200_OK
 
+    # per-request cookies are deprecated in httpx; set it on the jar
+    http_client.cookies.set("bancho_session", "expired-or-revoked")
     expired_response = await http_client.get(
         "/v2/sessions/current",
         headers=API_HEADERS,
-        cookies={"bancho_session": "expired-or-revoked"},
     )
     assert expired_response.status_code == status.HTTP_401_UNAUTHORIZED
 
@@ -592,7 +593,9 @@ async def test_v2_score_detail_is_gone_once_its_map_version_is(
     # a map update replaces the maps row's md5, orphaning scores set on
     # the previous version; their permalinks should 404 like everywhere
     # else the score stops being displayed
-    respx_mock.get(url__regex=r"https://old\.ppy\.sh/api/get_beatmaps.*").mock(
+    respx_mock.get(
+        url__regex=r"https://(old\.ppy\.sh|osu\.direct)/api/get_beatmaps.*",
+    ).mock(
         return_value=httpx.Response(status_code=status.HTTP_200_OK, json=[]),
     )
     user = await factories.create_user()
