@@ -112,7 +112,11 @@ class ScoresService:
 
         # scores of hidden (restricted or unverified) players are only
         # visible to staff and to the players themselves
-        if not can_view_player(viewer, target_id=player.id, target_priv=player.priv):
+        if not can_view_player(
+            viewer=viewer,
+            target_id=player.id,
+            target_priv=player.priv,
+        ):
             return None
 
         # scores are only displayed while the map version they were set

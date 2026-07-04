@@ -31,8 +31,8 @@ class PlayerIdentity(Protocol):
 
 
 def can_view_player(
-    viewer: PlayerIdentity | None,
     *,
+    viewer: PlayerIdentity | None,
     target_id: int,
     target_priv: int,
 ) -> bool:

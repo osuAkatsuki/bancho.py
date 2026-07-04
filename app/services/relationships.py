@@ -48,7 +48,11 @@ class RelationshipsService:
         return [
             friend
             for friend in friends
-            if can_view_player(viewer, target_id=friend.id, target_priv=friend.priv)
+            if can_view_player(
+                viewer=viewer,
+                target_id=friend.id,
+                target_priv=friend.priv,
+            )
         ]
 
     async def add_friend(self, viewer: User, target_id: int) -> AddFriendResult:
@@ -58,7 +62,7 @@ class RelationshipsService:
 
         target = await self.users.fetch_one(id=target_id)
         if target is None or not can_view_player(
-            viewer,
+            viewer=viewer,
             target_id=target.id,
             target_priv=target.priv,
         ):

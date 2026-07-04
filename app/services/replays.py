@@ -75,7 +75,7 @@ class ReplayService:
             return None
 
         if not can_view_player(
-            viewer,
+            viewer=viewer,
             target_id=row.user_id,
             target_priv=row.user_priv,
         ):
@@ -146,7 +146,7 @@ class ReplayService:
         the same visibility rules as full replays."""
         row = await self.fetch_replay_header(score_id)
         if row is None or not can_view_player(
-            viewer,
+            viewer=viewer,
             target_id=row.user_id,
             target_priv=row.user_priv,
         ):
@@ -173,7 +173,7 @@ class ReplayService:
 
         player = score.player
         if player is not None and not can_view_player(
-            viewer,
+            viewer=viewer,
             target_id=player.id,
             target_priv=int(player.priv),
         ):

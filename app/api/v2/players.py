@@ -141,7 +141,7 @@ async def get_player(
             username=player_id_or_name,
         )
     if data is None or not can_view_player(
-        viewer,
+        viewer=viewer,
         target_id=data.id,
         target_priv=data.priv,
     ):
@@ -350,7 +350,7 @@ async def get_player_favourites(
 ) -> Success[list[int]] | Failure:
     player = await players_service.fetch_player(player_id)
     if player is None or not can_view_player(
-        viewer,
+        viewer=viewer,
         target_id=player.id,
         target_priv=player.priv,
     ):
@@ -567,7 +567,7 @@ async def get_player_status(
 ) -> Success[PlayerStatus] | Failure:
     player = await players_service.fetch_player(player_id)
     if player is None or not can_view_player(
-        viewer,
+        viewer=viewer,
         target_id=player.id,
         target_priv=player.priv,
     ):
@@ -607,7 +607,7 @@ async def get_player_mode_stats(
 ) -> Success[PlayerStats] | Failure:
     player = await players_service.fetch_player(player_id)
     if player is None or not can_view_player(
-        viewer,
+        viewer=viewer,
         target_id=player.id,
         target_priv=player.priv,
     ):
@@ -645,7 +645,7 @@ async def get_player_stats(
 ) -> Success[list[PlayerStats]] | Failure:
     player = await players_service.fetch_player(player_id)
     if player is None or not can_view_player(
-        viewer,
+        viewer=viewer,
         target_id=player.id,
         target_priv=player.priv,
     ):
@@ -694,7 +694,7 @@ async def get_player_scores(
 ) -> Success[list[PlayerScore]] | Failure:
     player = await players_service.fetch_player(player_id)
     if player is None or not can_view_player(
-        viewer,
+        viewer=viewer,
         target_id=player.id,
         target_priv=player.priv,
     ):
@@ -756,7 +756,7 @@ async def get_player_most_played(
 ) -> Success[list[MostPlayedMap]] | Failure:
     player = await players_service.fetch_player(player_id)
     if player is None or not can_view_player(
-        viewer,
+        viewer=viewer,
         target_id=player.id,
         target_priv=player.priv,
     ):

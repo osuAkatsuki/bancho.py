@@ -255,7 +255,7 @@ async def api_get_player_info(
     # the v1 api is anonymous; hidden (restricted or unverified)
     # players are reported as missing
     if user_info is None or not can_view_player(
-        None,
+        viewer=None,
         target_id=user_info.id,
         target_priv=user_info.priv,
     ):
@@ -372,7 +372,7 @@ async def api_get_player_status(
         )
 
         if not row or not can_view_player(
-            None,
+            viewer=None,
             target_id=row.id,
             target_priv=row.priv,
         ):
@@ -391,7 +391,11 @@ async def api_get_player_status(
             },
         )
 
-    if not can_view_player(None, target_id=player.id, target_priv=int(player.priv)):
+    if not can_view_player(
+        viewer=None,
+        target_id=player.id,
+        target_priv=int(player.priv),
+    ):
         return ORJSONResponse(
             {"status": "Player not found."},
             status_code=status.HTTP_404_NOT_FOUND,
@@ -474,7 +478,7 @@ async def api_get_player_scores(
     )
 
     if not player or not can_view_player(
-        None,
+        viewer=None,
         target_id=player.id,
         target_priv=int(player.priv),
     ):
@@ -611,7 +615,7 @@ async def api_get_player_most_played(
     )
 
     if not player or not can_view_player(
-        None,
+        viewer=None,
         target_id=player.id,
         target_priv=int(player.priv),
     ):
@@ -771,7 +775,7 @@ async def api_get_score_info(
     # scores of hidden (restricted or unverified) players are not exposed
     owner = await players_service.fetch_player(score.userid)
     if owner is None or not can_view_player(
-        None,
+        viewer=None,
         target_id=owner.id,
         target_priv=owner.priv,
     ):
@@ -847,7 +851,7 @@ async def api_get_match(
     # hidden (restricted or unverified) players are omitted from the
     # match response, like everywhere else in the api
     host_visible = can_view_player(
-        None,
+        viewer=None,
         target_id=match.host.id,
         target_priv=int(match.host.priv),
     )
@@ -868,7 +872,7 @@ async def api_get_match(
                     {"id": player.id, "name": player.name}
                     for player in match.refs
                     if can_view_player(
-                        None,
+                        viewer=None,
                         target_id=player.id,
                         target_priv=int(player.priv),
                     )
@@ -892,7 +896,7 @@ async def api_get_match(
                     for idx, slot in enumerate(match.slots)
                     if slot.player
                     and can_view_player(
-                        None,
+                        viewer=None,
                         target_id=slot.player.id,
                         target_priv=int(slot.player.priv),
                     )
@@ -972,7 +976,7 @@ async def api_get_clan(
     )
     assert owner is not None
     owner_visible = can_view_player(
-        None,
+        viewer=None,
         target_id=owner.id,
         target_priv=int(owner.priv),
     )
@@ -1043,7 +1047,7 @@ async def api_get_pool(
     )
 
     if pool_creator is None or not can_view_player(
-        None,
+        viewer=None,
         target_id=pool_creator.id,
         target_priv=int(pool_creator.priv),
     ):
