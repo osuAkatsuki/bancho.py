@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+from pydantic import ConfigDict
+from pydantic import Field
+from pydantic.json_schema import SkipJsonSchema
+
+from app._typing import UNSET
+from app._typing import _UnsetSentinel
 from app.api.v2.common.parameters import GameModeParam
 
 from . import BaseModel
@@ -9,16 +15,23 @@ from . import BaseModel
 
 class ProfileUpdate(BaseModel):
     """Fields the authenticated player may change about themselves;
-    omitted fields are left untouched.
+    omitted fields default to UNSET and are left untouched. Only the
+    userpage is nullable; null is rejected everywhere else."""
 
-    Only the userpage may be null (unset); the defaults on the other
-    fields are placeholders, never read - whether a field was provided
-    is determined via `model_fields_set`."""
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    username: str = ""
-    country: str = ""
-    preferred_mode: GameModeParam = 0
-    userpage_content: str | None = None
+    username: str | SkipJsonSchema[_UnsetSentinel] = Field(
+        default_factory=lambda: UNSET,
+    )
+    country: str | SkipJsonSchema[_UnsetSentinel] = Field(
+        default_factory=lambda: UNSET,
+    )
+    preferred_mode: GameModeParam | SkipJsonSchema[_UnsetSentinel] = Field(
+        default_factory=lambda: UNSET,
+    )
+    userpage_content: str | None | SkipJsonSchema[_UnsetSentinel] = Field(
+        default_factory=lambda: UNSET,
+    )
 
 
 class PasswordUpdate(BaseModel):
