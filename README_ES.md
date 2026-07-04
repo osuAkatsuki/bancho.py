@@ -7,13 +7,13 @@
 
 [English](README.md) · [简体中文](README_CN.md) · [Italiano](README_IT.md) · [Deutsch](README_DE.md) · [Русский](README_RU.md) · Español
 
-**bancho.py** es un backend de servidor privado de osu! para desarrolladores de
-todos los niveles de experiencia interesados en alojar su(s) propia(s)
-instancia(s) de un servidor privado de osu!.
+**bancho.py** es un backend de servidor privado de osu! para desarrolladores con
+diversos niveles de experiencia interesados en alojar sus propias
+instancias de un servidor privado de osu!
 
 El proyecto es desarrollado principalmente por el equipo de [Akatsuki](https://akatsuki.gg/),
 y nuestro objetivo es crear la implementación de servidor de osu! más fácil de
-mantener, más fiable y más completa disponible. Busca ser más sencilla de
+mantener, más fiable y más completa disponible. Busca ser más sencillo de
 desplegar y modificar que el stack tecnológico usado por Akatsuki.gg,
 manteniendo todas las funcionalidades principales y conservando la capacidad
 de soportar un gran número de usuarios conectados simultáneamente.
@@ -25,11 +25,11 @@ Si te interesa ejecutar o contribuir a **bancho.py**, deberías visitar la **[wi
 **bancho.py** es un servidor backend — no incluye un sitio web. Para acompañarlo con uno:
 
 - **[bancho-web.ts](https://github.com/osuAkatsuki/bancho-web.ts)** (recomendado) — un
-  frontend moderno en React + TypeScript construido sobre la api v2 de bancho.py, con
+  frontend moderno en React + TypeScript construido sobre la API v2 de bancho.py, con
   tablas de clasificación, perfiles de jugadores, páginas de beatmaps, clanes, búsqueda
   de jugadores, y registro e inicio de sesión desde el sitio web (con soporte opcional
   de captcha). Mantenido por el equipo de bancho.py.
-- **[guweb](https://github.com/varkaria/guweb)** (alternativa) — el frontend en python
+- **[guweb](https://github.com/varkaria/guweb)** (alternativa) — el frontend en Python
   mantenido por la comunidad desde hace tiempo, que accede directamente a la base de
   datos de bancho.py.
 
