@@ -60,6 +60,7 @@ from app.repositories.legacy import get_legacy_repositories
 from app.repositories.map_requests import MapRequest
 from app.services.performance import PerformanceService
 from app.services.performance import ScoreParams
+from app.services.visibility import can_view_player
 
 if TYPE_CHECKING:
     from app.objects.channel import Channel
@@ -2446,6 +2447,58 @@ async def clan_disband(ctx: Context) -> str | None:
         announce_chan.send(msg, sender=ctx.player, to_self=True)
 
     return f"{clan_display_name} disbanded."
+
+
+@clan_commands.add(Privileges.UNRESTRICTED, aliases=["t"])
+async def clan_transfer(ctx: Context) -> str | None:
+    """Transfer ownership of your clan to another member."""
+    if not ctx.args:
+        return "Invalid syntax: !clan transfer <username>"
+
+    if ctx.player.clan_id is None or ctx.player.clan_priv != ClanPrivileges.Owner:
+        return "You must own a clan to transfer its ownership."
+
+    clan = await get_legacy_repositories().clans.fetch_one(id=ctx.player.clan_id)
+    if not clan:
+        return "You must own a clan to transfer its ownership."
+
+    target = await get_legacy_repositories().users.fetch_one(
+        name=" ".join(ctx.args),
+    )
+    # hidden (restricted or unverified) members are reported as missing,
+    # matching their visibility everywhere else
+    if (
+        target is None
+        or target.clan_id != clan.id
+        or not can_view_player(
+            viewer=ctx.player,
+            target_id=target.id,
+            target_priv=target.priv,
+        )
+    ):
+        return "Could not find a member of your clan by that name."
+
+    if target.id == ctx.player.id:
+        return "You already own your clan!"
+
+    await get_legacy_repositories().clans.partial_update(clan.id, owner=target.id)
+    await get_legacy_repositories().users.partial_update(
+        target.id,
+        clan_priv=ClanPrivileges.Owner,
+    )
+    await get_legacy_repositories().users.partial_update(
+        ctx.player.id,
+        clan_priv=ClanPrivileges.Officer,
+    )
+
+    # update cached clan privs for any online sessions
+    ctx.player.clan_priv = ClanPrivileges.Officer
+    online_target = app.state.sessions.players.get(id=target.id)
+    if online_target is not None:
+        online_target.clan_priv = ClanPrivileges.Owner
+
+    clan_display_name = f"[{clan.tag}] {clan.name}"
+    return f"Ownership of {clan_display_name} was transferred to {target.name}."
 
 
 @clan_commands.add(Privileges.UNRESTRICTED, aliases=["i"])
