@@ -17,7 +17,6 @@ from app.api import dependencies as api_dependencies
 from app.api.v2.common import actors
 from app.api.v2.common import responses
 from app.api.v2.common.parameters import GameModeParam
-from app.api.v2.common.parameters import SessionCookie
 from app.api.v2.common.responses import Failure
 from app.api.v2.common.responses import Success
 from app.api.v2.models.maps import MostPlayedMap
@@ -42,7 +41,6 @@ from app.services.relationships import AddFriendResult
 from app.services.relationships import RelationshipsService
 from app.services.scores import ScoresService
 from app.services.visibility import can_view_player
-from app.services.web_sessions import WebSessionsService
 
 router = APIRouter()
 
@@ -170,38 +168,30 @@ async def get_player(
 async def update_player_avatar(
     player_id: int,
     avatar_file: UploadFile = File(...),
-    session_token: SessionCookie = None,
     *,
-    web_sessions_service: Annotated[
-        WebSessionsService,
-        Depends(api_dependencies.get_web_sessions_service),
+    actor: Annotated[
+        User | None,
+        Depends(actors.get_optional_actor),
     ],
     avatars_service: Annotated[
         AvatarsService,
         Depends(api_dependencies.get_avatars_service),
     ],
 ) -> Success[None] | Failure:
-    if session_token is None:
+    if actor is None:
         return responses.failure(
             message="Authentication required.",
             status_code=status.HTTP_401_UNAUTHORIZED,
         )
 
-    user = await web_sessions_service.fetch_session_user(session_token)
-    if user is None:
-        return responses.failure(
-            message="Invalid or expired session.",
-            status_code=status.HTTP_401_UNAUTHORIZED,
-        )
-
-    if user.id != player_id:
+    if actor.id != player_id:
         return responses.failure(
             message="You may only update your own avatar.",
             status_code=status.HTTP_403_FORBIDDEN,
         )
 
     result = await avatars_service.upload_avatar(
-        user_id=user.id,
+        user_id=actor.id,
         avatar_data=await avatar_file.read(),
     )
     if result is AvatarUploadResultCode.FILE_TOO_LARGE:
@@ -222,37 +212,29 @@ async def update_player_avatar(
 @router.get("/players/{player_id}/friends")
 async def get_player_friends(
     player_id: int,
-    session_token: SessionCookie = None,
     *,
-    web_sessions_service: Annotated[
-        WebSessionsService,
-        Depends(api_dependencies.get_web_sessions_service),
+    actor: Annotated[
+        User | None,
+        Depends(actors.get_optional_actor),
     ],
     relationships_service: Annotated[
         RelationshipsService,
         Depends(api_dependencies.get_relationships_service),
     ],
 ) -> Success[list[Player]] | Failure:
-    if session_token is None:
+    if actor is None:
         return responses.failure(
             message="Authentication required.",
             status_code=status.HTTP_401_UNAUTHORIZED,
         )
 
-    user = await web_sessions_service.fetch_session_user(session_token)
-    if user is None:
-        return responses.failure(
-            message="Invalid or expired session.",
-            status_code=status.HTTP_401_UNAUTHORIZED,
-        )
-
-    if user.id != player_id:
+    if actor.id != player_id:
         return responses.failure(
             message="You may only view your own friends.",
             status_code=status.HTTP_403_FORBIDDEN,
         )
 
-    friends = await relationships_service.fetch_friends(user)
+    friends = await relationships_service.fetch_friends(actor)
     response = [Player.model_validate(rec) for rec in friends]
     return responses.success(response, meta={"total": len(response)})
 
@@ -261,37 +243,29 @@ async def get_player_friends(
 async def add_player_friend(
     player_id: int,
     target_id: int,
-    session_token: SessionCookie = None,
     *,
-    web_sessions_service: Annotated[
-        WebSessionsService,
-        Depends(api_dependencies.get_web_sessions_service),
+    actor: Annotated[
+        User | None,
+        Depends(actors.get_optional_actor),
     ],
     relationships_service: Annotated[
         RelationshipsService,
         Depends(api_dependencies.get_relationships_service),
     ],
 ) -> Success[None] | Failure:
-    if session_token is None:
+    if actor is None:
         return responses.failure(
             message="Authentication required.",
             status_code=status.HTTP_401_UNAUTHORIZED,
         )
 
-    user = await web_sessions_service.fetch_session_user(session_token)
-    if user is None:
-        return responses.failure(
-            message="Invalid or expired session.",
-            status_code=status.HTTP_401_UNAUTHORIZED,
-        )
-
-    if user.id != player_id:
+    if actor.id != player_id:
         return responses.failure(
             message="You may only manage your own friends.",
             status_code=status.HTTP_403_FORBIDDEN,
         )
 
-    result = await relationships_service.add_friend(user, target_id)
+    result = await relationships_service.add_friend(actor, target_id)
     if result is AddFriendResult.CANNOT_FRIEND_SELF:
         return responses.failure(
             message="You cannot friend yourself.",
@@ -310,37 +284,29 @@ async def add_player_friend(
 async def remove_player_friend(
     player_id: int,
     target_id: int,
-    session_token: SessionCookie = None,
     *,
-    web_sessions_service: Annotated[
-        WebSessionsService,
-        Depends(api_dependencies.get_web_sessions_service),
+    actor: Annotated[
+        User | None,
+        Depends(actors.get_optional_actor),
     ],
     relationships_service: Annotated[
         RelationshipsService,
         Depends(api_dependencies.get_relationships_service),
     ],
 ) -> Success[None] | Failure:
-    if session_token is None:
+    if actor is None:
         return responses.failure(
             message="Authentication required.",
             status_code=status.HTTP_401_UNAUTHORIZED,
         )
 
-    user = await web_sessions_service.fetch_session_user(session_token)
-    if user is None:
-        return responses.failure(
-            message="Invalid or expired session.",
-            status_code=status.HTTP_401_UNAUTHORIZED,
-        )
-
-    if user.id != player_id:
+    if actor.id != player_id:
         return responses.failure(
             message="You may only manage your own friends.",
             status_code=status.HTTP_403_FORBIDDEN,
         )
 
-    await relationships_service.remove_friend(user.id, target_id)
+    await relationships_service.remove_friend(actor.id, target_id)
     return responses.success(None)
 
 
@@ -380,38 +346,30 @@ async def get_player_favourites(
 async def add_player_favourite(
     player_id: int,
     set_id: int,
-    session_token: SessionCookie = None,
     *,
-    web_sessions_service: Annotated[
-        WebSessionsService,
-        Depends(api_dependencies.get_web_sessions_service),
+    actor: Annotated[
+        User | None,
+        Depends(actors.get_optional_actor),
     ],
     favourites_service: Annotated[
         FavouritesService,
         Depends(api_dependencies.get_favourites_service),
     ],
 ) -> Success[None] | Failure:
-    if session_token is None:
+    if actor is None:
         return responses.failure(
             message="Authentication required.",
             status_code=status.HTTP_401_UNAUTHORIZED,
         )
 
-    user = await web_sessions_service.fetch_session_user(session_token)
-    if user is None:
-        return responses.failure(
-            message="Invalid or expired session.",
-            status_code=status.HTTP_401_UNAUTHORIZED,
-        )
-
-    if user.id != player_id:
+    if actor.id != player_id:
         return responses.failure(
             message="You may only manage your own favourites.",
             status_code=status.HTTP_403_FORBIDDEN,
         )
 
     # adding an existing favourite is a no-op rather than an error
-    await favourites_service.add_favourite(player_id=user.id, map_set_id=set_id)
+    await favourites_service.add_favourite(player_id=actor.id, map_set_id=set_id)
     return responses.success(None)
 
 
@@ -419,37 +377,29 @@ async def add_player_favourite(
 async def remove_player_favourite(
     player_id: int,
     set_id: int,
-    session_token: SessionCookie = None,
     *,
-    web_sessions_service: Annotated[
-        WebSessionsService,
-        Depends(api_dependencies.get_web_sessions_service),
+    actor: Annotated[
+        User | None,
+        Depends(actors.get_optional_actor),
     ],
     favourites_service: Annotated[
         FavouritesService,
         Depends(api_dependencies.get_favourites_service),
     ],
 ) -> Success[None] | Failure:
-    if session_token is None:
+    if actor is None:
         return responses.failure(
             message="Authentication required.",
             status_code=status.HTTP_401_UNAUTHORIZED,
         )
 
-    user = await web_sessions_service.fetch_session_user(session_token)
-    if user is None:
-        return responses.failure(
-            message="Invalid or expired session.",
-            status_code=status.HTTP_401_UNAUTHORIZED,
-        )
-
-    if user.id != player_id:
+    if actor.id != player_id:
         return responses.failure(
             message="You may only manage your own favourites.",
             status_code=status.HTTP_403_FORBIDDEN,
         )
 
-    await favourites_service.remove_favourite(player_id=user.id, map_set_id=set_id)
+    await favourites_service.remove_favourite(player_id=actor.id, map_set_id=set_id)
     return responses.success(None)
 
 
@@ -457,38 +407,30 @@ async def remove_player_favourite(
 async def update_player_profile(
     player_id: int,
     args: ProfileUpdate,
-    session_token: SessionCookie = None,
     *,
-    web_sessions_service: Annotated[
-        WebSessionsService,
-        Depends(api_dependencies.get_web_sessions_service),
+    actor: Annotated[
+        User | None,
+        Depends(actors.get_optional_actor),
     ],
     account_settings_service: Annotated[
         AccountSettingsService,
         Depends(api_dependencies.get_account_settings_service),
     ],
 ) -> Success[Player] | Failure:
-    if session_token is None:
+    if actor is None:
         return responses.failure(
             message="Authentication required.",
             status_code=status.HTTP_401_UNAUTHORIZED,
         )
 
-    user = await web_sessions_service.fetch_session_user(session_token)
-    if user is None:
-        return responses.failure(
-            message="Invalid or expired session.",
-            status_code=status.HTTP_401_UNAUTHORIZED,
-        )
-
-    if user.id != player_id:
+    if actor.id != player_id:
         return responses.failure(
             message="You may only update your own profile.",
             status_code=status.HTTP_403_FORBIDDEN,
         )
 
     errors = await account_settings_service.validate_profile_update(
-        user,
+        actor,
         username=args.username,
         country=args.country,
         userpage_content=args.userpage_content,
@@ -503,7 +445,7 @@ async def update_player_profile(
         )
 
     updated_user = await account_settings_service.update_profile(
-        user,
+        actor,
         username=args.username,
         country=args.country,
         preferred_mode=args.preferred_mode,
@@ -518,38 +460,30 @@ async def update_player_profile(
 async def update_player_password(
     player_id: int,
     args: PasswordUpdate,
-    session_token: SessionCookie = None,
     *,
-    web_sessions_service: Annotated[
-        WebSessionsService,
-        Depends(api_dependencies.get_web_sessions_service),
+    actor: Annotated[
+        User | None,
+        Depends(actors.get_optional_actor),
     ],
     account_settings_service: Annotated[
         AccountSettingsService,
         Depends(api_dependencies.get_account_settings_service),
     ],
 ) -> Success[None] | Failure:
-    if session_token is None:
+    if actor is None:
         return responses.failure(
             message="Authentication required.",
             status_code=status.HTTP_401_UNAUTHORIZED,
         )
 
-    user = await web_sessions_service.fetch_session_user(session_token)
-    if user is None:
-        return responses.failure(
-            message="Invalid or expired session.",
-            status_code=status.HTTP_401_UNAUTHORIZED,
-        )
-
-    if user.id != player_id:
+    if actor.id != player_id:
         return responses.failure(
             message="You may only change your own password.",
             status_code=status.HTTP_403_FORBIDDEN,
         )
 
     result = await account_settings_service.change_password(
-        user,
+        actor,
         current_password=args.current_password,
         new_password=args.new_password,
     )
