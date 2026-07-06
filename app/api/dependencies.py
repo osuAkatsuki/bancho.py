@@ -201,7 +201,12 @@ def get_clans_service(
     clans: Annotated[ClansRepository, Depends(get_clans_repository)],
     users: Annotated[UsersRepository, Depends(get_users_repository)],
 ) -> ClansService:
-    return ClansService(clans=clans, users=users)
+    return ClansService(
+        clans=clans,
+        users=users,
+        online_players=app.state.sessions.players,
+        database=app.state.services.database,
+    )
 
 
 def get_bancho_authentication_service(

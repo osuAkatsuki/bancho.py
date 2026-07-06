@@ -42,7 +42,6 @@ from app.constants.beatmap_statuses import RankedStatus
 from app.constants.gamemodes import GAMEMODE_REPR_LIST
 from app.constants.mods import SPEED_CHANGING_MODS
 from app.constants.mods import Mods
-from app.constants.privileges import ClanPrivileges
 from app.constants.privileges import Privileges
 from app.constants.score_statuses import SubmissionStatus
 from app.logging import Ansi
@@ -58,9 +57,12 @@ from app.objects.match import StartingTimers
 from app.objects.player import Player
 from app.repositories.legacy import get_legacy_repositories
 from app.repositories.map_requests import MapRequest
+from app.services.clans import ClansService
+from app.services.clans import CreateClanResultCode
+from app.services.clans import LeaveClanResultCode
+from app.services.clans import TransferClanResultCode
 from app.services.performance import PerformanceService
 from app.services.performance import ScoreParams
-from app.services.visibility import can_view_player
 
 if TYPE_CHECKING:
     from app.objects.channel import Channel
@@ -2338,54 +2340,45 @@ async def clan_help(ctx: Context) -> str | None:
     return "\n".join(cmds)
 
 
+def _get_clans_service() -> ClansService:
+    repositories = get_legacy_repositories()
+    return ClansService(
+        clans=repositories.clans,
+        users=repositories.users,
+        online_players=app.state.sessions.players,
+        database=app.state.services.database,
+    )
+
+
 @clan_commands.add(Privileges.UNRESTRICTED, aliases=["c"])
 async def clan_create(ctx: Context) -> str | None:
     """Create a clan with a given tag & name."""
     if len(ctx.args) < 2:
         return "Invalid syntax: !clan create <tag> <name>"
 
-    tag = ctx.args[0].upper()
-    if not 1 <= len(tag) <= 6:
+    result = await _get_clans_service().create_clan(
+        player_id=ctx.player.id,
+        tag=ctx.args[0],
+        name=" ".join(ctx.args[1:]),
+    )
+    if result.code is CreateClanResultCode.INVALID_TAG:
         return "Clan tag may be 1-6 characters long."
-
-    name = " ".join(ctx.args[1:])
-    if not 2 <= len(name) <= 16:
+    if result.code is CreateClanResultCode.INVALID_NAME:
         return "Clan name may be 2-16 characters long."
-
-    if ctx.player.clan_id:
-        clan = await get_legacy_repositories().clans.fetch_one(
-            id=ctx.player.clan_id,
-        )
-        if clan:
-            clan_display_name = f"[{clan.tag}] {clan.name}"
-            return f"You're already a member of {clan_display_name}!"
-
-    if await get_legacy_repositories().clans.fetch_one(name=name):
+    if result.code is CreateClanResultCode.ALREADY_IN_CLAN:
+        assert result.current_clan is not None
+        current_display_name = f"[{result.current_clan.tag}] {result.current_clan.name}"
+        return f"You're already a member of {current_display_name}!"
+    if result.code is CreateClanResultCode.NAME_TAKEN:
         return "That name has already been claimed by another clan."
-
-    if await get_legacy_repositories().clans.fetch_one(tag=tag):
+    if result.code is CreateClanResultCode.TAG_TAKEN:
         return "That tag has already been claimed by another clan."
 
-    # add clan to sql
-    new_clan = await get_legacy_repositories().clans.create(
-        name=name,
-        tag=tag,
-        owner=ctx.player.id,
-    )
-
-    # set owner's clan & clan priv (cache & sql)
-    ctx.player.clan_id = new_clan.id
-    ctx.player.clan_priv = ClanPrivileges.Owner
-
-    await get_legacy_repositories().users.partial_update(
-        ctx.player.id,
-        clan_id=new_clan.id,
-        clan_priv=ClanPrivileges.Owner,
-    )
+    assert result.clan is not None
 
     # announce clan creation
     announce_chan = app.state.sessions.channels.get_by_name("#announce")
-    clan_display_name = f"[{new_clan.tag}] {new_clan.name}"
+    clan_display_name = f"[{result.clan.tag}] {result.clan.name}"
     if announce_chan:
         msg = f"\x01ACTION founded {clan_display_name}."
         announce_chan.send(msg, sender=ctx.player, to_self=True)
@@ -2417,27 +2410,8 @@ async def clan_disband(ctx: Context) -> str | None:
         if not clan:
             return "You're not a member of a clan!"
 
-    await get_legacy_repositories().clans.delete_one(clan.id)
-
-    # remove all members from the clan
-    clan_member_ids = [
-        clan_member.id
-        for clan_member in await get_legacy_repositories().users.fetch_many(
-            clan_id=clan.id,
-            include_hidden=True,
-        )
-    ]
-    for member_id in clan_member_ids:
-        await get_legacy_repositories().users.partial_update(
-            member_id,
-            clan_id=0,
-            clan_priv=0,
-        )
-
-        member = app.state.sessions.players.get(id=member_id)
-        if member:
-            member.clan_id = None
-            member.clan_priv = None
+    disbanded_clan = await _get_clans_service().disband_clan(clan.id)
+    assert disbanded_clan is not None
 
     # announce clan disbanding
     announce_chan = app.state.sessions.channels.get_by_name("#announce")
@@ -2455,50 +2429,20 @@ async def clan_transfer(ctx: Context) -> str | None:
     if not ctx.args:
         return "Invalid syntax: !clan transfer <username>"
 
-    if ctx.player.clan_id is None or ctx.player.clan_priv != ClanPrivileges.Owner:
-        return "You must own a clan to transfer its ownership."
-
-    clan = await get_legacy_repositories().clans.fetch_one(id=ctx.player.clan_id)
-    if not clan:
-        return "You must own a clan to transfer its ownership."
-
-    target = await get_legacy_repositories().users.fetch_one(
-        name=" ".join(ctx.args),
+    result = await _get_clans_service().transfer_clan_ownership(
+        owner_id=ctx.player.id,
+        target_name=" ".join(ctx.args),
     )
-    # hidden (restricted or unverified) members are reported as missing,
-    # matching their visibility everywhere else
-    if (
-        target is None
-        or target.clan_id != clan.id
-        or not can_view_player(
-            viewer=ctx.player,
-            target_id=target.id,
-            target_priv=target.priv,
-        )
-    ):
+    if result.code is TransferClanResultCode.NOT_CLAN_OWNER:
+        return "You must own a clan to transfer its ownership."
+    if result.code is TransferClanResultCode.TARGET_NOT_FOUND:
         return "Could not find a member of your clan by that name."
-
-    if target.id == ctx.player.id:
+    if result.code is TransferClanResultCode.TARGET_ALREADY_OWNER:
         return "You already own your clan!"
 
-    await get_legacy_repositories().clans.partial_update(clan.id, owner=target.id)
-    await get_legacy_repositories().users.partial_update(
-        target.id,
-        clan_priv=ClanPrivileges.Owner,
-    )
-    await get_legacy_repositories().users.partial_update(
-        ctx.player.id,
-        clan_priv=ClanPrivileges.Officer,
-    )
-
-    # update cached clan privs for any online sessions
-    ctx.player.clan_priv = ClanPrivileges.Officer
-    online_target = app.state.sessions.players.get(id=target.id)
-    if online_target is not None:
-        online_target.clan_priv = ClanPrivileges.Owner
-
-    clan_display_name = f"[{clan.tag}] {clan.name}"
-    return f"Ownership of {clan_display_name} was transferred to {target.name}."
+    assert result.clan is not None and result.target is not None
+    clan_display_name = f"[{result.clan.tag}] {result.clan.name}"
+    return f"Ownership of {clan_display_name} was transferred to {result.target.name}."
 
 
 @clan_commands.add(Privileges.UNRESTRICTED, aliases=["i"])
@@ -2533,36 +2477,16 @@ async def clan_info(ctx: Context) -> str | None:
 @clan_commands.add(Privileges.UNRESTRICTED)
 async def clan_leave(ctx: Context) -> str | None:
     """Leaves the clan you're in."""
-    if not ctx.player.clan_id:
+    result = await _get_clans_service().leave_clan(ctx.player.id)
+    if result.code is LeaveClanResultCode.NOT_IN_CLAN:
         return "You're not in a clan."
-    elif ctx.player.clan_priv == ClanPrivileges.Owner:
+    if result.code is LeaveClanResultCode.OWNER_MUST_TRANSFER:
         return "You must transfer your clan's ownership before leaving it. Alternatively, you can use !clan disband."
 
-    clan = await get_legacy_repositories().clans.fetch_one(
-        id=ctx.player.clan_id,
-    )
-    if not clan:
-        return "You're not in a clan."
+    assert result.clan is not None
+    clan_display_name = f"[{result.clan.tag}] {result.clan.name}"
 
-    clan_members = await get_legacy_repositories().users.fetch_many(
-        clan_id=clan.id,
-        include_hidden=True,
-    )
-
-    await get_legacy_repositories().users.partial_update(
-        ctx.player.id,
-        clan_id=0,
-        clan_priv=0,
-    )
-    ctx.player.clan_id = None
-    ctx.player.clan_priv = None
-
-    clan_display_name = f"[{clan.tag}] {clan.name}"
-
-    if not clan_members:
-        # no members left, disband clan
-        await get_legacy_repositories().clans.delete_one(clan.id)
-
+    if result.disbanded:
         # announce clan disbanding
         announce_chan = app.state.sessions.channels.get_by_name("#announce")
         if announce_chan:
