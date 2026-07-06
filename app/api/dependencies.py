@@ -419,6 +419,7 @@ def get_tourney_pools_service(
     return TourneyPoolsService(
         tourney_pools=tourney_pools,
         tourney_pool_maps=tourney_pool_maps,
+        database=app.state.services.database,
     )
 
 

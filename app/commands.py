@@ -63,6 +63,9 @@ from app.services.clans import LeaveClanResultCode
 from app.services.clans import TransferClanResultCode
 from app.services.performance import PerformanceService
 from app.services.performance import ScoreParams
+from app.services.tourney_pools import AddPoolMapResultCode
+from app.services.tourney_pools import CreatePoolResultCode
+from app.services.tourney_pools import TourneyPoolsService
 
 if TYPE_CHECKING:
     from app.objects.channel import Channel
@@ -1933,7 +1936,7 @@ async def mp_loadpool(ctx: Context, match: Match) -> str | None:
 
     name = ctx.args[0]
 
-    tourney_pool = await get_legacy_repositories().tourney_pools.fetch_by_name(
+    tourney_pool = await _get_tourney_pools_service().fetch_tourney_pool_by_name(
         name,
     )
     if tourney_pool is None:
@@ -1984,7 +1987,7 @@ async def mp_ban(ctx: Context, match: Match) -> str | None:
     mods = Mods.from_modstr(r_match[1])
     slot = int(r_match[2])
 
-    map_pick = await get_legacy_repositories().tourney_pool_maps.fetch_by_pool_and_pick(
+    map_pick = await _get_tourney_pools_service().fetch_pool_map_pick(
         pool_id=match.tourney_pool.id,
         mods=mods,
         slot=slot,
@@ -2020,7 +2023,7 @@ async def mp_unban(ctx: Context, match: Match) -> str | None:
     mods = Mods.from_modstr(r_match[1])
     slot = int(r_match[2])
 
-    map_pick = await get_legacy_repositories().tourney_pool_maps.fetch_by_pool_and_pick(
+    map_pick = await _get_tourney_pools_service().fetch_pool_map_pick(
         pool_id=match.tourney_pool.id,
         mods=mods,
         slot=slot,
@@ -2056,7 +2059,7 @@ async def mp_pick(ctx: Context, match: Match) -> str | None:
     mods = Mods.from_modstr(r_match[1])
     slot = int(r_match[2])
 
-    map_pick = await get_legacy_repositories().tourney_pool_maps.fetch_by_pool_and_pick(
+    map_pick = await _get_tourney_pools_service().fetch_pool_map_pick(
         pool_id=match.tourney_pool.id,
         mods=mods,
         slot=slot,
@@ -2100,6 +2103,15 @@ async def mp_pick(ctx: Context, match: Match) -> str | None:
 """
 
 
+def _get_tourney_pools_service() -> TourneyPoolsService:
+    repositories = get_legacy_repositories()
+    return TourneyPoolsService(
+        tourney_pools=repositories.tourney_pools,
+        tourney_pool_maps=repositories.tourney_pool_maps,
+        database=app.state.services.database,
+    )
+
+
 @pool_commands.add(Privileges.TOURNEY_MANAGER, aliases=["h"], hidden=True)
 async def pool_help(ctx: Context) -> str | None:
     """Show all documented mappool commands the player can access."""
@@ -2124,16 +2136,12 @@ async def pool_create(ctx: Context) -> str | None:
 
     name = ctx.args[0]
 
-    existing_pool = await get_legacy_repositories().tourney_pools.fetch_by_name(
-        name,
-    )
-    if existing_pool is not None:
-        return "Pool already exists by that name!"
-
-    tourney_pool = await get_legacy_repositories().tourney_pools.create(
+    result = await _get_tourney_pools_service().create_pool(
         name=name,
         created_by=ctx.player.id,
     )
+    if result.code is CreatePoolResultCode.NAME_TAKEN:
+        return "Pool already exists by that name!"
 
     return f"{name} created."
 
@@ -2146,18 +2154,12 @@ async def pool_delete(ctx: Context) -> str | None:
 
     name = ctx.args[0]
 
-    existing_pool = await get_legacy_repositories().tourney_pools.fetch_by_name(
-        name,
-    )
+    tourney_pools_service = _get_tourney_pools_service()
+    existing_pool = await tourney_pools_service.fetch_tourney_pool_by_name(name)
     if existing_pool is None:
         return "Could not find a pool by that name!"
 
-    await get_legacy_repositories().tourney_pools.delete_by_id(
-        existing_pool.id,
-    )
-    await get_legacy_repositories().tourney_pool_maps.delete_all_in_pool(
-        pool_id=existing_pool.id,
-    )
+    await tourney_pools_service.delete_pool(existing_pool.id)
 
     return f"{name} deleted."
 
@@ -2187,30 +2189,24 @@ async def pool_add(ctx: Context) -> str | None:
     mods = Mods.from_modstr(r_match[1])
     slot = int(r_match[2])
 
-    tourney_pool = await get_legacy_repositories().tourney_pools.fetch_by_name(
-        name,
-    )
+    tourney_pools_service = _get_tourney_pools_service()
+    tourney_pool = await tourney_pools_service.fetch_tourney_pool_by_name(name)
     if tourney_pool is None:
         return "Could not find a pool by that name!"
 
-    tourney_pool_maps = await get_legacy_repositories().tourney_pool_maps.fetch_many(
+    result = await tourney_pools_service.add_map_to_pool(
         pool_id=tourney_pool.id,
-    )
-    for pool_map in tourney_pool_maps:
-        if mods == pool_map.mods and slot == pool_map.slot:
-            pool_beatmap = await Beatmap.from_bid(pool_map.map_id)
-            assert pool_beatmap is not None
-            return f"{mods_slot} is already {pool_beatmap.embed}!"
-
-        if pool_map.map_id == bmap.id:
-            return f"{bmap.embed} is already in the pool!"
-
-    await get_legacy_repositories().tourney_pool_maps.create(
         map_id=bmap.id,
-        pool_id=tourney_pool.id,
         mods=mods,
         slot=slot,
     )
+    if result.code is AddPoolMapResultCode.PICK_TAKEN:
+        assert result.existing_map_id is not None
+        pool_beatmap = await Beatmap.from_bid(result.existing_map_id)
+        assert pool_beatmap is not None
+        return f"{mods_slot} is already {pool_beatmap.embed}!"
+    if result.code is AddPoolMapResultCode.MAP_ALREADY_IN_POOL:
+        return f"{bmap.embed} is already in the pool!"
 
     return f"{bmap.embed} added to {name} as {mods_slot}."
 
@@ -2233,13 +2229,12 @@ async def pool_remove(ctx: Context) -> str | None:
     mods = Mods.from_modstr(r_match[1])
     slot = int(r_match[2])
 
-    tourney_pool = await get_legacy_repositories().tourney_pools.fetch_by_name(
-        name,
-    )
+    tourney_pools_service = _get_tourney_pools_service()
+    tourney_pool = await tourney_pools_service.fetch_tourney_pool_by_name(name)
     if tourney_pool is None:
         return "Could not find a pool by that name!"
 
-    map_pick = await get_legacy_repositories().tourney_pool_maps.fetch_by_pool_and_pick(
+    map_pick = await tourney_pools_service.remove_map_from_pool(
         pool_id=tourney_pool.id,
         mods=mods,
         slot=slot,
@@ -2247,21 +2242,13 @@ async def pool_remove(ctx: Context) -> str | None:
     if map_pick is None:
         return f"Found no {mods_slot} pick in the pool."
 
-    await get_legacy_repositories().tourney_pool_maps.delete_map_from_pool(
-        map_pick.pool_id,
-        map_pick.map_id,
-    )
-
     return f"{mods_slot} removed from {name}."
 
 
 @pool_commands.add(Privileges.TOURNEY_MANAGER, aliases=["l"], hidden=True)
 async def pool_list(ctx: Context) -> str | None:
     """List all existing mappools information."""
-    tourney_pools = await get_legacy_repositories().tourney_pools.fetch_many(
-        page=None,
-        page_size=None,
-    )
+    tourney_pools = await _get_tourney_pools_service().fetch_tourney_pools()
     if not tourney_pools:
         return "There are currently no pools!"
 
@@ -2290,7 +2277,7 @@ async def pool_info(ctx: Context) -> str | None:
 
     name = ctx.args[0]
 
-    tourney_pool = await get_legacy_repositories().tourney_pools.fetch_by_name(
+    tourney_pool = await _get_tourney_pools_service().fetch_tourney_pool_by_name(
         name,
     )
     if tourney_pool is None:
@@ -2304,7 +2291,7 @@ async def pool_info(ctx: Context) -> str | None:
     ]
 
     for tourney_map in sorted(
-        await get_legacy_repositories().tourney_pool_maps.fetch_many(
+        await _get_tourney_pools_service().fetch_tourney_pool_maps(
             pool_id=tourney_pool.id,
         ),
         key=lambda x: (repr(Mods(x.mods)), x.slot),
