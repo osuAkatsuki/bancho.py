@@ -21,6 +21,7 @@ from typing import cast
 # from app.objects.beatmap import BeatmapInfo
 
 if TYPE_CHECKING:
+    from app.api.dependencies import Services
     from app.objects.match import Match
     from app.objects.player import Player
 
@@ -297,7 +298,7 @@ class BasePacket(ABC):
     def __init__(self, reader: BanchoPacketReader) -> None: ...
 
     @abstractmethod
-    async def handle(self, player: Player) -> None: ...
+    async def handle(self, player: Player, services: Services) -> None: ...
 
 
 PacketMap = dict[ClientPackets, type[BasePacket]]

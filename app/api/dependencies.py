@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import random
 import secrets
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated
 from typing import Any
@@ -27,6 +28,8 @@ from app.repositories.comments import CommentsRepository
 from app.repositories.favourites import FavouritesRepository
 from app.repositories.ingame_logins import IngameLoginsRepository
 from app.repositories.leaderboard_ranks import LeaderboardRanksRepository
+from app.repositories.legacy import LegacyRepositories
+from app.repositories.legacy import get_legacy_repositories
 from app.repositories.mail import MailRepository
 from app.repositories.maps import MapsRepository
 from app.repositories.ratings import RatingsRepository
@@ -554,3 +557,151 @@ def get_web_sessions_service(
         web_sessions=web_sessions,
         generate_token=_generate_web_session_token,
     )
+
+
+@dataclass(frozen=True)
+class Services:
+    """All of the app's services, composed once at startup.
+
+    HTTP controllers receive individual services via FastAPI dependencies;
+    the bancho packet handlers (and the chat commands beneath them) receive
+    this container threaded down from the packet controller layer.
+    """
+
+    repositories: LegacyRepositories
+
+    account_registration: AccountRegistrationService
+    account_settings: AccountSettingsService
+    avatars: AvatarsService
+    bancho_authentication: BanchoAuthenticationService
+    bancho_login: BanchoLoginService
+    beatmap_info: BeatmapInfoService
+    beatmap_leaderboards: BeatmapLeaderboardService
+    beatmap_rating: BeatmapRatingService
+    beatmap_set: BeatmapSetService
+    captcha: CaptchaService
+    clans: ClansService
+    client_integrity: ClientIntegrityService
+    comments: CommentsService
+    direct_search: DirectSearchService
+    favourites: FavouritesService
+    mail_read: MailReadService
+    maps: MapsService
+    performance: PerformanceService
+    player_leaderboards: PlayerLeaderboardsService
+    players: PlayersService
+    relationships: RelationshipsService
+    replays: ReplayService
+    score_leaderboards: ScoreLeaderboardsService
+    score_submission: ScoreSubmissionService
+    scores: ScoresService
+    screenshots: ScreenshotService
+    tourney_pools: TourneyPoolsService
+    web_sessions: WebSessionsService
+
+
+def build_services() -> Services:
+    """Compose the app's services; the single wiring root, called at the
+    end of startup (some services capture startup-created state such as
+    the bot session)."""
+    repos = get_legacy_repositories()
+    leaderboard_ranks = get_leaderboard_ranks_repository()
+    relationships = get_relationships_repository()
+    web_sessions_repository = get_web_sessions_repository()
+
+    bancho_authentication = get_bancho_authentication_service(users=repos.users)
+    player_leaderboards = get_player_leaderboards_service(
+        stats=repos.stats,
+        leaderboard_ranks=leaderboard_ranks,
+    )
+    score_leaderboards = get_score_leaderboards_service(scores=repos.scores)
+
+    return Services(
+        repositories=repos,
+        account_registration=get_account_registration_service(
+            users=repos.users,
+            stats=repos.stats,
+        ),
+        account_settings=get_account_settings_service(
+            users=repos.users,
+            stats=repos.stats,
+            leaderboard_ranks=leaderboard_ranks,
+            bancho_authentication=bancho_authentication,
+        ),
+        avatars=get_avatars_service(),
+        bancho_authentication=bancho_authentication,
+        bancho_login=get_bancho_login_service(
+            authentication=bancho_authentication,
+            users=repos.users,
+            ingame_logins=repos.ingame_logins,
+            client_hashes=repos.client_hashes,
+            mail=repos.mail,
+        ),
+        beatmap_info=get_beatmap_info_service(maps=repos.maps, scores=repos.scores),
+        beatmap_leaderboards=get_beatmap_leaderboard_service(
+            score_leaderboards=score_leaderboards,
+            clans=repos.clans,
+            maps=repos.maps,
+            ratings=repos.ratings,
+        ),
+        beatmap_rating=get_beatmap_rating_service(ratings=repos.ratings),
+        beatmap_set=get_beatmap_set_service(maps=repos.maps),
+        captcha=get_captcha_service(),
+        clans=get_clans_service(clans=repos.clans, users=repos.users),
+        client_integrity=get_client_integrity_service(),
+        comments=get_comments_service(comments=repos.comments),
+        direct_search=get_direct_search_service(),
+        favourites=get_favourites_service(favourites=repos.favourites),
+        mail_read=get_mail_read_service(mail=repos.mail),
+        maps=get_maps_service(maps=repos.maps),
+        performance=get_performance_service(),
+        player_leaderboards=player_leaderboards,
+        players=get_players_service(
+            users=repos.users,
+            stats=repos.stats,
+            player_leaderboards=player_leaderboards,
+        ),
+        relationships=get_relationships_service(
+            relationships=relationships,
+            users=repos.users,
+        ),
+        replays=get_replay_service(scores=repos.scores),
+        score_leaderboards=score_leaderboards,
+        score_submission=get_score_submission_service(
+            bancho_authentication=bancho_authentication,
+            scores=repos.scores,
+            stats=repos.stats,
+            maps=repos.maps,
+            achievements=repos.achievements,
+            user_achievements=repos.user_achievements,
+        ),
+        scores=get_scores_service(
+            scores=repos.scores,
+            users=repos.users,
+            clans=repos.clans,
+        ),
+        screenshots=get_screenshot_service(),
+        tourney_pools=get_tourney_pools_service(
+            tourney_pools=repos.tourney_pools,
+            tourney_pool_maps=repos.tourney_pool_maps,
+        ),
+        web_sessions=get_web_sessions_service(
+            bancho_authentication=bancho_authentication,
+            users=repos.users,
+            web_sessions=web_sessions_repository,
+        ),
+    )
+
+
+_global_services: Services | None = None
+
+
+def set_global_services(services: Services) -> None:
+    global _global_services
+    _global_services = services
+
+
+def get_global_services() -> Services:
+    """The app-wide service container, composed at startup."""
+    assert _global_services is not None, "services have not been composed yet"
+    return _global_services

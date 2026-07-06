@@ -31,6 +31,7 @@ import app.utils
 from app import commands
 from app._typing import IPAddress
 from app.api import dependencies as api_dependencies
+from app.api.dependencies import Services
 from app.constants import regexes
 from app.constants.gamemodes import GameMode
 from app.constants.mods import SPEED_CHANGING_MODS
@@ -63,11 +64,9 @@ from app.packets import BanchoPacketReader
 from app.packets import BasePacket
 from app.packets import ClientPackets
 from app.packets import LoginFailureReason
-from app.repositories.legacy import get_legacy_repositories
 from app.services.bancho import BanchoLoginService
 from app.services.performance import PerformanceService
 from app.services.performance import ScoreParams
-from app.state import services
 
 OSU_API_V2_CHANGELOG_URL = "https://osu.ppy.sh/api/v2/changelog"
 
@@ -190,6 +189,10 @@ async def bancho_handler(
         BanchoLoginService,
         Depends(api_dependencies.get_bancho_login_service),
     ],
+    services: Annotated[
+        Services,
+        Depends(api_dependencies.get_global_services),
+    ],
 ) -> Response:
     ip = app.state.services.ip_resolver.get_ip(request.headers)
 
@@ -200,6 +203,7 @@ async def bancho_handler(
             await request.body(),
             ip,
             bancho_login_service,
+            services,
         )
 
         return Response(
@@ -233,7 +237,7 @@ async def bancho_handler(
 
     with memoryview(await request.body()) as body_view:
         for packet in BanchoPacketReader(body_view, packet_map):
-            await packet.handle(player)
+            await packet.handle(player, services)
 
     player.last_recv_time = time.time()
 
@@ -263,7 +267,7 @@ def register(
 
 @register(ClientPackets.PING, restricted=True)
 class Ping(BasePacket):
-    async def handle(self, player: Player) -> None:
+    async def handle(self, player: Player, services: Services) -> None:
         pass  # ping be like
 
 
@@ -289,7 +293,7 @@ class ChangeAction(BasePacket):
 
         self.map_id = reader.read_i32()
 
-    async def handle(self, player: Player) -> None:
+    async def handle(self, player: Player, services: Services) -> None:
         # update the user's status.
         player.status.action = Action(self.action)
         player.status.info_text = self.info_text
@@ -311,7 +315,7 @@ class SendMessage(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.msg = reader.read_message()
 
-    async def handle(self, player: Player) -> None:
+    async def handle(self, player: Player, services: Services) -> None:
         if player.silenced:
             log(f"{player} sent a message while silenced.", Ansi.LYELLOW)
             return
@@ -369,7 +373,7 @@ class SendMessage(BasePacket):
             )
 
         if msg.startswith(app.settings.COMMAND_PREFIX):
-            cmd = await commands.process_commands(player, t_chan, msg)
+            cmd = await commands.process_commands(player, t_chan, msg, services)
         else:
             cmd = None
 
@@ -448,7 +452,7 @@ class Logout(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         reader.read_i32()  # reserved
 
-    async def handle(self, player: Player) -> None:
+    async def handle(self, player: Player, services: Services) -> None:
         if (time.time() - player.login_time) < 1:
             # osu! has a weird tendency to log out immediately after login.
             # i've tested the times and they're generally 300-800ms, so
@@ -462,7 +466,7 @@ class Logout(BasePacket):
 
 @register(ClientPackets.REQUEST_STATUS_UPDATE, restricted=True)
 class StatsUpdateRequest(BasePacket):
-    async def handle(self, player: Player) -> None:
+    async def handle(self, player: Player, services: Services) -> None:
         player.enqueue(app.packets.user_stats(player))
 
 
@@ -576,7 +580,7 @@ async def get_allowed_client_versions(osu_stream: OsuStream) -> set[date] | None
     if osu_stream in (OsuStream.STABLE, OsuStream.BETA):
         osu_stream_str += "40"  # i wonder why this exists
 
-    response = await services.http_client.get(
+    response = await app.state.services.http_client.get(
         OSU_API_V2_CHANGELOG_URL,
         params={"stream": osu_stream_str},
     )
@@ -614,6 +618,7 @@ async def handle_osu_login_request(
     body: bytes,
     ip: IPAddress,
     bancho_login_service: BanchoLoginService,
+    services: Services,
 ) -> LoginResponse:
     """\
     Login has no specific packet, but happens when the osu!
@@ -840,7 +845,7 @@ async def handle_osu_login_request(
         ip=ip,
     )
 
-    password_hash = await get_legacy_repositories().users.fetch_password_hash(
+    password_hash = await services.repositories.users.fetch_password_hash(
         id=user_info.id,
     )
     assert password_hash is not None
@@ -1043,7 +1048,7 @@ class StartSpectating(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.target_id = reader.read_i32()
 
-    async def handle(self, player: Player) -> None:
+    async def handle(self, player: Player, services: Services) -> None:
         new_host = app.state.sessions.players.get(id=self.target_id)
         if not new_host:
             log(
@@ -1077,7 +1082,7 @@ class StartSpectating(BasePacket):
 
 @register(ClientPackets.STOP_SPECTATING)
 class StopSpectating(BasePacket):
-    async def handle(self, player: Player) -> None:
+    async def handle(self, player: Player, services: Services) -> None:
         host = player.spectating
 
         if not host:
@@ -1092,7 +1097,7 @@ class SpectateFrames(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.frame_bundle = reader.read_replayframe_bundle()
 
-    async def handle(self, player: Player) -> None:
+    async def handle(self, player: Player, services: Services) -> None:
         # TODO: perform validations on the parsed frame bundle
         # to ensure it's not being tamperated with or weaponized.
 
@@ -1113,7 +1118,7 @@ class SpectateFrames(BasePacket):
 
 @register(ClientPackets.CANT_SPECTATE)
 class CantSpectate(BasePacket):
-    async def handle(self, player: Player) -> None:
+    async def handle(self, player: Player, services: Services) -> None:
         if not player.spectating:
             log(f"{player} sent can't spectate while not spectating?", Ansi.LRED)
             return
@@ -1133,7 +1138,7 @@ class SendPrivateMessage(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.msg = reader.read_message()
 
-    async def handle(self, player: Player) -> None:
+    async def handle(self, player: Player, services: Services) -> None:
         if player.silenced:
             if app.settings.DEBUG:
                 log(f"{player} tried to send a dm while silenced.", Ansi.LYELLOW)
@@ -1209,7 +1214,7 @@ class SendPrivateMessage(BasePacket):
                 )
 
             # insert mail into db, marked as unread.
-            await get_legacy_repositories().mail.create(
+            await services.repositories.mail.create(
                 from_id=player.id,
                 to_id=target.id,
                 msg=msg,
@@ -1217,7 +1222,7 @@ class SendPrivateMessage(BasePacket):
         else:
             # messaging the bot, check for commands & /np.
             if msg.startswith(app.settings.COMMAND_PREFIX):
-                cmd = await commands.process_commands(player, target, msg)
+                cmd = await commands.process_commands(player, target, msg, services)
             else:
                 cmd = None
 
@@ -1320,13 +1325,13 @@ class SendPrivateMessage(BasePacket):
 
 @register(ClientPackets.PART_LOBBY)
 class LobbyPart(BasePacket):
-    async def handle(self, player: Player) -> None:
+    async def handle(self, player: Player, services: Services) -> None:
         player.in_lobby = False
 
 
 @register(ClientPackets.JOIN_LOBBY)
 class LobbyJoin(BasePacket):
-    async def handle(self, player: Player) -> None:
+    async def handle(self, player: Player, services: Services) -> None:
         player.in_lobby = True
 
         for match in app.state.sessions.matches:
@@ -1360,7 +1365,7 @@ class MatchCreate(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.match_data = reader.read_match()
 
-    async def handle(self, player: Player) -> None:
+    async def handle(self, player: Player, services: Services) -> None:
         if not validate_match_data(self.match_data, expected_host_id=player.id):
             log(f"{player} tried to create a match with invalid data.", Ansi.LYELLOW)
             return
@@ -1436,7 +1441,7 @@ class MatchJoin(BasePacket):
         self.match_id = reader.read_i32()
         self.match_passwd = reader.read_string()
 
-    async def handle(self, player: Player) -> None:
+    async def handle(self, player: Player, services: Services) -> None:
         match = app.state.sessions.matches[self.match_id]
         if not match:
             log(f"{player} tried to join a non-existant mp lobby?")
@@ -1467,7 +1472,7 @@ class MatchJoin(BasePacket):
 
 @register(ClientPackets.PART_MATCH)
 class MatchPart(BasePacket):
-    async def handle(self, player: Player) -> None:
+    async def handle(self, player: Player, services: Services) -> None:
         player.update_latest_activity_soon()
         player.leave_match()
 
@@ -1477,7 +1482,7 @@ class MatchChangeSlot(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.slot_id = reader.read_i32()
 
-    async def handle(self, player: Player) -> None:
+    async def handle(self, player: Player, services: Services) -> None:
         if player.match is None:
             return
 
@@ -1501,7 +1506,7 @@ class MatchChangeSlot(BasePacket):
 
 @register(ClientPackets.MATCH_READY)
 class MatchReady(BasePacket):
-    async def handle(self, player: Player) -> None:
+    async def handle(self, player: Player, services: Services) -> None:
         if player.match is None:
             return
 
@@ -1517,7 +1522,7 @@ class MatchLock(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.slot_id = reader.read_i32()
 
-    async def handle(self, player: Player) -> None:
+    async def handle(self, player: Player, services: Services) -> None:
         if player.match is None:
             return
 
@@ -1555,7 +1560,7 @@ class MatchChangeSettings(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.match_data = reader.read_match()
 
-    async def handle(self, player: Player) -> None:
+    async def handle(self, player: Player, services: Services) -> None:
         if not validate_match_data(self.match_data, expected_host_id=player.id):
             log(
                 f"{player} tried to change match settings with invalid data.",
@@ -1681,7 +1686,7 @@ class MatchChangeSettings(BasePacket):
 
 @register(ClientPackets.MATCH_START)
 class MatchStart(BasePacket):
-    async def handle(self, player: Player) -> None:
+    async def handle(self, player: Player, services: Services) -> None:
         if player.match is None:
             return
 
@@ -1697,7 +1702,7 @@ class MatchScoreUpdate(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.play_data = reader.read_raw()
 
-    async def handle(self, player: Player) -> None:
+    async def handle(self, player: Player, services: Services) -> None:
         # this runs very frequently in matches,
         # so it's written to run pretty quick.
 
@@ -1718,7 +1723,7 @@ class MatchScoreUpdate(BasePacket):
 
 @register(ClientPackets.MATCH_COMPLETE)
 class MatchComplete(BasePacket):
-    async def handle(self, player: Player) -> None:
+    async def handle(self, player: Player, services: Services) -> None:
         if player.match is None:
             return
 
@@ -1768,7 +1773,7 @@ class MatchChangeMods(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.mods = reader.read_i32()
 
-    async def handle(self, player: Player) -> None:
+    async def handle(self, player: Player, services: Services) -> None:
         if player.match is None:
             return
 
@@ -1799,7 +1804,7 @@ def is_playing(slot: Slot) -> bool:
 
 @register(ClientPackets.MATCH_LOAD_COMPLETE)
 class MatchLoadComplete(BasePacket):
-    async def handle(self, player: Player) -> None:
+    async def handle(self, player: Player, services: Services) -> None:
         if player.match is None:
             return
 
@@ -1817,7 +1822,7 @@ class MatchLoadComplete(BasePacket):
 
 @register(ClientPackets.MATCH_NO_BEATMAP)
 class MatchNoBeatmap(BasePacket):
-    async def handle(self, player: Player) -> None:
+    async def handle(self, player: Player, services: Services) -> None:
         if player.match is None:
             return
 
@@ -1830,7 +1835,7 @@ class MatchNoBeatmap(BasePacket):
 
 @register(ClientPackets.MATCH_NOT_READY)
 class MatchNotReady(BasePacket):
-    async def handle(self, player: Player) -> None:
+    async def handle(self, player: Player, services: Services) -> None:
         if player.match is None:
             return
 
@@ -1843,7 +1848,7 @@ class MatchNotReady(BasePacket):
 
 @register(ClientPackets.MATCH_FAILED)
 class MatchFailed(BasePacket):
-    async def handle(self, player: Player) -> None:
+    async def handle(self, player: Player, services: Services) -> None:
         if player.match is None:
             return
 
@@ -1857,7 +1862,7 @@ class MatchFailed(BasePacket):
 
 @register(ClientPackets.MATCH_HAS_BEATMAP)
 class MatchHasBeatmap(BasePacket):
-    async def handle(self, player: Player) -> None:
+    async def handle(self, player: Player, services: Services) -> None:
         if player.match is None:
             return
 
@@ -1870,7 +1875,7 @@ class MatchHasBeatmap(BasePacket):
 
 @register(ClientPackets.MATCH_SKIP_REQUEST)
 class MatchSkipRequest(BasePacket):
-    async def handle(self, player: Player) -> None:
+    async def handle(self, player: Player, services: Services) -> None:
         if player.match is None:
             return
 
@@ -1893,7 +1898,7 @@ class ChannelJoin(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.name = reader.read_string()
 
-    async def handle(self, player: Player) -> None:
+    async def handle(self, player: Player, services: Services) -> None:
         if self.name in IGNORED_CHANNELS:
             return
 
@@ -1909,7 +1914,7 @@ class MatchTransferHost(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.slot_id = reader.read_i32()
 
-    async def handle(self, player: Player) -> None:
+    async def handle(self, player: Player, services: Services) -> None:
         if player.match is None:
             return
 
@@ -1936,7 +1941,7 @@ class TourneyMatchInfoRequest(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.match_id = reader.read_i32()
 
-    async def handle(self, player: Player) -> None:
+    async def handle(self, player: Player, services: Services) -> None:
         if not 0 <= self.match_id < 64:
             return  # invalid match id
 
@@ -1955,7 +1960,7 @@ class TourneyMatchJoinChannel(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.match_id = reader.read_i32()
 
-    async def handle(self, player: Player) -> None:
+    async def handle(self, player: Player, services: Services) -> None:
         if not 0 <= self.match_id < 64:
             return  # invalid match id
 
@@ -1981,7 +1986,7 @@ class TourneyMatchLeaveChannel(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.match_id = reader.read_i32()
 
-    async def handle(self, player: Player) -> None:
+    async def handle(self, player: Player, services: Services) -> None:
         if not 0 <= self.match_id < 64:
             return  # invalid match id
 
@@ -2002,7 +2007,7 @@ class FriendAdd(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.user_id = reader.read_i32()
 
-    async def handle(self, player: Player) -> None:
+    async def handle(self, player: Player, services: Services) -> None:
         target = app.state.sessions.players.get(id=self.user_id)
         if not target:
             log(f"{player} tried to add a user who is not online! ({self.user_id})")
@@ -2023,7 +2028,7 @@ class FriendRemove(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.user_id = reader.read_i32()
 
-    async def handle(self, player: Player) -> None:
+    async def handle(self, player: Player, services: Services) -> None:
         target = app.state.sessions.players.get(id=self.user_id)
         if not target:
             log(f"{player} tried to remove a user who is not online! ({self.user_id})")
@@ -2038,7 +2043,7 @@ class FriendRemove(BasePacket):
 
 @register(ClientPackets.MATCH_CHANGE_TEAM)
 class MatchChangeTeam(BasePacket):
-    async def handle(self, player: Player) -> None:
+    async def handle(self, player: Player, services: Services) -> None:
         if player.match is None:
             return
 
@@ -2059,7 +2064,7 @@ class ChannelPart(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.name = reader.read_string()
 
-    async def handle(self, player: Player) -> None:
+    async def handle(self, player: Player, services: Services) -> None:
         if self.name in IGNORED_CHANNELS:
             return
 
@@ -2082,7 +2087,7 @@ class ReceiveUpdates(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.value = reader.read_i32()
 
-    async def handle(self, player: Player) -> None:
+    async def handle(self, player: Player, services: Services) -> None:
         if not 0 <= self.value < 3:
             log(f"{player} tried to set his presence filter to {self.value}?")
             return
@@ -2095,7 +2100,7 @@ class SetAwayMessage(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.msg = reader.read_message()
 
-    async def handle(self, player: Player) -> None:
+    async def handle(self, player: Player, services: Services) -> None:
         player.away_msg = self.msg.text
 
 
@@ -2104,7 +2109,7 @@ class StatsRequest(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.user_ids = reader.read_i32_list_i16l()
 
-    async def handle(self, player: Player) -> None:
+    async def handle(self, player: Player, services: Services) -> None:
         unrestrcted_ids = [p.id for p in app.state.sessions.players.unrestricted]
 
         def is_online(o: int) -> bool:
@@ -2128,7 +2133,7 @@ class MatchInvite(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.user_id = reader.read_i32()
 
-    async def handle(self, player: Player) -> None:
+    async def handle(self, player: Player, services: Services) -> None:
         if not player.match:
             return
 
@@ -2152,7 +2157,7 @@ class MatchChangePassword(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.match_data = reader.read_match()
 
-    async def handle(self, player: Player) -> None:
+    async def handle(self, player: Player, services: Services) -> None:
         if not validate_match_data(self.match_data, expected_host_id=player.id):
             log(
                 f"{player} tried to change match password with invalid data.",
@@ -2176,7 +2181,7 @@ class UserPresenceRequest(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.user_ids = reader.read_i32_list_i16l()
 
-    async def handle(self, player: Player) -> None:
+    async def handle(self, player: Player, services: Services) -> None:
         for pid in self.user_ids:
             target = app.state.sessions.players.get(id=pid)
             if target:
@@ -2195,7 +2200,7 @@ class UserPresenceRequestAll(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.ingame_time = reader.read_i32()
 
-    async def handle(self, player: Player) -> None:
+    async def handle(self, player: Player, services: Services) -> None:
         # NOTE: this packet is only used when there
         # are >256 players visible to the client.
 
@@ -2212,7 +2217,7 @@ class ToggleBlockingDMs(BasePacket):
     def __init__(self, reader: BanchoPacketReader) -> None:
         self.value = reader.read_i32()
 
-    async def handle(self, player: Player) -> None:
+    async def handle(self, player: Player, services: Services) -> None:
         player.pm_private = self.value == 1
 
         player.update_latest_activity_soon()

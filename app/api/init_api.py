@@ -25,6 +25,7 @@ import app.settings
 import app.state
 import app.utils
 from app.api import api_router  # type: ignore[attr-defined]
+from app.api import dependencies as api_dependencies
 from app.api import domains
 from app.api import middlewares
 from app.api.v2.common.json import ORJSONResponse
@@ -99,6 +100,10 @@ async def lifespan(asgi_app: BanchoAPI) -> AsyncIterator[None]:
     await collections.initialize_ram_caches()
 
     await app.bg_loops.initialize_housekeeping_tasks()
+
+    # compose the app's services now that startup state (e.g. the
+    # bot session & channels) exists for them to capture
+    api_dependencies.set_global_services(api_dependencies.build_services())
 
     log("Startup process complete.", Ansi.LGREEN)
     log(

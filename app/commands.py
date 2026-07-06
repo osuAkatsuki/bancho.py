@@ -55,9 +55,7 @@ from app.objects.match import MatchWinConditions
 from app.objects.match import SlotStatus
 from app.objects.match import StartingTimers
 from app.objects.player import Player
-from app.repositories.legacy import get_legacy_repositories
 from app.repositories.map_requests import MapRequest
-from app.services.clans import ClansService
 from app.services.clans import CreateClanResultCode
 from app.services.clans import LeaveClanResultCode
 from app.services.clans import TransferClanResultCode
@@ -65,9 +63,9 @@ from app.services.performance import PerformanceService
 from app.services.performance import ScoreParams
 from app.services.tourney_pools import AddPoolMapResultCode
 from app.services.tourney_pools import CreatePoolResultCode
-from app.services.tourney_pools import TourneyPoolsService
 
 if TYPE_CHECKING:
+    from app.api.dependencies import Services
     from app.objects.channel import Channel
 
 
@@ -81,6 +79,9 @@ class Context:
     args: Sequence[str]
 
     recipient: Channel | Player
+
+    # the app's services, threaded down from the packet controller layer
+    services: Services
 
 
 Callback = Callable[[Context], Awaitable[Optional[str]]]
@@ -276,11 +277,11 @@ async def changename(ctx: Context) -> str | None:
     if name in app.settings.DISALLOWED_NAMES:
         return "Disallowed username; pick another."
 
-    if await get_legacy_repositories().users.fetch_one(name=name):
+    if await ctx.services.repositories.users.fetch_one(name=name):
         return "Username already taken by another player."
 
     # all checks passed, update their name
-    await get_legacy_repositories().users.partial_update(
+    await ctx.services.repositories.users.partial_update(
         ctx.player.id,
         name=name,
     )
@@ -383,12 +384,12 @@ async def top(ctx: Context) -> str | None:
             return "Invalid username."
 
         # specific player provided
-        user = await get_legacy_repositories().users.fetch_one(
+        user = await ctx.services.repositories.users.fetch_one(
             name=ctx.args[1],
         )
     else:
         # no player provided, use self
-        user = await get_legacy_repositories().users.fetch_one(
+        user = await ctx.services.repositories.users.fetch_one(
             id=ctx.player.id,
         )
 
@@ -549,7 +550,7 @@ async def request(ctx: Context) -> str | None:
     if bmap.status != RankedStatus.Pending:
         return "Only pending maps may be requested for status change."
 
-    map_requests = await get_legacy_repositories().map_requests.fetch_all(
+    map_requests = await ctx.services.repositories.map_requests.fetch_all(
         map_id=bmap.id,
         player_id=ctx.player.id,
         active=True,
@@ -557,7 +558,7 @@ async def request(ctx: Context) -> str | None:
     if map_requests:
         return "You already have an active nomination request for that map."
 
-    await get_legacy_repositories().map_requests.create(
+    await ctx.services.repositories.map_requests.create(
         map_id=bmap.id,
         player_id=ctx.player.id,
         active=True,
@@ -579,7 +580,7 @@ async def apikey(ctx: Context) -> str | None:
     # generate new token
     ctx.player.api_key = str(uuid.uuid4())
 
-    await get_legacy_repositories().users.partial_update(
+    await ctx.services.repositories.users.partial_update(
         ctx.player.id,
         api_key=ctx.player.api_key,
     )
@@ -600,7 +601,7 @@ async def requests(ctx: Context) -> str | None:
     if ctx.args:
         return "Invalid syntax: !requests"
 
-    rows = await get_legacy_repositories().map_requests.fetch_all(
+    rows = await ctx.services.repositories.map_requests.fetch_all(
         active=True,
     )
 
@@ -670,7 +671,7 @@ async def _map(ctx: Context) -> str | None:
     # for updating cache would be faster?
     # surely this will not scale as well...
 
-    repositories = get_legacy_repositories()
+    repositories = ctx.services.repositories
 
     async with app.state.services.database.transaction():
         if ctx.args[1] == "set":
@@ -711,7 +712,7 @@ async def _map(ctx: Context) -> str | None:
             modified_beatmap_ids = [bmap.id]
 
         # deactivate rank requests for all ids
-        await get_legacy_repositories().map_requests.mark_batch_as_inactive(
+        await ctx.services.repositories.map_requests.mark_batch_as_inactive(
             map_ids=modified_beatmap_ids,
         )
 
@@ -785,7 +786,7 @@ async def addnote(ctx: Context) -> str | None:
     if not target:
         return f'"{ctx.args[0]}" not found.'
 
-    await get_legacy_repositories().logs.create(
+    await ctx.services.repositories.logs.create(
         _from=ctx.player.id,
         to=target.id,
         action="note",
@@ -900,7 +901,7 @@ async def user(ctx: Context) -> str | None:
     )
 
     user_clan = (
-        await get_legacy_repositories().clans.fetch_one(
+        await ctx.services.repositories.clans.fetch_one(
             id=player.clan_id,
         )
         if player.clan_id is not None
@@ -1936,7 +1937,7 @@ async def mp_loadpool(ctx: Context, match: Match) -> str | None:
 
     name = ctx.args[0]
 
-    tourney_pool = await _get_tourney_pools_service().fetch_tourney_pool_by_name(
+    tourney_pool = await ctx.services.tourney_pools.fetch_tourney_pool_by_name(
         name,
     )
     if tourney_pool is None:
@@ -1987,7 +1988,7 @@ async def mp_ban(ctx: Context, match: Match) -> str | None:
     mods = Mods.from_modstr(r_match[1])
     slot = int(r_match[2])
 
-    map_pick = await _get_tourney_pools_service().fetch_pool_map_pick(
+    map_pick = await ctx.services.tourney_pools.fetch_pool_map_pick(
         pool_id=match.tourney_pool.id,
         mods=mods,
         slot=slot,
@@ -2023,7 +2024,7 @@ async def mp_unban(ctx: Context, match: Match) -> str | None:
     mods = Mods.from_modstr(r_match[1])
     slot = int(r_match[2])
 
-    map_pick = await _get_tourney_pools_service().fetch_pool_map_pick(
+    map_pick = await ctx.services.tourney_pools.fetch_pool_map_pick(
         pool_id=match.tourney_pool.id,
         mods=mods,
         slot=slot,
@@ -2059,7 +2060,7 @@ async def mp_pick(ctx: Context, match: Match) -> str | None:
     mods = Mods.from_modstr(r_match[1])
     slot = int(r_match[2])
 
-    map_pick = await _get_tourney_pools_service().fetch_pool_map_pick(
+    map_pick = await ctx.services.tourney_pools.fetch_pool_map_pick(
         pool_id=match.tourney_pool.id,
         mods=mods,
         slot=slot,
@@ -2103,15 +2104,6 @@ async def mp_pick(ctx: Context, match: Match) -> str | None:
 """
 
 
-def _get_tourney_pools_service() -> TourneyPoolsService:
-    repositories = get_legacy_repositories()
-    return TourneyPoolsService(
-        tourney_pools=repositories.tourney_pools,
-        tourney_pool_maps=repositories.tourney_pool_maps,
-        database=app.state.services.database,
-    )
-
-
 @pool_commands.add(Privileges.TOURNEY_MANAGER, aliases=["h"], hidden=True)
 async def pool_help(ctx: Context) -> str | None:
     """Show all documented mappool commands the player can access."""
@@ -2136,7 +2128,7 @@ async def pool_create(ctx: Context) -> str | None:
 
     name = ctx.args[0]
 
-    result = await _get_tourney_pools_service().create_pool(
+    result = await ctx.services.tourney_pools.create_pool(
         name=name,
         created_by=ctx.player.id,
     )
@@ -2154,7 +2146,7 @@ async def pool_delete(ctx: Context) -> str | None:
 
     name = ctx.args[0]
 
-    tourney_pools_service = _get_tourney_pools_service()
+    tourney_pools_service = ctx.services.tourney_pools
     existing_pool = await tourney_pools_service.fetch_tourney_pool_by_name(name)
     if existing_pool is None:
         return "Could not find a pool by that name!"
@@ -2189,7 +2181,7 @@ async def pool_add(ctx: Context) -> str | None:
     mods = Mods.from_modstr(r_match[1])
     slot = int(r_match[2])
 
-    tourney_pools_service = _get_tourney_pools_service()
+    tourney_pools_service = ctx.services.tourney_pools
     tourney_pool = await tourney_pools_service.fetch_tourney_pool_by_name(name)
     if tourney_pool is None:
         return "Could not find a pool by that name!"
@@ -2229,7 +2221,7 @@ async def pool_remove(ctx: Context) -> str | None:
     mods = Mods.from_modstr(r_match[1])
     slot = int(r_match[2])
 
-    tourney_pools_service = _get_tourney_pools_service()
+    tourney_pools_service = ctx.services.tourney_pools
     tourney_pool = await tourney_pools_service.fetch_tourney_pool_by_name(name)
     if tourney_pool is None:
         return "Could not find a pool by that name!"
@@ -2248,14 +2240,14 @@ async def pool_remove(ctx: Context) -> str | None:
 @pool_commands.add(Privileges.TOURNEY_MANAGER, aliases=["l"], hidden=True)
 async def pool_list(ctx: Context) -> str | None:
     """List all existing mappools information."""
-    tourney_pools = await _get_tourney_pools_service().fetch_tourney_pools()
+    tourney_pools = await ctx.services.tourney_pools.fetch_tourney_pools()
     if not tourney_pools:
         return "There are currently no pools!"
 
     l = [f"Mappools ({len(tourney_pools)})"]
 
     for pool in tourney_pools:
-        created_by = await get_legacy_repositories().users.fetch_one(
+        created_by = await ctx.services.repositories.users.fetch_one(
             id=pool.created_by,
         )
         if created_by is None:
@@ -2277,7 +2269,7 @@ async def pool_info(ctx: Context) -> str | None:
 
     name = ctx.args[0]
 
-    tourney_pool = await _get_tourney_pools_service().fetch_tourney_pool_by_name(
+    tourney_pool = await ctx.services.tourney_pools.fetch_tourney_pool_by_name(
         name,
     )
     if tourney_pool is None:
@@ -2291,7 +2283,7 @@ async def pool_info(ctx: Context) -> str | None:
     ]
 
     for tourney_map in sorted(
-        await _get_tourney_pools_service().fetch_tourney_pool_maps(
+        await ctx.services.tourney_pools.fetch_tourney_pool_maps(
             pool_id=tourney_pool.id,
         ),
         key=lambda x: (repr(Mods(x.mods)), x.slot),
@@ -2327,23 +2319,13 @@ async def clan_help(ctx: Context) -> str | None:
     return "\n".join(cmds)
 
 
-def _get_clans_service() -> ClansService:
-    repositories = get_legacy_repositories()
-    return ClansService(
-        clans=repositories.clans,
-        users=repositories.users,
-        online_players=app.state.sessions.players,
-        database=app.state.services.database,
-    )
-
-
 @clan_commands.add(Privileges.UNRESTRICTED, aliases=["c"])
 async def clan_create(ctx: Context) -> str | None:
     """Create a clan with a given tag & name."""
     if len(ctx.args) < 2:
         return "Invalid syntax: !clan create <tag> <name>"
 
-    result = await _get_clans_service().create_clan(
+    result = await ctx.services.clans.create_clan(
         player_id=ctx.player.id,
         tag=ctx.args[0],
         name=" ".join(ctx.args[1:]),
@@ -2381,7 +2363,7 @@ async def clan_disband(ctx: Context) -> str | None:
         if ctx.player not in app.state.sessions.players.staff:
             return "Only staff members may disband the clans of others."
 
-        clan = await get_legacy_repositories().clans.fetch_one(
+        clan = await ctx.services.repositories.clans.fetch_one(
             tag=" ".join(ctx.args).upper(),
         )
         if not clan:
@@ -2391,13 +2373,13 @@ async def clan_disband(ctx: Context) -> str | None:
             return "You're not a member of a clan!"
 
         # disband the player's clan
-        clan = await get_legacy_repositories().clans.fetch_one(
+        clan = await ctx.services.repositories.clans.fetch_one(
             id=ctx.player.clan_id,
         )
         if not clan:
             return "You're not a member of a clan!"
 
-    disbanded_clan = await _get_clans_service().disband_clan(clan.id)
+    disbanded_clan = await ctx.services.clans.disband_clan(clan.id)
     assert disbanded_clan is not None
 
     # announce clan disbanding
@@ -2416,7 +2398,7 @@ async def clan_transfer(ctx: Context) -> str | None:
     if not ctx.args:
         return "Invalid syntax: !clan transfer <username>"
 
-    result = await _get_clans_service().transfer_clan_ownership(
+    result = await ctx.services.clans.transfer_clan_ownership(
         owner_id=ctx.player.id,
         target_name=" ".join(ctx.args),
     )
@@ -2438,7 +2420,7 @@ async def clan_info(ctx: Context) -> str | None:
     if not ctx.args:
         return "Invalid syntax: !clan info <tag>"
 
-    clan = await get_legacy_repositories().clans.fetch_one(
+    clan = await ctx.services.repositories.clans.fetch_one(
         tag=" ".join(ctx.args).upper(),
     )
     if not clan:
@@ -2449,7 +2431,7 @@ async def clan_info(ctx: Context) -> str | None:
 
     # get members privs from sql; hidden (restricted or unverified)
     # members are only listed for staff and for themselves
-    clan_members = await get_legacy_repositories().users.fetch_many(
+    clan_members = await ctx.services.repositories.users.fetch_many(
         clan_id=clan.id,
         include_hidden=ctx.player.priv & Privileges.STAFF != 0,
         always_visible_id=ctx.player.id,
@@ -2464,7 +2446,7 @@ async def clan_info(ctx: Context) -> str | None:
 @clan_commands.add(Privileges.UNRESTRICTED)
 async def clan_leave(ctx: Context) -> str | None:
     """Leaves the clan you're in."""
-    result = await _get_clans_service().leave_clan(ctx.player.id)
+    result = await ctx.services.clans.leave_clan(ctx.player.id)
     if result.code is LeaveClanResultCode.NOT_IN_CLAN:
         return "You're not in a clan."
     if result.code is LeaveClanResultCode.OWNER_MUST_TRANSFER:
@@ -2497,7 +2479,7 @@ async def clan_list(ctx: Context) -> str | None:
     else:
         offset = 0
 
-    all_clans = await get_legacy_repositories().clans.fetch_many(
+    all_clans = await ctx.services.repositories.clans.fetch_many(
         page=None,
         page_size=None,
     )
@@ -2523,6 +2505,7 @@ async def process_commands(
     player: Player,
     target: Channel | Player,
     msg: str,
+    services: Services,
 ) -> CommandResponse | None:
     # response is either a CommandResponse if we hit a command,
     # or simply False if we don't have any command hits.
@@ -2562,6 +2545,7 @@ async def process_commands(
                         trigger=trigger,
                         args=args,
                         recipient=target,
+                        services=services,
                     ),
                 )
             except Exception:
