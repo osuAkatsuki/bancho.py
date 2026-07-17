@@ -59,3 +59,4 @@ echo "Running tests..."
 coverage run -m pytest -vv -s tests/
 coverage report --show-missing --fail-under=45
 coverage html
+coverage xml -o coverage/coverage.xml

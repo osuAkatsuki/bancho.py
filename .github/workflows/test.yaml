@@ -14,6 +14,10 @@ on:
       - "Dockerfile"
   pull_request:
 
+permissions:
+  contents: read
+  id-token: write
+
 jobs:
   run-test-suite:
     runs-on: ubuntu-latest
@@ -39,3 +43,11 @@ jobs:
         with:
           name: code-coverage-report
           path: coverage/
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac # v5.5.5
+        with:
+          disable_search: true
+          fail_ci_if_error: false
+          files: coverage/coverage.xml
+          use_oidc: true
