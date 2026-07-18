@@ -4,7 +4,7 @@ import secrets
 
 import pytest
 
-import app.state.services
+from app.application import Application
 from app.constants.privileges import ClanPrivileges
 from app.constants.privileges import Privileges
 from app.objects.collections import Players
@@ -15,7 +15,7 @@ from app.services.clans import ClansService
 from app.services.clans import CreateClanResultCode
 from app.services.clans import LeaveClanResultCode
 from app.services.clans import TransferClanResultCode
-from tests import factories
+from tests.factories import TestDataFactory
 
 VISIBLE_PRIV = int(Privileges.UNRESTRICTED | Privileges.VERIFIED)
 
@@ -27,10 +27,11 @@ class _CreateThenFailClansRepository(ClansRepository):
 
 
 def _clans_service(
+    application: Application,
     *,
     clans: ClansRepository | None = None,
 ) -> ClansService:
-    database = app.state.services.database
+    database = application.resources.database
     return ClansService(
         clans=clans or ClansRepository(database),
         users=UsersRepository(database),
@@ -39,10 +40,13 @@ def _clans_service(
     )
 
 
-async def test_clan_lifecycle_persists_ownership_membership_and_disbanding() -> None:
-    owner = await factories.create_user(priv=VISIBLE_PRIV)
-    member = await factories.create_user(priv=VISIBLE_PRIV)
-    service = _clans_service()
+async def test_clan_lifecycle_persists_ownership_membership_and_disbanding(
+    application: Application,
+    test_data: TestDataFactory,
+) -> None:
+    owner = await test_data.create_user(priv=VISIBLE_PRIV)
+    member = await test_data.create_user(priv=VISIBLE_PRIV)
+    service = _clans_service(application)
 
     created = await service.create_clan(
         player_id=owner.id,
@@ -53,7 +57,7 @@ async def test_clan_lifecycle_persists_ownership_membership_and_disbanding() -> 
     assert created.code is CreateClanResultCode.CREATED
     assert created.clan is not None
     clan = created.clan
-    users = UsersRepository(app.state.services.database)
+    users = application.repositories.users
     joined_member = await users.partial_update(
         member.id,
         clan_id=clan.id,
@@ -68,7 +72,7 @@ async def test_clan_lifecycle_persists_ownership_membership_and_disbanding() -> 
 
     assert transferred.code is TransferClanResultCode.TRANSFERRED
     persisted_clan = await ClansRepository(
-        app.state.services.database,
+        application.resources.database,
     ).fetch_one(id=clan.id)
     persisted_owner = await users.fetch_one(id=owner.id)
     persisted_member = await users.fetch_one(id=member.id)
@@ -98,10 +102,16 @@ async def test_clan_lifecycle_persists_ownership_membership_and_disbanding() -> 
     assert persisted_member.clan_priv == 0
 
 
-async def test_create_clan_rolls_back_when_repository_fails_after_insert() -> None:
-    owner = await factories.create_user(priv=VISIBLE_PRIV)
-    database = app.state.services.database
-    service = _clans_service(clans=_CreateThenFailClansRepository(database))
+async def test_create_clan_rolls_back_when_repository_fails_after_insert(
+    application: Application,
+    test_data: TestDataFactory,
+) -> None:
+    owner = await test_data.create_user(priv=VISIBLE_PRIV)
+    database = application.resources.database
+    service = _clans_service(
+        application,
+        clans=_CreateThenFailClansRepository(database),
+    )
     clan_name = f"Clan {secrets.token_hex(3)}"
 
     with pytest.raises(RuntimeError, match="fail after clan insert"):

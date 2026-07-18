@@ -14,12 +14,13 @@ class _FakeMailRepository:
 
 
 class _FakePlayers:
-    async def from_cache_or_sql(
+    async def fetch_player_session(
         self,
-        id: int | None = None,
-        name: str | None = None,
+        *,
+        user_id: int | None,
+        username: str | None,
     ) -> SimpleNamespace | None:
-        return SimpleNamespace(id=8) if name == "Target User" else None
+        return SimpleNamespace(id=8) if username == "Target User" else None
 
 
 async def test_mail_read_service_marks_decoded_channel_target_as_read() -> None:

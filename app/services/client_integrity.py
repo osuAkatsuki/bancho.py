@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Awaitable
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
@@ -15,9 +16,10 @@ class ClientIntegrityResult(StrEnum):
 
 @dataclass(frozen=True)
 class ClientIntegrityService:
-    restriction_admin: Player
     restriction_roll: Callable[[int], int]
     send_notification: Callable[[Player, str], None]
+    restrict_player: Callable[[Player, str], Awaitable[None]]
+    logout_player: Callable[[Player], None]
 
     async def handle_lastfm_flags(
         self,
@@ -65,7 +67,7 @@ class ClientIntegrityService:
                     ],
                 ),
             )
-            player.logout()
+            self.logout_player(player)
             return ClientIntegrityResult.STOP_SENDING
 
         """ These checks only worked for ~5 hours from release. rumoi's quick!
@@ -90,8 +92,8 @@ class ClientIntegrityService:
         *,
         reason: str,
     ) -> None:
-        await player.restrict(admin=self.restriction_admin, reason=reason)
+        await self.restrict_player(player, reason)
 
         # refresh their client state
         if player.is_online:
-            player.logout()
+            self.logout_player(player)

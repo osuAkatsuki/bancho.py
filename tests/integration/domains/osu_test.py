@@ -10,14 +10,13 @@ import respx
 from fastapi import status
 from httpx import AsyncClient
 
-import app.state.services
 from app import encryption
-from app.repositories.scores import ScoresRepository
-from app.repositories.users import UsersRepository
+from app.application import Application
 from testing.sample_data import sample_beatmap_data
 
 
 async def test_score_submission(
+    application: Application,
     http_client: AsyncClient,
     respx_mock: respx.MockRouter,
 ) -> None:
@@ -49,7 +48,7 @@ async def test_score_submission(
         },
     )
     assert response.status_code == status.HTTP_200_OK
-    user = await UsersRepository(app.state.services.database).fetch_one(name=username)
+    user = await application.repositories.users.fetch_one(name=username)
     assert user is not None
 
     osu_version = "20230814"
@@ -242,7 +241,7 @@ async def test_score_submission(
 
     # ASSERT
     assert response.status_code == status.HTTP_200_OK
-    submitted_scores = await ScoresRepository(app.state.services.database).fetch_many(
+    submitted_scores = await application.repositories.scores.fetch_many(
         user_id=user.id,
         include_hidden_players=True,
     )

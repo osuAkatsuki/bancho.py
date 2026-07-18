@@ -7,6 +7,7 @@ from abc import abstractmethod
 from collections.abc import Callable
 from collections.abc import Collection
 from collections.abc import Iterator
+from collections.abc import Mapping
 from dataclasses import dataclass
 from dataclasses import field
 from enum import IntEnum
@@ -21,7 +22,6 @@ from typing import cast
 # from app.objects.beatmap import BeatmapInfo
 
 if TYPE_CHECKING:
-    from app.api.dependencies import Services
     from app.objects.match import Match
     from app.objects.player import Player
 
@@ -298,10 +298,11 @@ class BasePacket(ABC):
     def __init__(self, reader: BanchoPacketReader) -> None: ...
 
     @abstractmethod
-    async def handle(self, player: Player, services: Services) -> None: ...
+    async def handle(self, player: Player) -> None: ...
 
 
-PacketMap = dict[ClientPackets, type[BasePacket]]
+PacketFactory = Callable[["BanchoPacketReader"], BasePacket]
+PacketMap = Mapping[ClientPackets, PacketFactory]
 
 
 class BanchoPacketReader:
@@ -314,16 +315,16 @@ class BanchoPacketReader:
     body_view: `memoryview`
         A readonly view of the request's body.
 
-    packet_map: `dict[ClientPackets, BasePacket]`
-        The map of registered packets the reader may handle.
+    packet_map: `Mapping[ClientPackets, PacketFactory]`
+        The factories for registered packets the reader may handle.
 
-    current_length: int
+    current_len: int
         The length in bytes of the packet currently being handled.
 
     Intended Usage:
     >>> with memoryview(await request.body()) as body_view:
-    ...     for packet in BanchoPacketReader(body_view):
-    ...         await packet.handle()
+    ...     for packet in BanchoPacketReader(body_view, packet_factories):
+    ...         await packet.handle(player)
     """
 
     def __init__(self, body_view: memoryview, packet_map: PacketMap) -> None:
@@ -355,10 +356,10 @@ class BanchoPacketReader:
             raise StopIteration
 
         # we have a packet handler for this.
-        packet_cls = self.packet_map[p_type]
+        packet_factory = self.packet_map[p_type]
         self.current_len = p_len
 
-        return packet_cls(self)
+        return packet_factory(self)
 
     def _read_header(self) -> tuple[ClientPackets, int]:
         """Read the header of an osu! packet (id & length)."""

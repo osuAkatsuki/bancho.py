@@ -1,23 +1,21 @@
 from __future__ import annotations
 
-import app.state.services
+from app.application import Application
 from app.constants.beatmap_statuses import RankedStatus
 from app.constants.score_statuses import SubmissionStatus
-from app.repositories.maps import MapsRepository
-from app.repositories.scores import ScoresRepository
-from app.repositories.users import UsersRepository
-from tests import factories
+from tests.factories import TestDataFactory
 
 
-async def test_fetch_beatmap_leaderboard_scores_orders_scores_and_filters_restricted_users() -> (
-    None
-):
-    beatmap = await factories.create_map()
-    requester = await factories.create_user()
-    unrestricted_user = await factories.create_user()
-    restricted_user = await factories.create_user()
-    users = UsersRepository(app.state.services.database)
-    scores = ScoresRepository(app.state.services.database)
+async def test_fetch_beatmap_leaderboard_scores_orders_scores_and_filters_restricted_users(
+    application: Application,
+    test_data: TestDataFactory,
+) -> None:
+    beatmap = await test_data.create_map()
+    requester = await test_data.create_user()
+    unrestricted_user = await test_data.create_user()
+    restricted_user = await test_data.create_user()
+    users = application.repositories.users
+    scores = application.repositories.scores
     await users.partial_update(
         id=requester.id,
         priv=0,
@@ -27,19 +25,19 @@ async def test_fetch_beatmap_leaderboard_scores_orders_scores_and_filters_restri
         priv=0,
     )
 
-    requester_score = await factories.create_score(
+    requester_score = await test_data.create_score(
         player_id=requester.id,
         map_md5=beatmap.md5,
         score=900_000,
         mods=0,
     )
-    unrestricted_score = await factories.create_score(
+    unrestricted_score = await test_data.create_score(
         player_id=unrestricted_user.id,
         map_md5=beatmap.md5,
         score=500_000,
         mods=0,
     )
-    await factories.create_score(
+    await test_data.create_score(
         player_id=restricted_user.id,
         map_md5=beatmap.md5,
         score=1_000_000,
@@ -60,27 +58,28 @@ async def test_fetch_beatmap_leaderboard_scores_orders_scores_and_filters_restri
     assert [row.leaderboard_value for row in score_rows] == [900_000, 500_000]
 
 
-async def test_fetch_beatmap_leaderboard_scores_orders_by_pp_and_formats_clan_names() -> (
-    None
-):
-    beatmap = await factories.create_map()
-    clan_player = await factories.create_user()
-    other_player = await factories.create_user()
-    clan = await factories.create_clan(owner_id=clan_player.id)
-    scores = ScoresRepository(app.state.services.database)
-    await UsersRepository(app.state.services.database).partial_update(
+async def test_fetch_beatmap_leaderboard_scores_orders_by_pp_and_formats_clan_names(
+    application: Application,
+    test_data: TestDataFactory,
+) -> None:
+    beatmap = await test_data.create_map()
+    clan_player = await test_data.create_user()
+    other_player = await test_data.create_user()
+    clan = await test_data.create_clan(owner_id=clan_player.id)
+    scores = application.repositories.scores
+    await application.repositories.users.partial_update(
         id=clan_player.id,
         clan_id=clan.id,
     )
 
-    clan_score = await factories.create_score(
+    clan_score = await test_data.create_score(
         player_id=clan_player.id,
         map_md5=beatmap.md5,
         score=100_000,
         pp=250.5,
         mods=0,
     )
-    other_score = await factories.create_score(
+    other_score = await test_data.create_score(
         player_id=other_player.id,
         map_md5=beatmap.md5,
         score=900_000,
@@ -106,34 +105,35 @@ async def test_fetch_beatmap_leaderboard_scores_orders_by_pp_and_formats_clan_na
     ]
 
 
-async def test_fetch_first_place_score_uses_metric_and_ignores_restricted_users() -> (
-    None
-):
-    beatmap = await factories.create_map()
-    first_place_player = await factories.create_user()
-    higher_score_player = await factories.create_user()
-    restricted_higher_pp_player = await factories.create_user()
-    scores = ScoresRepository(app.state.services.database)
-    await UsersRepository(app.state.services.database).partial_update(
+async def test_fetch_first_place_score_uses_metric_and_ignores_restricted_users(
+    application: Application,
+    test_data: TestDataFactory,
+) -> None:
+    beatmap = await test_data.create_map()
+    first_place_player = await test_data.create_user()
+    higher_score_player = await test_data.create_user()
+    restricted_higher_pp_player = await test_data.create_user()
+    scores = application.repositories.scores
+    await application.repositories.users.partial_update(
         id=restricted_higher_pp_player.id,
         priv=0,
     )
 
-    await factories.create_score(
+    await test_data.create_score(
         player_id=first_place_player.id,
         map_md5=beatmap.md5,
         score=800_000,
         pp=300.0,
         mods=0,
     )
-    await factories.create_score(
+    await test_data.create_score(
         player_id=higher_score_player.id,
         map_md5=beatmap.md5,
         score=900_000,
         pp=250.0,
         mods=0,
     )
-    await factories.create_score(
+    await test_data.create_score(
         player_id=restricted_higher_pp_player.id,
         map_md5=beatmap.md5,
         score=700_000,
@@ -152,14 +152,17 @@ async def test_fetch_first_place_score_uses_metric_and_ignores_restricted_users(
     assert first_place_score.name == first_place_player.name
 
 
-async def test_fetch_one_by_online_checksum_returns_matching_score() -> None:
-    beatmap = await factories.create_map()
-    player = await factories.create_user()
-    score = await factories.create_score(
+async def test_fetch_one_by_online_checksum_returns_matching_score(
+    application: Application,
+    test_data: TestDataFactory,
+) -> None:
+    beatmap = await test_data.create_map()
+    player = await test_data.create_user()
+    score = await test_data.create_score(
         player_id=player.id,
         map_md5=beatmap.md5,
     )
-    scores = ScoresRepository(app.state.services.database)
+    scores = application.repositories.scores
 
     fetched_score = await scores.fetch_one_by_online_checksum(
         score.online_checksum,
@@ -173,31 +176,34 @@ async def test_fetch_one_by_online_checksum_returns_matching_score() -> None:
     assert missing_score is None
 
 
-async def test_fetch_personal_best_leaderboard_rank_ignores_restricted_scores() -> None:
-    beatmap = await factories.create_map()
-    player = await factories.create_user()
-    higher_unrestricted_user = await factories.create_user()
-    higher_restricted_user = await factories.create_user()
-    users = UsersRepository(app.state.services.database)
-    scores = ScoresRepository(app.state.services.database)
+async def test_fetch_personal_best_leaderboard_rank_ignores_restricted_scores(
+    application: Application,
+    test_data: TestDataFactory,
+) -> None:
+    beatmap = await test_data.create_map()
+    player = await test_data.create_user()
+    higher_unrestricted_user = await test_data.create_user()
+    higher_restricted_user = await test_data.create_user()
+    users = application.repositories.users
+    scores = application.repositories.scores
     await users.partial_update(
         id=higher_restricted_user.id,
         priv=0,
     )
 
-    player_score = await factories.create_score(
+    player_score = await test_data.create_score(
         player_id=player.id,
         map_md5=beatmap.md5,
         score=700_000,
         mods=0,
     )
-    await factories.create_score(
+    await test_data.create_score(
         player_id=higher_unrestricted_user.id,
         map_md5=beatmap.md5,
         score=800_000,
         mods=0,
     )
-    await factories.create_score(
+    await test_data.create_score(
         player_id=higher_restricted_user.id,
         map_md5=beatmap.md5,
         score=900_000,
@@ -222,48 +228,51 @@ async def test_fetch_personal_best_leaderboard_rank_ignores_restricted_scores() 
     assert rank == 2
 
 
-async def test_fetch_personal_best_leaderboard_score_and_rank_use_pp_metric() -> None:
-    beatmap = await factories.create_map()
-    player = await factories.create_user()
-    higher_pp_user = await factories.create_user()
-    lower_pp_user = await factories.create_user()
-    restricted_higher_pp_user = await factories.create_user()
-    users = UsersRepository(app.state.services.database)
-    scores = ScoresRepository(app.state.services.database)
+async def test_fetch_personal_best_leaderboard_score_and_rank_use_pp_metric(
+    application: Application,
+    test_data: TestDataFactory,
+) -> None:
+    beatmap = await test_data.create_map()
+    player = await test_data.create_user()
+    higher_pp_user = await test_data.create_user()
+    lower_pp_user = await test_data.create_user()
+    restricted_higher_pp_user = await test_data.create_user()
+    users = application.repositories.users
+    scores = application.repositories.scores
     await users.partial_update(
         id=restricted_higher_pp_user.id,
         priv=0,
     )
 
-    await factories.create_score(
+    await test_data.create_score(
         player_id=player.id,
         map_md5=beatmap.md5,
         score=900_000,
         pp=100.0,
         mods=0,
     )
-    player_best_pp_score = await factories.create_score(
+    player_best_pp_score = await test_data.create_score(
         player_id=player.id,
         map_md5=beatmap.md5,
         score=800_000,
         pp=300.0,
         mods=0,
     )
-    await factories.create_score(
+    await test_data.create_score(
         player_id=higher_pp_user.id,
         map_md5=beatmap.md5,
         score=500_000,
         pp=400.0,
         mods=0,
     )
-    await factories.create_score(
+    await test_data.create_score(
         player_id=lower_pp_user.id,
         map_md5=beatmap.md5,
         score=1_000_000,
         pp=250.0,
         mods=0,
     )
-    await factories.create_score(
+    await test_data.create_score(
         player_id=restricted_higher_pp_user.id,
         map_md5=beatmap.md5,
         score=600_000,
@@ -290,35 +299,36 @@ async def test_fetch_personal_best_leaderboard_score_and_rank_use_pp_metric() ->
     assert rank == 2
 
 
-async def test_fetch_beatmap_leaderboard_scores_applies_mods_friends_and_country_filters() -> (
-    None
-):
-    beatmap = await factories.create_map()
-    requester = await factories.create_user(country="ca")
-    friend = await factories.create_user(country="us")
-    same_country_user = await factories.create_user(country="ca")
-    other_user = await factories.create_user(country="jp")
-    scores = ScoresRepository(app.state.services.database)
+async def test_fetch_beatmap_leaderboard_scores_applies_mods_friends_and_country_filters(
+    application: Application,
+    test_data: TestDataFactory,
+) -> None:
+    beatmap = await test_data.create_map()
+    requester = await test_data.create_user(country="ca")
+    friend = await test_data.create_user(country="us")
+    same_country_user = await test_data.create_user(country="ca")
+    other_user = await test_data.create_user(country="jp")
+    scores = application.repositories.scores
 
-    requester_score = await factories.create_score(
+    requester_score = await test_data.create_score(
         player_id=requester.id,
         map_md5=beatmap.md5,
         score=900_000,
         mods=64,
     )
-    friend_score = await factories.create_score(
+    friend_score = await test_data.create_score(
         player_id=friend.id,
         map_md5=beatmap.md5,
         score=800_000,
         mods=0,
     )
-    same_country_score = await factories.create_score(
+    same_country_score = await test_data.create_score(
         player_id=same_country_user.id,
         map_md5=beatmap.md5,
         score=700_000,
         mods=0,
     )
-    await factories.create_score(
+    await test_data.create_score(
         player_id=other_user.id,
         map_md5=beatmap.md5,
         score=600_000,
@@ -358,15 +368,16 @@ async def test_fetch_beatmap_leaderboard_scores_applies_mods_friends_and_country
     ]
 
 
-async def test_fetch_player_best_score_listing_rows_filters_best_ranked_and_loved_maps() -> (
-    None
-):
-    ranked_map = await factories.create_map()
-    loved_map = await factories.create_map()
-    pending_map = await factories.create_map()
-    player = await factories.create_user()
-    maps = MapsRepository(app.state.services.database)
-    scores = ScoresRepository(app.state.services.database)
+async def test_fetch_player_best_score_listing_rows_filters_best_ranked_and_loved_maps(
+    application: Application,
+    test_data: TestDataFactory,
+) -> None:
+    ranked_map = await test_data.create_map()
+    loved_map = await test_data.create_map()
+    pending_map = await test_data.create_map()
+    player = await test_data.create_user()
+    maps = application.repositories.maps
+    scores = application.repositories.scores
 
     await maps.partial_update(
         id=loved_map.id,
@@ -377,25 +388,25 @@ async def test_fetch_player_best_score_listing_rows_filters_best_ranked_and_love
         status=RankedStatus.Pending.value,
     )
 
-    ranked_score = await factories.create_score(
+    ranked_score = await test_data.create_score(
         player_id=player.id,
         map_md5=ranked_map.md5,
         pp=300.0,
         status=SubmissionStatus.BEST.value,
     )
-    loved_score = await factories.create_score(
+    loved_score = await test_data.create_score(
         player_id=player.id,
         map_md5=loved_map.md5,
         pp=400.0,
         status=SubmissionStatus.BEST.value,
     )
-    await factories.create_score(
+    await test_data.create_score(
         player_id=player.id,
         map_md5=ranked_map.md5,
         pp=500.0,
         status=SubmissionStatus.SUBMITTED.value,
     )
-    await factories.create_score(
+    await test_data.create_score(
         player_id=player.id,
         map_md5=pending_map.md5,
         pp=600.0,
@@ -430,30 +441,33 @@ async def test_fetch_player_best_score_listing_rows_filters_best_ranked_and_love
     ]
 
 
-async def test_fetch_player_recent_score_listing_rows_filters_failed_and_mods() -> None:
-    beatmap = await factories.create_map()
-    player = await factories.create_user()
-    scores = ScoresRepository(app.state.services.database)
+async def test_fetch_player_recent_score_listing_rows_filters_failed_and_mods(
+    application: Application,
+    test_data: TestDataFactory,
+) -> None:
+    beatmap = await test_data.create_map()
+    player = await test_data.create_user()
+    scores = application.repositories.scores
 
-    hd_score = await factories.create_score(
+    hd_score = await test_data.create_score(
         player_id=player.id,
         map_md5=beatmap.md5,
         mods=64,
         status=SubmissionStatus.SUBMITTED.value,
     )
-    hr_score = await factories.create_score(
+    hr_score = await test_data.create_score(
         player_id=player.id,
         map_md5=beatmap.md5,
         mods=16,
         status=SubmissionStatus.SUBMITTED.value,
     )
-    hdhr_score = await factories.create_score(
+    hdhr_score = await test_data.create_score(
         player_id=player.id,
         map_md5=beatmap.md5,
         mods=80,
         status=SubmissionStatus.SUBMITTED.value,
     )
-    failed_score = await factories.create_score(
+    failed_score = await test_data.create_score(
         player_id=player.id,
         map_md5=beatmap.md5,
         mods=80,
@@ -508,21 +522,24 @@ async def test_fetch_player_recent_score_listing_rows_filters_failed_and_mods() 
     }
 
 
-async def test_fetch_most_played_map_rows_groups_by_map() -> None:
-    most_played_map = await factories.create_map()
-    other_map = await factories.create_map()
-    player = await factories.create_user()
-    scores = ScoresRepository(app.state.services.database)
+async def test_fetch_most_played_map_rows_groups_by_map(
+    application: Application,
+    test_data: TestDataFactory,
+) -> None:
+    most_played_map = await test_data.create_map()
+    other_map = await test_data.create_map()
+    player = await test_data.create_user()
+    scores = application.repositories.scores
 
-    await factories.create_score(
+    await test_data.create_score(
         player_id=player.id,
         map_md5=most_played_map.md5,
     )
-    await factories.create_score(
+    await test_data.create_score(
         player_id=player.id,
         map_md5=most_played_map.md5,
     )
-    await factories.create_score(
+    await test_data.create_score(
         player_id=player.id,
         map_md5=other_map.md5,
     )
@@ -539,18 +556,19 @@ async def test_fetch_most_played_map_rows_groups_by_map() -> None:
     ]
 
 
-async def test_fetch_map_score_listing_rows_filters_restricted_and_sorts_by_mode_metric() -> (
-    None
-):
-    beatmap = await factories.create_map()
-    score_player = await factories.create_user()
-    pp_player = await factories.create_user()
-    restricted_player = await factories.create_user()
-    users = UsersRepository(app.state.services.database)
-    scores = ScoresRepository(app.state.services.database)
+async def test_fetch_map_score_listing_rows_filters_restricted_and_sorts_by_mode_metric(
+    application: Application,
+    test_data: TestDataFactory,
+) -> None:
+    beatmap = await test_data.create_map()
+    score_player = await test_data.create_user()
+    pp_player = await test_data.create_user()
+    restricted_player = await test_data.create_user()
+    users = application.repositories.users
+    scores = application.repositories.scores
     await users.partial_update(id=restricted_player.id, priv=0)
 
-    await factories.create_score(
+    await test_data.create_score(
         player_id=score_player.id,
         map_md5=beatmap.md5,
         score=900_000,
@@ -558,7 +576,7 @@ async def test_fetch_map_score_listing_rows_filters_restricted_and_sorts_by_mode
         mode=0,
         status=SubmissionStatus.BEST.value,
     )
-    await factories.create_score(
+    await test_data.create_score(
         player_id=pp_player.id,
         map_md5=beatmap.md5,
         score=500_000,
@@ -566,7 +584,7 @@ async def test_fetch_map_score_listing_rows_filters_restricted_and_sorts_by_mode
         mode=0,
         status=SubmissionStatus.BEST.value,
     )
-    await factories.create_score(
+    await test_data.create_score(
         player_id=restricted_player.id,
         map_md5=beatmap.md5,
         score=1_000_000,
@@ -574,7 +592,7 @@ async def test_fetch_map_score_listing_rows_filters_restricted_and_sorts_by_mode
         mode=0,
         status=SubmissionStatus.BEST.value,
     )
-    await factories.create_score(
+    await test_data.create_score(
         player_id=score_player.id,
         map_md5=beatmap.md5,
         score=900_000,
@@ -582,7 +600,7 @@ async def test_fetch_map_score_listing_rows_filters_restricted_and_sorts_by_mode
         mode=4,
         status=SubmissionStatus.BEST.value,
     )
-    await factories.create_score(
+    await test_data.create_score(
         player_id=pp_player.id,
         map_md5=beatmap.md5,
         score=500_000,
@@ -618,14 +636,17 @@ async def test_fetch_map_score_listing_rows_filters_restricted_and_sorts_by_mode
     ]
 
 
-async def test_fetch_replay_header_returns_score_player_and_map_details() -> None:
-    beatmap = await factories.create_map()
-    player = await factories.create_user()
-    score = await factories.create_score(
+async def test_fetch_replay_header_returns_score_player_and_map_details(
+    application: Application,
+    test_data: TestDataFactory,
+) -> None:
+    beatmap = await test_data.create_map()
+    player = await test_data.create_user()
+    score = await test_data.create_score(
         player_id=player.id,
         map_md5=beatmap.md5,
     )
-    scores = ScoresRepository(app.state.services.database)
+    scores = application.repositories.scores
 
     row = await scores.fetch_replay_header(score.id)
 

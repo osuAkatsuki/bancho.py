@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 from typing import TypeVar
 
-import databases
+import httpx
 from akatsuki_pp_py import Beatmap
 from akatsuki_pp_py import Calculator
 from redis import asyncio as aioredis
@@ -25,11 +25,13 @@ os.chdir(os.path.abspath(os.pardir))
 
 try:
     import app.settings
-    import app.state.services
+    from app.adapters.database import Database
+    from app.caches import ApplicationCaches
     from app.constants.gamemodes import GameMode
     from app.constants.mods import Mods
     from app.constants.privileges import Privileges
-    from app.objects.beatmap import ensure_osu_file_is_available
+    from app.repositories.maps import MapsRepository
+    from app.services.beatmaps import BeatmapsService
 except ModuleNotFoundError:
     print("\x1b[;91mMust run from tools/ directory\x1b[m")
     raise
@@ -43,9 +45,10 @@ BEATMAPS_PATH = Path.cwd() / ".data/osu"
 
 @dataclass
 class Context:
-    database: databases.Database
+    database: Database
     redis: aioredis.Redis
-    beatmaps: dict[int, Beatmap] = field(default_factory=dict)
+    beatmap_files: BeatmapsService
+    performance_beatmaps: dict[int, Beatmap] = field(default_factory=dict)
 
 
 def divide_chunks(values: list[T], n: int) -> Iterator[list[T]]:
@@ -58,10 +61,10 @@ async def recalculate_score(
     beatmap_path: Path,
     ctx: Context,
 ) -> None:
-    beatmap = ctx.beatmaps.get(score["map_id"])
+    beatmap = ctx.performance_beatmaps.get(score["map_id"])
     if beatmap is None:
         beatmap = Beatmap(path=str(beatmap_path))
-        ctx.beatmaps[score["map_id"]] = beatmap
+        ctx.performance_beatmaps[score["map_id"]] = beatmap
 
     calculator = Calculator(
         mode=GameMode(score["mode"]).as_vanilla,
@@ -99,7 +102,7 @@ async def process_score_chunk(
 ) -> None:
     tasks: list[Awaitable[None]] = []
     for score in chunk:
-        osu_file_available = await ensure_osu_file_is_available(
+        osu_file_available = await ctx.beatmap_files.ensure_osu_file_is_available(
             score["map_id"],
             expected_md5=score["map_md5"],
         )
@@ -252,25 +255,37 @@ async def main(argv: Sequence[str] | None = None) -> int:
     global debug_mode_enabled
     debug_mode_enabled = args.debug
 
-    db = databases.Database(app.settings.DB_DSN)
+    db = Database(app.settings.DB_DSN)
     await db.connect()
 
-    redis = await aioredis.from_url(app.settings.REDIS_DSN)
+    redis = aioredis.from_url(app.settings.REDIS_DSN)
+    http_client = httpx.AsyncClient()
+    beatmap_files = BeatmapsService(
+        maps=MapsRepository(db),
+        database=db,
+        http_client=http_client,
+        caches=ApplicationCaches(),
+        beatmaps_path=BEATMAPS_PATH,
+        osu_api_key=(
+            str(app.settings.OSU_API_KEY) if app.settings.OSU_API_KEY else None
+        ),
+        debug=debug_mode_enabled,
+    )
+    ctx = Context(db, redis, beatmap_files)
 
-    ctx = Context(db, redis)
+    try:
+        for mode_value in args.mode:
+            mode = GameMode(int(mode_value))
 
-    for mode in args.mode:
-        mode = GameMode(int(mode))
+            if not args.no_scores:
+                await recalculate_mode_scores(mode, ctx)
 
-        if not args.no_scores:
-            await recalculate_mode_scores(mode, ctx)
-
-        if not args.no_stats:
-            await recalculate_mode_users(mode, ctx)
-
-    await app.state.services.http_client.aclose()
-    await db.disconnect()
-    await redis.aclose()
+            if not args.no_stats:
+                await recalculate_mode_users(mode, ctx)
+    finally:
+        await http_client.aclose()
+        await db.disconnect()
+        await redis.aclose()
 
     return 0
 

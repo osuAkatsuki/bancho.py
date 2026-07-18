@@ -1,13 +1,19 @@
 from __future__ import annotations
 
+from functools import partial
+from unittest.mock import Mock
+
 import pytest
 
 import app.packets
 import app.settings
-import app.state.sessions
+from app.command_router import CommandRouter
+from app.command_router import Context
 from app.commands import ParsingError
+from app.commands import build_command_router
+from app.commands import mp_abort
 from app.commands import parse__with__command_args
-from app.commands import process_commands
+from app.commands import restrict
 from app.commands import status_to_id
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
@@ -47,6 +53,33 @@ class _RecordingPlayer(Player):
         self.logged_out = True
 
 
+class _FakePlayersService:
+    def __init__(self, players: Players) -> None:
+        self.players = players
+
+    async def fetch_player_session(
+        self,
+        *,
+        user_id: int | None,
+        username: str | None,
+    ) -> Player | None:
+        return self.players.get(id=user_id, name=username)
+
+
+class _RecordingModerationService:
+    async def restrict(
+        self,
+        player: Player,
+        *,
+        admin: Player,
+        reason: str,
+    ) -> None:
+        assert isinstance(player, _RecordingPlayer)
+        player.restriction = (admin, reason)
+        player.priv &= ~Privileges.UNRESTRICTED
+        player.logout()
+
+
 def _player(*, id: int, name: str, priv: Privileges) -> Player:
     return Player(
         id=id,
@@ -57,8 +90,29 @@ def _player(*, id: int, name: str, priv: Privileges) -> Player:
     )
 
 
+def _router() -> CommandRouter:
+    return CommandRouter(
+        prefix=app.settings.COMMAND_PREFIX,
+        clock=lambda: 0,
+        format_elapsed=lambda elapsed: f"{elapsed}ns",
+    )
+
+
+async def _fetch_beatmap(value: int | str) -> None:
+    return None
+
+
+async def _ensure_osu_file_available(
+    beatmap_id: int,
+    *,
+    expected_md5: str,
+) -> bool:
+    return True
+
+
 def _match(*, host: Player, guest: Player | None = None) -> Match:
     chat = Channel("#multi_0", "test match", instance=True)
+    lobby = Channel("#lobby", "multiplayer lobby")
     match = Match(
         id=0,
         name="test match",
@@ -75,6 +129,7 @@ def _match(*, host: Player, guest: Player | None = None) -> Match:
         freemods=False,
         seed=0,
         chat_channel=chat,
+        lobby_channel=lobby,
     )
     match.slots[0].player = host
     match.slots[0].status = SlotStatus.playing
@@ -129,9 +184,54 @@ def test_status_to_id(status: str, expected_id: int) -> None:
     assert status_to_id(status) == expected_id
 
 
-async def test_command_dispatch_requires_the_commands_privilege(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_build_command_router_registers_all_production_commands() -> None:
+    bot = _player(id=1, name="bot", priv=Privileges.UNRESTRICTED)
+    router = build_command_router(
+        prefix="!",
+        clock=lambda: 0,
+        format_elapsed=lambda elapsed: f"{elapsed}ns",
+        developer_mode=True,
+        players=Players(),
+        players_service=Mock(),
+        channels=Mock(),
+        bot=bot,
+        api_keys={},
+        database=Mock(),
+        loop=Mock(),
+        beatmap_cache={},
+        beatmapset_cache={},
+        users=Mock(),
+        map_requests=Mock(),
+        maps=Mock(),
+        logs=Mock(),
+        clans_repository=Mock(),
+        clans=Mock(),
+        tourney_pools=Mock(),
+        performance=Mock(),
+        player_sessions=Mock(),
+        player_moderation=Mock(),
+        relationships=Mock(),
+        fetch_beatmap_by_id=_fetch_beatmap,
+        fetch_beatmap_by_md5=_fetch_beatmap,
+        ensure_osu_file_available=_ensure_osu_file_available,
+    )
+
+    assert len(router.commands) == 35
+    assert {group.trigger: len(group.commands) for group in router.groups} == {
+        "mp": 25,
+        "pool": 7,
+        "clan": 7,
+    }
+
+    restrict_command = next(
+        command for command in router.commands if "restrict" in command.triggers
+    )
+    assert restrict_command.privileges is Privileges.ADMINISTRATOR
+    assert restrict_command.hidden is True
+
+
+async def test_command_dispatch_requires_the_commands_privilege() -> None:
+    router = _router()
     player = _player(
         id=3,
         name="ordinary player",
@@ -142,25 +242,27 @@ async def test_command_dispatch_requires_the_commands_privilege(
         name="target",
         priv=Privileges.UNRESTRICTED | Privileges.VERIFIED,
     )
-    players = Players()
-    players.append(player)
-    players.append(target)
-    monkeypatch.setattr(app.state.sessions, "players", players)
+    callback_called = False
 
-    response = await process_commands(
+    @router.command("restrict", privileges=Privileges.ADMINISTRATOR)
+    async def restricted_command(context: Context) -> None:
+        nonlocal callback_called
+        callback_called = True
+
+    response = await router.process(
         player,
         player,
         f"{app.settings.COMMAND_PREFIX}restrict target cc",
     )
 
     assert response is None
+    assert callback_called is False
     assert target.restriction is None
     assert target.logged_out is False
 
 
-async def test_restrict_command_expands_reason_and_refreshes_online_target(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_restrict_command_expands_reason_and_refreshes_online_target() -> None:
+    router = _router()
     admin = _player(
         id=3,
         name="admin",
@@ -174,9 +276,21 @@ async def test_restrict_command_expands_reason_and_refreshes_online_target(
     players = Players()
     players.append(admin)
     players.append(target)
-    monkeypatch.setattr(app.state.sessions, "players", players)
+    players_service = _FakePlayersService(players)
+    player_moderation = _RecordingModerationService()
+    router.register(
+        partial(
+            restrict,
+            players_service=players_service,
+            player_moderation=player_moderation,
+        ),
+        trigger="restrict",
+        privileges=Privileges.ADMINISTRATOR,
+        hidden=True,
+        description=restrict.__doc__,
+    )
 
-    response = await process_commands(
+    response = await router.process(
         admin,
         admin,
         f"{app.settings.COMMAND_PREFIX}restrict target cc",
@@ -190,9 +304,8 @@ async def test_restrict_command_expands_reason_and_refreshes_online_target(
     assert target.logged_out is True
 
 
-async def test_multiplayer_abort_requires_a_referee_and_resets_match_state(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_multiplayer_abort_requires_a_referee_and_resets_match_state() -> None:
+    router = _router()
     host = _player(
         id=3,
         name="host",
@@ -206,14 +319,21 @@ async def test_multiplayer_abort_requires_a_referee_and_resets_match_state(
     players = Players()
     players.append(host)
     players.append(guest)
-    monkeypatch.setattr(app.state.sessions, "players", players)
+    multiplayer = router.create_group("mp", "Multiplayer commands.")
+    multiplayer.register(
+        mp_abort,
+        trigger="abort",
+        privileges=Privileges.UNRESTRICTED,
+        aliases=("a",),
+        description=mp_abort.__doc__,
+    )
     match = _match(host=host, guest=guest)
     match.in_progress = True
     for slot in match.slots[:2]:
         slot.loaded = True
         slot.skipped = True
 
-    denied_response = await process_commands(
+    denied_response = await router.process(
         guest,
         match.chat,
         f"{app.settings.COMMAND_PREFIX}mp abort",
@@ -222,7 +342,7 @@ async def test_multiplayer_abort_requires_a_referee_and_resets_match_state(
     assert denied_response == {"resp": None, "hidden": False}
     assert match.in_progress is True
 
-    accepted_response = await process_commands(
+    accepted_response = await router.process(
         host,
         match.chat,
         f"{app.settings.COMMAND_PREFIX}mp abort",

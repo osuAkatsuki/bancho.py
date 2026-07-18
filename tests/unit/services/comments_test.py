@@ -22,12 +22,14 @@ async def test_comments_service_strips_colour_for_non_supporter() -> None:
         priv=Privileges.UNRESTRICTED,
         latest_activity_updates=0,
     )
-    player.update_latest_activity_soon = lambda: setattr(
-        player,
-        "latest_activity_updates",
-        player.latest_activity_updates + 1,
+
+    def schedule_latest_activity_update(player: SimpleNamespace) -> None:
+        player.latest_activity_updates += 1
+
+    service = comments.CommentsService(
+        comments=comments_repo,
+        schedule_latest_activity_update=schedule_latest_activity_update,
     )
-    service = comments.CommentsService(comments=comments_repo)
 
     await service.create_comment_for_player(
         player=player,

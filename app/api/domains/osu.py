@@ -27,7 +27,6 @@ from pydantic import ValidationError
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
 import app.settings
-import app.state
 import app.utils
 from app import encryption
 from app.api import dependencies as api_dependencies
@@ -61,6 +60,7 @@ from app.services.maps import BeatmapInfoService
 from app.services.maps import BeatmapRatingResultCode
 from app.services.maps import BeatmapRatingService
 from app.services.maps import BeatmapSetService
+from app.services.problem_reporting import ProblemReportingService
 from app.services.replays import ReplayResultCode
 from app.services.replays import ReplayService
 from app.services.score_submission import ScoreSubmissionError
@@ -187,6 +187,10 @@ async def osuGetBeatmapInfo(
         BeatmapInfoService,
         Depends(api_dependencies.get_beatmap_info_service),
     ],
+    problem_reporting: Annotated[
+        ProblemReportingService,
+        Depends(api_dependencies.get_problem_reporting_service),
+    ],
 ) -> Response:
     player = await bancho_authentication.authenticate_online_player(
         username=unquote(username),
@@ -221,7 +225,7 @@ async def osuGetBeatmapInfo(
         )
 
     if form_data.Ids:  # still have yet to see this used
-        await app.state.services.log_strange_occurrence(
+        await problem_reporting.report(
             f"{player} requested map(s) info by id ({form_data.Ids})",
         )
 
@@ -649,12 +653,16 @@ async def osuSubmitModularSelector(
         ScoreSubmissionService,
         Depends(api_dependencies.get_score_submission_service),
     ],
+    problem_reporting: Annotated[
+        ProblemReportingService,
+        Depends(api_dependencies.get_problem_reporting_service),
+    ],
 ) -> Response:
     """Handle a score submission from an osu! client with an active session."""
 
     if fl_cheat_screenshot:
         stacktrace = app.utils.get_appropriate_stacktrace()
-        await app.state.services.log_strange_occurrence(stacktrace)
+        await problem_reporting.report(stacktrace)
 
     # NOTE: the bancho protocol uses the "score" parameter name for both
     # the base64'ed score data, and the replay file in the multipart

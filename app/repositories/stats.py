@@ -369,4 +369,13 @@ class StatsRepository:
         stat = await self._database.fetch_one(select_stmt)
         return self._deserialize_stat(stat) if stat is not None else None
 
+    async def increment_replay_views(self, player_id: int, mode: int) -> None:
+        update_stmt = (
+            update(StatsTable)
+            .where(StatsTable.id == player_id)
+            .where(StatsTable.mode == mode)
+            .values(replay_views=StatsTable.replay_views + 1)
+        )
+        await self._database.execute(update_stmt)
+
     # TODO: delete?

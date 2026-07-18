@@ -5,24 +5,16 @@ import hashlib
 from datetime import datetime
 from enum import IntEnum
 from enum import unique
-from pathlib import Path
 from typing import TYPE_CHECKING
 
-import app.state
-import app.utils
 from app.constants.clientflags import ClientFlags
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
 from app.constants.score_statuses import SubmissionStatus
-from app.objects.beatmap import Beatmap
-from app.repositories.legacy import get_legacy_repositories
-from app.services.performance import PerformanceService
-from app.services.performance import ScoreParams
 
 if TYPE_CHECKING:
+    from app.objects.beatmap import Beatmap
     from app.objects.player import Player
-
-BEATMAPS_PATH = Path.cwd() / ".data/osu"
 
 
 @unique
@@ -142,52 +134,6 @@ class Score:
         except:
             return super().__repr__()
 
-    """Classmethods to fetch a score object from various data types."""
-
-    @classmethod
-    async def from_sql(cls, score_id: int) -> Score | None:
-        """Create a score object from sql using its scoreid."""
-        rec = await get_legacy_repositories().scores.fetch_one(
-            score_id,
-        )
-
-        if rec is None:
-            return None
-
-        s = cls()
-
-        s.id = rec.id
-        s.bmap = await Beatmap.from_md5(rec.map_md5)
-        s.player = await app.state.sessions.players.from_cache_or_sql(id=rec.userid)
-
-        s.sr = 0.0  # TODO
-
-        s.pp = rec.pp
-        s.score = rec.score
-        s.max_combo = rec.max_combo
-        s.mods = Mods(rec.mods)
-        s.acc = rec.acc
-        s.n300 = rec.n300
-        s.n100 = rec.n100
-        s.n50 = rec.n50
-        s.nmiss = rec.nmiss
-        s.ngeki = rec.ngeki
-        s.nkatu = rec.nkatu
-        s.grade = Grade.from_str(rec.grade)
-        s.perfect = rec.perfect == 1
-        s.status = SubmissionStatus(rec.status)
-        s.passed = s.status != SubmissionStatus.FAILED
-        s.mode = GameMode(rec.mode)
-        s.server_time = rec.play_time
-        s.time_elapsed = rec.time_elapsed
-        s.client_flags = ClientFlags(rec.client_flags)
-        s.client_checksum = rec.online_checksum
-
-        if s.bmap:
-            s.rank = await s.calculate_placement()
-
-        return s
-
     @classmethod
     def from_submission(cls, data: list[str]) -> Score:
         """Create a score object from an osu! submission string."""
@@ -267,90 +213,6 @@ class Score:
             ).encode(),
         ).hexdigest()
 
-    """Methods to calculate internal data for a score."""
-
-    async def calculate_placement(self) -> int:
-        assert self.bmap is not None
-
-        if self.mode >= GameMode.RELAX_OSU:
-            scoring_metric = "pp"
-            score = self.pp
-        else:
-            scoring_metric = "score"
-            score = self.score
-
-        num_better_scores: int | None = await app.state.services.database.fetch_val(
-            "SELECT COUNT(*) AS c FROM scores s "
-            "INNER JOIN users u ON u.id = s.userid "
-            "WHERE s.map_md5 = :map_md5 AND s.mode = :mode "
-            "AND s.status = 2 AND u.priv & 1 "
-            f"AND s.{scoring_metric} > :score",
-            {
-                "map_md5": self.bmap.md5,
-                "mode": self.mode,
-                "score": score,
-            },
-            column=0,  # COUNT(*)
-        )
-        assert num_better_scores is not None
-        return num_better_scores + 1
-
-    def calculate_performance(self, beatmap_id: int) -> tuple[float, float]:
-        """Calculate PP and star rating for our score."""
-        mode_vn = self.mode.as_vanilla
-
-        score_args = ScoreParams(
-            mode=mode_vn,
-            mods=int(self.mods),
-            combo=self.max_combo,
-            ngeki=self.ngeki,
-            n300=self.n300,
-            nkatu=self.nkatu,
-            n100=self.n100,
-            n50=self.n50,
-            nmiss=self.nmiss,
-        )
-
-        result = PerformanceService().calculate_performances(
-            osu_file_path=str(BEATMAPS_PATH / f"{beatmap_id}.osu"),
-            scores=[score_args],
-        )
-
-        return result[0].performance.pp, result[0].difficulty.stars
-
-    async def calculate_status(self) -> None:
-        """Calculate the submission status of a submitted score."""
-        assert self.player is not None
-        assert self.bmap is not None
-
-        recs = await get_legacy_repositories().scores.fetch_many(
-            user_id=self.player.id,
-            map_md5=self.bmap.md5,
-            mode=self.mode,
-            status=SubmissionStatus.BEST,
-            include_hidden_players=True,
-        )
-
-        if recs:
-            rec = recs[0]
-
-            # we have a score on the map.
-            # save it as our previous best score.
-            self.prev_best = await Score.from_sql(rec.id)
-            assert self.prev_best is not None
-
-            # if our new score is better, update
-            # both of our score's submission statuses.
-            # NOTE: this will be updated in sql later on in submission
-            if self.pp > rec.pp:
-                self.status = SubmissionStatus.BEST
-                self.prev_best.status = SubmissionStatus.SUBMITTED
-            else:
-                self.status = SubmissionStatus.SUBMITTED
-        else:
-            # this is our first score on the map.
-            self.status = SubmissionStatus.BEST
-
     def calculate_accuracy(self) -> float:
         """Calculate the accuracy of our score."""
         mode_vn = self.mode.as_vanilla
@@ -416,18 +278,3 @@ class Score:
             )
         else:
             raise Exception(f"Invalid vanilla mode {mode_vn}")
-
-    """ Methods for updating a score. """
-
-    async def increment_replay_views(self) -> None:
-        # TODO: move replay views to be per-score rather than per-user
-        assert self.player is not None
-
-        # TODO: apparently cached stats don't store replay views?
-        #       need to refactor that to be able to use StatsRepository here
-        await app.state.services.database.execute(
-            f"UPDATE stats "
-            "SET replay_views = replay_views + 1 "
-            "WHERE id = :user_id AND mode = :mode",
-            {"user_id": self.player.id, "mode": self.mode},
-        )

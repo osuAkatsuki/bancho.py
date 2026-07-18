@@ -11,6 +11,8 @@ from asgi_lifespan._types import ASGIApp
 from fastapi import status
 
 from app.api.init_api import asgi_app
+from app.application import Application
+from tests.factories import TestDataFactory
 
 # TODO: fixtures for postgres database connection(s) for itests
 
@@ -47,6 +49,17 @@ async def app() -> AsyncIterator[ASGIApp]:
         shutdown_timeout=None,
     ) as manager:
         yield manager.app
+
+
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
+async def application(app: ASGIApp) -> Application:
+    """Return the application graph initialized by the managed ASGI lifespan."""
+    return asgi_app.state.application
+
+
+@pytest.fixture
+def test_data(application: Application) -> TestDataFactory:
+    return TestDataFactory(application)
 
 
 @pytest_asyncio.fixture(loop_scope="session")

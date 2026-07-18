@@ -51,6 +51,17 @@ class LeaderboardRanksRepository:
             {str(player_id): pp},
         )
 
+    async def add_to_global_leaderboard(
+        self,
+        player_id: int,
+        mode: int,
+        pp: float,
+    ) -> None:
+        await self._redis.zadd(
+            f"bancho:leaderboard:{mode}",
+            {str(player_id): pp},
+        )
+
     async def remove_from_country_leaderboard(
         self,
         player_id: int,
@@ -60,5 +71,15 @@ class LeaderboardRanksRepository:
         """Remove a player's entry from a country leaderboard."""
         await self._redis.zrem(
             f"bancho:leaderboard:{mode}:{country}",
+            str(player_id),
+        )
+
+    async def remove_from_global_leaderboard(
+        self,
+        player_id: int,
+        mode: int,
+    ) -> None:
+        await self._redis.zrem(
+            f"bancho:leaderboard:{mode}",
             str(player_id),
         )

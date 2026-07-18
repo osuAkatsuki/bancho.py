@@ -6,21 +6,22 @@ from pathlib import Path
 from fastapi import status
 from httpx import AsyncClient
 
-import app.state.services
+from app.application import Application
 from app.constants.privileges import Privileges
-from app.repositories.users import UsersRepository
-from tests import factories
+from tests.factories import TestDataFactory
 
 API_HEADERS = {"Host": "api.cmyui.xyz"}
 
 
 async def test_v1_search_players_returns_verified_unrestricted_matches(
+    application: Application,
+    test_data: TestDataFactory,
     http_client: AsyncClient,
 ) -> None:
     suffix = secrets.token_hex(4)
-    users = UsersRepository(app.state.services.database)
-    visible = await factories.create_user()
-    restricted = await factories.create_user()
+    users = application.repositories.users
+    visible = await test_data.create_user()
+    restricted = await test_data.create_user()
     await users.partial_update(
         id=visible.id,
         name=f"search-{suffix}-visible",
@@ -52,16 +53,18 @@ async def test_v1_search_players_returns_verified_unrestricted_matches(
 
 
 async def test_v1_global_leaderboard_filters_restricted_players(
+    application: Application,
+    test_data: TestDataFactory,
     http_client: AsyncClient,
 ) -> None:
-    users = UsersRepository(app.state.services.database)
-    first = await factories.create_user(country="zz")
-    second = await factories.create_user(country="zz")
-    restricted = await factories.create_user(country="zz")
+    users = application.repositories.users
+    first = await test_data.create_user(country="zz")
+    second = await test_data.create_user(country="zz")
+    restricted = await test_data.create_user(country="zz")
     await users.partial_update(id=restricted.id, priv=0)
-    await factories.create_player_stats(player_id=first.id, mode=0, pp=400)
-    await factories.create_player_stats(player_id=second.id, mode=0, pp=300)
-    await factories.create_player_stats(player_id=restricted.id, mode=0, pp=500)
+    await test_data.create_player_stats(player_id=first.id, mode=0, pp=400)
+    await test_data.create_player_stats(player_id=second.id, mode=0, pp=300)
+    await test_data.create_player_stats(player_id=restricted.id, mode=0, pp=500)
 
     response = await http_client.get(
         "/v1/get_leaderboard",
@@ -79,12 +82,13 @@ async def test_v1_global_leaderboard_filters_restricted_players(
 
 
 async def test_v1_hidden_player_resources_are_not_exposed(
+    test_data: TestDataFactory,
     http_client: AsyncClient,
 ) -> None:
     # a hidden (unverified) player with a score & a replay on disk
-    hidden = await factories.create_user(priv=int(Privileges.UNRESTRICTED))
-    beatmap = await factories.create_map()
-    score = await factories.create_score(player_id=hidden.id, map_md5=beatmap.md5)
+    hidden = await test_data.create_user(priv=int(Privileges.UNRESTRICTED))
+    beatmap = await test_data.create_map()
+    score = await test_data.create_score(player_id=hidden.id, map_md5=beatmap.md5)
     replay_path = Path.cwd() / ".data/osr" / f"{score.id}.osr"
     replay_path.write_bytes(b"raw replay frames")
     try:

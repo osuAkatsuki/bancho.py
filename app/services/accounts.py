@@ -19,7 +19,7 @@ from app.logging import log
 from app.repositories.stats import StatsRepository
 from app.repositories.users import User
 from app.repositories.users import UsersRepository
-from app.state.services import Geolocation
+from app.runtime import Geolocation
 
 
 class IPResolver(Protocol):

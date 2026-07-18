@@ -4,7 +4,6 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 import app.packets
-import app.state
 from app.constants.privileges import Privileges
 
 if TYPE_CHECKING:
@@ -87,10 +86,8 @@ class Channel:
             if sender.id not in player.blocks and (to_self or player.id != sender.id):
                 player.enqueue(data)
 
-    def send_bot(self, msg: str) -> None:
+    def send_bot(self, msg: str, *, bot: Player) -> None:
         """Enqueue `msg` to all connected clients from bot."""
-        bot = app.state.sessions.bot
-
         msg_len = len(msg)
 
         if msg_len >= 31979:  # TODO ??????????
@@ -123,12 +120,6 @@ class Channel:
     def remove(self, player: Player) -> None:
         """Remove `player` from the channel's players."""
         self.players.remove(player)
-
-        if not self.players and self.instance:
-            # if it's an instance channel and this
-            # is the last member leaving, just remove
-            # the channel from the global list.
-            app.state.sessions.channels.remove(self)
 
     def enqueue(self, data: bytes, immune: Sequence[int] = []) -> None:
         """Enqueue `data` to all connected clients not in `immune`."""

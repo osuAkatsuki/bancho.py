@@ -7,22 +7,24 @@ from app.constants.clientflags import LastFMFlags
 class _FakePlayer:
     def __init__(self) -> None:
         self.is_online = True
-        self.restrictions: list[tuple[object, str]] = []
+        self.restrictions: list[str] = []
         self.notifications: list[str] = []
         self.logout_count = 0
 
-    async def restrict(self, *, admin: object, reason: str) -> None:
-        self.restrictions.append((admin, reason))
-
-    def logout(self) -> None:
-        self.logout_count += 1
-
 
 def _service(*, restriction_roll: int = 1) -> client_integrity.ClientIntegrityService:
+    async def restrict_player(player: _FakePlayer, reason: str) -> None:
+        player.restrictions.append(reason)
+
     return client_integrity.ClientIntegrityService(
-        restriction_admin=object(),
         restriction_roll=lambda limit: restriction_roll,
         send_notification=lambda player, message: player.notifications.append(message),
+        restrict_player=restrict_player,
+        logout_player=lambda player: setattr(
+            player,
+            "logout_count",
+            player.logout_count + 1,
+        ),
     )
 
 
@@ -50,9 +52,7 @@ async def test_client_integrity_restricts_hq_osu_flags_and_logs_out_player() -> 
     )
 
     assert result is client_integrity.ClientIntegrityResult.STOP_SENDING
-    assert player.restrictions == [
-        (service.restriction_admin, f"hq!osu running ({LastFMFlags.HQ_FILE})"),
-    ]
+    assert player.restrictions == [f"hq!osu running ({LastFMFlags.HQ_FILE})"]
     assert player.logout_count == 1
 
 

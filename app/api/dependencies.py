@@ -1,26 +1,13 @@
 from __future__ import annotations
 
-import random
-import secrets
-from dataclasses import dataclass
-from pathlib import Path
 from typing import Annotated
-from typing import Any
 from typing import cast
 
-import httpx
 from fastapi import Depends
+from fastapi import Request
 
-import app.packets
-import app.state.services
-import app.state.sessions
-import app.utils
-from app import settings
-from app import state
-from app.objects.beatmap import Beatmap
-from app.objects.beatmap import ensure_osu_file_is_available
-from app.objects.player import Player
-from app.objects.score import Score
+from app.application import Application
+from app.objects.collections import Matches
 from app.repositories.achievements import AchievementsRepository
 from app.repositories.clans import ClansRepository
 from app.repositories.client_hashes import ClientHashesRepository
@@ -28,8 +15,6 @@ from app.repositories.comments import CommentsRepository
 from app.repositories.favourites import FavouritesRepository
 from app.repositories.ingame_logins import IngameLoginsRepository
 from app.repositories.leaderboard_ranks import LeaderboardRanksRepository
-from app.repositories.legacy import LegacyRepositories
-from app.repositories.legacy import get_legacy_repositories
 from app.repositories.mail import MailRepository
 from app.repositories.maps import MapsRepository
 from app.repositories.ratings import RatingsRepository
@@ -47,12 +32,11 @@ from app.services.avatars import AvatarsService
 from app.services.bancho import BanchoAuthenticationService
 from app.services.bancho import BanchoLoginService
 from app.services.beatmap_leaderboards import BeatmapLeaderboardService
-from app.services.captcha import CAPTCHA_VERIFY_URLS
+from app.services.beatmaps import BeatmapsService
 from app.services.captcha import CaptchaService
 from app.services.clans import ClansService
 from app.services.client_integrity import ClientIntegrityService
 from app.services.comments import CommentsService
-from app.services.direct_search import DirectSearchParams
 from app.services.direct_search import DirectSearchService
 from app.services.favourites import FavouritesService
 from app.services.mail import MailReadService
@@ -61,8 +45,12 @@ from app.services.maps import BeatmapRatingService
 from app.services.maps import BeatmapSetService
 from app.services.maps import MapsService
 from app.services.performance import PerformanceService
+from app.services.player_data import PlayerDataService
 from app.services.player_leaderboards import PlayerLeaderboardsService
+from app.services.player_moderation import PlayerModerationService
+from app.services.player_sessions import PlayerSessionService
 from app.services.players import PlayersService
+from app.services.problem_reporting import ProblemReportingService
 from app.services.relationships import RelationshipsService
 from app.services.replays import ReplayService
 from app.services.score_leaderboards import ScoreLeaderboardsService
@@ -72,636 +60,255 @@ from app.services.screenshots import ScreenshotService
 from app.services.tourney_pools import TourneyPoolsService
 from app.services.web_sessions import WebSessionsService
 
-AVATARS_PATH = Path.cwd() / ".data/avatars"
-SCREENSHOTS_PATH = Path.cwd() / ".data/ss"
-REPLAYS_PATH = Path.cwd() / ".data/osr"
+
+def get_application(request: Request) -> Application:
+    """Resolve the application graph at the outer FastAPI boundary."""
+
+    return cast(Application, request.app.state.application)
 
 
-async def _fetch_mirror_search(
-    url: str,
-    *,
-    params: DirectSearchParams,
-) -> httpx.Response:
-    http_params: dict[str, str | int | float | bool | None] = {
-        "amount": params["amount"],
-        "offset": params["offset"],
-    }
-    if "query" in params:
-        http_params["query"] = params["query"]
-    if "mode" in params:
-        http_params["mode"] = params["mode"]
-    if "status" in params:
-        http_params["status"] = params["status"]
-
-    return await app.state.services.http_client.get(url, params=http_params)
+ApplicationDependency = Annotated[Application, Depends(get_application)]
 
 
-def _increment_metric(metric: str) -> None:
-    if app.state.services.datadog:
-        app.state.services.datadog.increment(metric)  # type: ignore[no-untyped-call]
+def get_api_keys(app: ApplicationDependency) -> dict[str, int]:
+    return app.sessions.api_keys
 
 
-def _send_notification(player: Player, message: str) -> None:
-    player.enqueue(app.packets.notification(message))
+def get_matches(app: ApplicationDependency) -> Matches:
+    return app.sessions.matches
 
 
-def _publish_user_stats(player: Player) -> None:
-    app.state.sessions.players.enqueue(app.packets.user_stats(player))
+def get_achievements_repository(app: ApplicationDependency) -> AchievementsRepository:
+    return app.repositories.achievements
 
 
-async def _record_strange_occurrence_stacktrace() -> None:
-    stacktrace = app.utils.get_appropriate_stacktrace()
-    await app.state.services.log_strange_occurrence(stacktrace)
+def get_clans_repository(app: ApplicationDependency) -> ClansRepository:
+    return app.repositories.clans
 
 
-def _schedule_replay_view_increment(score: Score) -> None:
-    _ = app.state.loop.create_task(score.increment_replay_views())
+def get_client_hashes_repository(app: ApplicationDependency) -> ClientHashesRepository:
+    return app.repositories.client_hashes
 
 
-async def _post_captcha_siteverify(url: str, data: dict[str, str]) -> dict[str, Any]:
-    response = await app.state.services.http_client.post(url, data=data)
-    response.raise_for_status()
-    return cast("dict[str, Any]", response.json())
+def get_comments_repository(app: ApplicationDependency) -> CommentsRepository:
+    return app.repositories.comments
 
 
-def _generate_web_session_token() -> str:
-    return secrets.token_urlsafe(32)
+def get_favourites_repository(app: ApplicationDependency) -> FavouritesRepository:
+    return app.repositories.favourites
 
 
-def get_achievements_repository() -> AchievementsRepository:
-    return AchievementsRepository(app.state.services.database)
+def get_ingame_logins_repository(app: ApplicationDependency) -> IngameLoginsRepository:
+    return app.repositories.ingame_logins
 
 
-def get_clans_repository() -> ClansRepository:
-    return ClansRepository(app.state.services.database)
+def get_mail_repository(app: ApplicationDependency) -> MailRepository:
+    return app.repositories.mail
 
 
-def get_client_hashes_repository() -> ClientHashesRepository:
-    return ClientHashesRepository(app.state.services.database)
+def get_leaderboard_ranks_repository(
+    app: ApplicationDependency,
+) -> LeaderboardRanksRepository:
+    return app.repositories.leaderboard_ranks
 
 
-def get_comments_repository() -> CommentsRepository:
-    return CommentsRepository(app.state.services.database)
+def get_maps_repository(app: ApplicationDependency) -> MapsRepository:
+    return app.repositories.maps
 
 
-def get_favourites_repository() -> FavouritesRepository:
-    return FavouritesRepository(app.state.services.database)
+def get_ratings_repository(app: ApplicationDependency) -> RatingsRepository:
+    return app.repositories.ratings
 
 
-def get_ingame_logins_repository() -> IngameLoginsRepository:
-    return IngameLoginsRepository(app.state.services.database)
+def get_relationships_repository(app: ApplicationDependency) -> RelationshipsRepository:
+    return app.repositories.relationships
 
 
-def get_mail_repository() -> MailRepository:
-    return MailRepository(app.state.services.database)
+def get_scores_repository(app: ApplicationDependency) -> ScoresRepository:
+    return app.repositories.scores
 
 
-def get_leaderboard_ranks_repository() -> LeaderboardRanksRepository:
-    return LeaderboardRanksRepository(app.state.services.redis)
+def get_stats_repository(app: ApplicationDependency) -> StatsRepository:
+    return app.repositories.stats
 
 
-def get_maps_repository() -> MapsRepository:
-    return MapsRepository(app.state.services.database)
+def get_tourney_pool_maps_repository(
+    app: ApplicationDependency,
+) -> TourneyPoolMapsRepository:
+    return app.repositories.tourney_pool_maps
 
 
-def get_ratings_repository() -> RatingsRepository:
-    return RatingsRepository(app.state.services.database)
+def get_tourney_pools_repository(
+    app: ApplicationDependency,
+) -> TourneyPoolsRepository:
+    return app.repositories.tourney_pools
 
 
-def get_relationships_repository() -> RelationshipsRepository:
-    return RelationshipsRepository(app.state.services.database)
+def get_user_achievements_repository(
+    app: ApplicationDependency,
+) -> UserAchievementsRepository:
+    return app.repositories.user_achievements
 
 
-def get_scores_repository() -> ScoresRepository:
-    return ScoresRepository(app.state.services.database)
+def get_users_repository(app: ApplicationDependency) -> UsersRepository:
+    return app.repositories.users
 
 
-def get_stats_repository() -> StatsRepository:
-    return StatsRepository(app.state.services.database)
+def get_web_sessions_repository(
+    app: ApplicationDependency,
+) -> WebSessionsRepository:
+    return app.repositories.web_sessions
 
 
-def get_tourney_pool_maps_repository() -> TourneyPoolMapsRepository:
-    return TourneyPoolMapsRepository(app.state.services.database)
-
-
-def get_tourney_pools_repository() -> TourneyPoolsRepository:
-    return TourneyPoolsRepository(app.state.services.database)
-
-
-def get_user_achievements_repository() -> UserAchievementsRepository:
-    return UserAchievementsRepository(app.state.services.database)
-
-
-def get_users_repository() -> UsersRepository:
-    return UsersRepository(app.state.services.database)
-
-
-def get_web_sessions_repository() -> WebSessionsRepository:
-    return WebSessionsRepository(app.state.services.redis)
-
-
-def get_clans_service(
-    clans: Annotated[ClansRepository, Depends(get_clans_repository)],
-    users: Annotated[UsersRepository, Depends(get_users_repository)],
-) -> ClansService:
-    return ClansService(
-        clans=clans,
-        users=users,
-        online_players=app.state.sessions.players,
-        database=app.state.services.database,
-    )
+def get_clans_service(app: ApplicationDependency) -> ClansService:
+    return app.services.clans
 
 
 def get_bancho_authentication_service(
-    users: Annotated[UsersRepository, Depends(get_users_repository)],
+    app: ApplicationDependency,
 ) -> BanchoAuthenticationService:
-    return BanchoAuthenticationService(
-        users=users,
-        online_players=app.state.sessions.players,
-        password_cache=state.cache.bcrypt,
-    )
+    return app.services.bancho_authentication
 
 
-def get_bancho_login_service(
-    authentication: Annotated[
-        BanchoAuthenticationService,
-        Depends(get_bancho_authentication_service),
-    ],
-    users: Annotated[UsersRepository, Depends(get_users_repository)],
-    ingame_logins: Annotated[
-        IngameLoginsRepository,
-        Depends(get_ingame_logins_repository),
-    ],
-    client_hashes: Annotated[
-        ClientHashesRepository,
-        Depends(get_client_hashes_repository),
-    ],
-    mail: Annotated[MailRepository, Depends(get_mail_repository)],
-) -> BanchoLoginService:
-    return BanchoLoginService(
-        authentication=authentication,
-        users=users,
-        ingame_logins=ingame_logins,
-        client_hashes=client_hashes,
-        mail=mail,
-    )
+def get_bancho_login_service(app: ApplicationDependency) -> BanchoLoginService:
+    return app.services.bancho_login
 
 
-def get_maps_service(
-    maps: Annotated[MapsRepository, Depends(get_maps_repository)],
-) -> MapsService:
-    return MapsService(maps=maps)
+def get_maps_service(app: ApplicationDependency) -> MapsService:
+    return app.services.maps
 
 
 def get_account_registration_service(
-    users: Annotated[UsersRepository, Depends(get_users_repository)],
-    stats: Annotated[StatsRepository, Depends(get_stats_repository)],
+    app: ApplicationDependency,
 ) -> AccountRegistrationService:
-    return AccountRegistrationService(
-        users=users,
-        stats=stats,
-        database=app.state.services.database,
-        password_cache=state.cache.bcrypt,
-        ip_resolver=app.state.services.ip_resolver,
-        fetch_geoloc=app.state.services.fetch_geoloc,
-        increment_metric=_increment_metric,
-        ingame_registration_disallowed=settings.DISALLOW_INGAME_REGISTRATION,
-        disallowed_names=settings.DISALLOWED_NAMES,
-        disallowed_passwords=settings.DISALLOWED_PASSWORDS,
-    )
+    return app.services.account_registration
 
 
 def get_account_settings_service(
-    users: Annotated[UsersRepository, Depends(get_users_repository)],
-    stats: Annotated[StatsRepository, Depends(get_stats_repository)],
-    leaderboard_ranks: Annotated[
-        LeaderboardRanksRepository,
-        Depends(get_leaderboard_ranks_repository),
-    ],
-    bancho_authentication: Annotated[
-        BanchoAuthenticationService,
-        Depends(get_bancho_authentication_service),
-    ],
+    app: ApplicationDependency,
 ) -> AccountSettingsService:
-    return AccountSettingsService(
-        users=users,
-        stats=stats,
-        leaderboard_ranks=leaderboard_ranks,
-        authentication=bancho_authentication,
-        online_players=app.state.sessions.players,
-        password_cache=state.cache.bcrypt,
-        disallowed_names=settings.DISALLOWED_NAMES,
-        disallowed_passwords=settings.DISALLOWED_PASSWORDS,
-    )
+    return app.services.account_settings
 
 
-def get_avatars_service() -> AvatarsService:
-    return AvatarsService(avatars_path=AVATARS_PATH)
+def get_avatars_service(app: ApplicationDependency) -> AvatarsService:
+    return app.services.avatars
 
 
-def get_screenshot_service() -> ScreenshotService:
-    return ScreenshotService(
-        screenshots_path=SCREENSHOTS_PATH,
-        token_urlsafe=secrets.token_urlsafe,
-        log_strange_occurrence=app.state.services.log_strange_occurrence,
-    )
+def get_screenshot_service(app: ApplicationDependency) -> ScreenshotService:
+    return app.services.screenshots
 
 
-def get_client_integrity_service() -> ClientIntegrityService:
-    return ClientIntegrityService(
-        restriction_admin=app.state.sessions.bot,
-        restriction_roll=random.randrange,
-        send_notification=_send_notification,
-    )
+def get_client_integrity_service(
+    app: ApplicationDependency,
+) -> ClientIntegrityService:
+    return app.services.client_integrity
 
 
-def get_direct_search_service() -> DirectSearchService:
-    return DirectSearchService(
-        mirror_search_endpoint=settings.MIRROR_SEARCH_ENDPOINT,
-        fetch_mirror_search=_fetch_mirror_search,
-    )
+def get_direct_search_service(app: ApplicationDependency) -> DirectSearchService:
+    return app.services.direct_search
 
 
-def get_beatmap_info_service(
-    maps: Annotated[MapsRepository, Depends(get_maps_repository)],
-    scores: Annotated[ScoresRepository, Depends(get_scores_repository)],
-) -> BeatmapInfoService:
-    return BeatmapInfoService(maps=maps, scores=scores)
+def get_beatmap_info_service(app: ApplicationDependency) -> BeatmapInfoService:
+    return app.services.beatmap_info
 
 
-def get_beatmap_rating_service(
-    ratings: Annotated[RatingsRepository, Depends(get_ratings_repository)],
-) -> BeatmapRatingService:
-    return BeatmapRatingService(
-        ratings=ratings,
-        beatmap_cache=state.cache.beatmap,
-    )
+def get_beatmap_rating_service(app: ApplicationDependency) -> BeatmapRatingService:
+    return app.services.beatmap_rating
 
 
-def get_beatmap_set_service(
-    maps: Annotated[MapsRepository, Depends(get_maps_repository)],
-) -> BeatmapSetService:
-    return BeatmapSetService(maps=maps)
+def get_beatmap_set_service(app: ApplicationDependency) -> BeatmapSetService:
+    return app.services.beatmap_set
 
 
-def get_comments_service(
-    comments: Annotated[CommentsRepository, Depends(get_comments_repository)],
-) -> CommentsService:
-    return CommentsService(comments=comments)
+def get_beatmaps_service(app: ApplicationDependency) -> BeatmapsService:
+    return app.services.beatmaps
 
 
-def get_favourites_service(
-    favourites: Annotated[FavouritesRepository, Depends(get_favourites_repository)],
-) -> FavouritesService:
-    return FavouritesService(favourites=favourites)
+def get_comments_service(app: ApplicationDependency) -> CommentsService:
+    return app.services.comments
 
 
-def get_mail_read_service(
-    mail: Annotated[MailRepository, Depends(get_mail_repository)],
-) -> MailReadService:
-    return MailReadService(
-        mail=mail,
-        players=app.state.sessions.players,
-    )
+def get_favourites_service(app: ApplicationDependency) -> FavouritesService:
+    return app.services.favourites
 
 
-def get_replay_service(
-    scores: Annotated[ScoresRepository, Depends(get_scores_repository)],
-) -> ReplayService:
-    return ReplayService(
-        replays_path=REPLAYS_PATH,
-        fetch_score=Score.from_sql,
-        fetch_replay_header=scores.fetch_replay_header,
-        schedule_replay_view_increment=_schedule_replay_view_increment,
-    )
+def get_mail_read_service(app: ApplicationDependency) -> MailReadService:
+    return app.services.mail_read
+
+
+def get_replay_service(app: ApplicationDependency) -> ReplayService:
+    return app.services.replays
 
 
 def get_player_leaderboards_service(
-    stats: Annotated[StatsRepository, Depends(get_stats_repository)],
-    leaderboard_ranks: Annotated[
-        LeaderboardRanksRepository,
-        Depends(get_leaderboard_ranks_repository),
-    ],
+    app: ApplicationDependency,
 ) -> PlayerLeaderboardsService:
-    return PlayerLeaderboardsService(
-        stats=stats,
-        leaderboard_ranks=leaderboard_ranks,
-    )
+    return app.services.player_leaderboards
 
 
-def get_players_service(
-    users: Annotated[UsersRepository, Depends(get_users_repository)],
-    stats: Annotated[StatsRepository, Depends(get_stats_repository)],
-    player_leaderboards: Annotated[
-        PlayerLeaderboardsService,
-        Depends(get_player_leaderboards_service),
-    ],
-) -> PlayersService:
-    return PlayersService(
-        users=users,
-        stats=stats,
-        online_players=app.state.sessions.players,
-        player_leaderboards=player_leaderboards,
-    )
+def get_players_service(app: ApplicationDependency) -> PlayersService:
+    return app.services.players
 
 
-def get_performance_service() -> PerformanceService:
-    return PerformanceService()
+def get_player_moderation_service(
+    app: ApplicationDependency,
+) -> PlayerModerationService:
+    return app.services.player_moderation
 
 
-def get_tourney_pools_service(
-    tourney_pools: Annotated[
-        TourneyPoolsRepository,
-        Depends(get_tourney_pools_repository),
-    ],
-    tourney_pool_maps: Annotated[
-        TourneyPoolMapsRepository,
-        Depends(get_tourney_pool_maps_repository),
-    ],
-) -> TourneyPoolsService:
-    return TourneyPoolsService(
-        tourney_pools=tourney_pools,
-        tourney_pool_maps=tourney_pool_maps,
-        database=app.state.services.database,
-    )
+def get_player_data_service(app: ApplicationDependency) -> PlayerDataService:
+    return app.services.player_data
+
+
+def get_player_session_service(
+    app: ApplicationDependency,
+) -> PlayerSessionService:
+    return app.services.player_sessions
+
+
+def get_problem_reporting_service(
+    app: ApplicationDependency,
+) -> ProblemReportingService:
+    return app.services.problem_reporting
+
+
+def get_performance_service(app: ApplicationDependency) -> PerformanceService:
+    return app.services.performance
+
+
+def get_tourney_pools_service(app: ApplicationDependency) -> TourneyPoolsService:
+    return app.services.tourney_pools
 
 
 def get_score_leaderboards_service(
-    scores: Annotated[ScoresRepository, Depends(get_scores_repository)],
+    app: ApplicationDependency,
 ) -> ScoreLeaderboardsService:
-    return ScoreLeaderboardsService(scores=scores)
+    return app.services.score_leaderboards
 
 
 def get_beatmap_leaderboard_service(
-    score_leaderboards: Annotated[
-        ScoreLeaderboardsService,
-        Depends(get_score_leaderboards_service),
-    ],
-    clans: Annotated[ClansRepository, Depends(get_clans_repository)],
-    maps: Annotated[MapsRepository, Depends(get_maps_repository)],
-    ratings: Annotated[RatingsRepository, Depends(get_ratings_repository)],
+    app: ApplicationDependency,
 ) -> BeatmapLeaderboardService:
-    return BeatmapLeaderboardService(
-        score_leaderboards=score_leaderboards,
-        clans=clans,
-        maps=maps,
-        ratings=ratings,
-        beatmap_fetcher=Beatmap.from_md5,
-        unsubmitted_cache=app.state.cache.unsubmitted,
-        needs_update_cache=app.state.cache.needs_update,
-        beatmapset_cache=app.state.cache.beatmapset,
-        publish_user_stats=_publish_user_stats,
-        increment_metric=_increment_metric,
-        log_strange_occurrence=app.state.services.log_strange_occurrence,
-        get_appropriate_stacktrace=app.utils.get_appropriate_stacktrace,
-    )
+    return app.services.beatmap_leaderboards
 
 
 def get_score_submission_service(
-    bancho_authentication: Annotated[
-        BanchoAuthenticationService,
-        Depends(get_bancho_authentication_service),
-    ],
-    scores: Annotated[ScoresRepository, Depends(get_scores_repository)],
-    stats: Annotated[StatsRepository, Depends(get_stats_repository)],
-    maps: Annotated[MapsRepository, Depends(get_maps_repository)],
-    achievements: Annotated[
-        AchievementsRepository,
-        Depends(get_achievements_repository),
-    ],
-    user_achievements: Annotated[
-        UserAchievementsRepository,
-        Depends(get_user_achievements_repository),
-    ],
+    app: ApplicationDependency,
 ) -> ScoreSubmissionService:
-    return ScoreSubmissionService(
-        replays_path=REPLAYS_PATH,
-        restriction_admin=app.state.sessions.bot,
-        fetch_beatmap=Beatmap.from_md5,
-        bancho_authentication=bancho_authentication,
-        score_submission_locks=app.state.score_submission_locks,
-        database=app.state.services.database,
-        scores=scores,
-        stats=stats,
-        maps=maps,
-        achievements=achievements,
-        user_achievements=user_achievements,
-        ensure_osu_file_is_available=ensure_osu_file_is_available,
-        publish_user_stats=_publish_user_stats,
-        send_personal_best_notification=_send_notification,
-        announce_channel=app.state.sessions.channels.get_by_name("#announce"),
-        domain=settings.DOMAIN,
-        increment_metric=_increment_metric,
-        record_submission_integrity_failure=_record_strange_occurrence_stacktrace,
-    )
+    return app.services.score_submission
 
 
-def get_relationships_service(
-    relationships: Annotated[
-        RelationshipsRepository,
-        Depends(get_relationships_repository),
-    ],
-    users: Annotated[UsersRepository, Depends(get_users_repository)],
-) -> RelationshipsService:
-    return RelationshipsService(
-        relationships=relationships,
-        users=users,
-        online_players=app.state.sessions.players,
-    )
+def get_relationships_service(app: ApplicationDependency) -> RelationshipsService:
+    return app.services.relationships
 
 
-def get_scores_service(
-    scores: Annotated[ScoresRepository, Depends(get_scores_repository)],
-    users: Annotated[UsersRepository, Depends(get_users_repository)],
-    clans: Annotated[ClansRepository, Depends(get_clans_repository)],
-) -> ScoresService:
-    return ScoresService(
-        scores=scores,
-        users=users,
-        clans=clans,
-        fetch_beatmap=Beatmap.from_md5,
-    )
+def get_scores_service(app: ApplicationDependency) -> ScoresService:
+    return app.services.scores
 
 
-def get_captcha_service() -> CaptchaService:
-    if (
-        settings.CAPTCHA_PROVIDER is not None
-        and settings.CAPTCHA_PROVIDER not in CAPTCHA_VERIFY_URLS
-    ):
-        raise ValueError(
-            f"Unsupported CAPTCHA_PROVIDER {settings.CAPTCHA_PROVIDER!r}; "
-            f"must be one of {', '.join(CAPTCHA_VERIFY_URLS)}.",
-        )
-
-    return CaptchaService(
-        provider=settings.CAPTCHA_PROVIDER,
-        secret=settings.CAPTCHA_SECRET,
-        post_siteverify=_post_captcha_siteverify,
-    )
+def get_captcha_service(app: ApplicationDependency) -> CaptchaService:
+    return app.services.captcha
 
 
-def get_web_sessions_service(
-    bancho_authentication: Annotated[
-        BanchoAuthenticationService,
-        Depends(get_bancho_authentication_service),
-    ],
-    users: Annotated[UsersRepository, Depends(get_users_repository)],
-    web_sessions: Annotated[
-        WebSessionsRepository,
-        Depends(get_web_sessions_repository),
-    ],
-) -> WebSessionsService:
-    return WebSessionsService(
-        authentication=bancho_authentication,
-        users=users,
-        web_sessions=web_sessions,
-        generate_token=_generate_web_session_token,
-    )
-
-
-@dataclass(frozen=True)
-class Services:
-    """All of the app's services, composed once at startup.
-
-    HTTP controllers receive individual services via FastAPI dependencies;
-    the bancho packet handlers (and the chat commands beneath them) receive
-    this container threaded down from the packet controller layer.
-    """
-
-    repositories: LegacyRepositories
-
-    account_registration: AccountRegistrationService
-    account_settings: AccountSettingsService
-    avatars: AvatarsService
-    bancho_authentication: BanchoAuthenticationService
-    bancho_login: BanchoLoginService
-    beatmap_info: BeatmapInfoService
-    beatmap_leaderboards: BeatmapLeaderboardService
-    beatmap_rating: BeatmapRatingService
-    beatmap_set: BeatmapSetService
-    captcha: CaptchaService
-    clans: ClansService
-    client_integrity: ClientIntegrityService
-    comments: CommentsService
-    direct_search: DirectSearchService
-    favourites: FavouritesService
-    mail_read: MailReadService
-    maps: MapsService
-    performance: PerformanceService
-    player_leaderboards: PlayerLeaderboardsService
-    players: PlayersService
-    relationships: RelationshipsService
-    replays: ReplayService
-    score_leaderboards: ScoreLeaderboardsService
-    score_submission: ScoreSubmissionService
-    scores: ScoresService
-    screenshots: ScreenshotService
-    tourney_pools: TourneyPoolsService
-    web_sessions: WebSessionsService
-
-
-def build_services() -> Services:
-    """Compose the app's services; the single wiring root, called at the
-    end of startup (some services capture startup-created state such as
-    the bot session)."""
-    repos = get_legacy_repositories()
-    leaderboard_ranks = get_leaderboard_ranks_repository()
-    relationships = get_relationships_repository()
-    web_sessions_repository = get_web_sessions_repository()
-
-    bancho_authentication = get_bancho_authentication_service(users=repos.users)
-    player_leaderboards = get_player_leaderboards_service(
-        stats=repos.stats,
-        leaderboard_ranks=leaderboard_ranks,
-    )
-    score_leaderboards = get_score_leaderboards_service(scores=repos.scores)
-
-    return Services(
-        repositories=repos,
-        account_registration=get_account_registration_service(
-            users=repos.users,
-            stats=repos.stats,
-        ),
-        account_settings=get_account_settings_service(
-            users=repos.users,
-            stats=repos.stats,
-            leaderboard_ranks=leaderboard_ranks,
-            bancho_authentication=bancho_authentication,
-        ),
-        avatars=get_avatars_service(),
-        bancho_authentication=bancho_authentication,
-        bancho_login=get_bancho_login_service(
-            authentication=bancho_authentication,
-            users=repos.users,
-            ingame_logins=repos.ingame_logins,
-            client_hashes=repos.client_hashes,
-            mail=repos.mail,
-        ),
-        beatmap_info=get_beatmap_info_service(maps=repos.maps, scores=repos.scores),
-        beatmap_leaderboards=get_beatmap_leaderboard_service(
-            score_leaderboards=score_leaderboards,
-            clans=repos.clans,
-            maps=repos.maps,
-            ratings=repos.ratings,
-        ),
-        beatmap_rating=get_beatmap_rating_service(ratings=repos.ratings),
-        beatmap_set=get_beatmap_set_service(maps=repos.maps),
-        captcha=get_captcha_service(),
-        clans=get_clans_service(clans=repos.clans, users=repos.users),
-        client_integrity=get_client_integrity_service(),
-        comments=get_comments_service(comments=repos.comments),
-        direct_search=get_direct_search_service(),
-        favourites=get_favourites_service(favourites=repos.favourites),
-        mail_read=get_mail_read_service(mail=repos.mail),
-        maps=get_maps_service(maps=repos.maps),
-        performance=get_performance_service(),
-        player_leaderboards=player_leaderboards,
-        players=get_players_service(
-            users=repos.users,
-            stats=repos.stats,
-            player_leaderboards=player_leaderboards,
-        ),
-        relationships=get_relationships_service(
-            relationships=relationships,
-            users=repos.users,
-        ),
-        replays=get_replay_service(scores=repos.scores),
-        score_leaderboards=score_leaderboards,
-        score_submission=get_score_submission_service(
-            bancho_authentication=bancho_authentication,
-            scores=repos.scores,
-            stats=repos.stats,
-            maps=repos.maps,
-            achievements=repos.achievements,
-            user_achievements=repos.user_achievements,
-        ),
-        scores=get_scores_service(
-            scores=repos.scores,
-            users=repos.users,
-            clans=repos.clans,
-        ),
-        screenshots=get_screenshot_service(),
-        tourney_pools=get_tourney_pools_service(
-            tourney_pools=repos.tourney_pools,
-            tourney_pool_maps=repos.tourney_pool_maps,
-        ),
-        web_sessions=get_web_sessions_service(
-            bancho_authentication=bancho_authentication,
-            users=repos.users,
-            web_sessions=web_sessions_repository,
-        ),
-    )
-
-
-_global_services: Services | None = None
-
-
-def set_global_services(services: Services) -> None:
-    global _global_services
-    _global_services = services
-
-
-def get_global_services() -> Services:
-    """The app-wide service container, composed at startup."""
-    assert _global_services is not None, "services have not been composed yet"
-    return _global_services
+def get_web_sessions_service(app: ApplicationDependency) -> WebSessionsService:
+    return app.services.web_sessions

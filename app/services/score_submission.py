@@ -39,6 +39,7 @@ from app.repositories.scores import ScoresRepository
 from app.repositories.stats import StatsRepository
 from app.repositories.user_achievements import UserAchievement
 from app.repositories.user_achievements import UserAchievementsRepository
+from app.services.scores import ScoreDomainService
 
 
 class ScoreStatsUpdates(TypedDict):
@@ -338,6 +339,7 @@ async def calculate_score_submission_status(
     score_time: int,
     fail_time: int,
     ensure_osu_file_is_available: OsuFileAvailabilityChecker,
+    score_domain: ScoreDomainService,
 ) -> None:
     assert score.bmap is not None
 
@@ -350,13 +352,13 @@ async def calculate_score_submission_status(
         expected_md5=score.bmap.md5,
     )
     if osu_file_available:
-        score.pp, score.sr = score.calculate_performance(score.bmap.id)
+        score.pp, score.sr = score_domain.calculate_performance(score, score.bmap.id)
 
         if score.passed:
-            await score.calculate_status()
+            await score_domain.calculate_submission_status(score)
 
             if score.bmap.status != RankedStatus.Pending:
-                score.rank = await score.calculate_placement()
+                score.rank = await score_domain.calculate_placement(score)
         else:
             score.status = SubmissionStatus.FAILED
 
@@ -437,18 +439,13 @@ def replay_data_is_valid(replay_data: bytes) -> bool:
 async def restrict_player_for_missing_replay(
     score: Score,
     *,
-    restriction_admin: Player,
+    restrict_player: Callable[[Player, str], Awaitable[None]],
 ) -> None:
     assert score.player is not None
     log(f"{score.player} submitted a score without a replay!", Ansi.LRED)
 
     if not score.player.restricted:
-        await score.player.restrict(
-            admin=restriction_admin,
-            reason="submitted score with no replay",
-        )
-        if score.player.is_online:
-            score.player.logout()
+        await restrict_player(score.player, "submitted score with no replay")
 
 
 def write_replay_file(
@@ -762,7 +759,6 @@ def score_can_unlock_achievements(score: Score) -> bool:
 @dataclass(frozen=True)
 class ScoreSubmissionService:
     replays_path: Path
-    restriction_admin: Player
     fetch_beatmap: BeatmapFetcher
     bancho_authentication: PlayerAuthenticator
     score_submission_locks: ScoreSubmissionLocks
@@ -773,12 +769,16 @@ class ScoreSubmissionService:
     achievements: AchievementsRepository
     user_achievements: UserAchievementsRepository
     ensure_osu_file_is_available: OsuFileAvailabilityChecker
+    score_domain: ScoreDomainService
     publish_user_stats: Callable[[Player], None]
     send_personal_best_notification: Callable[[Player, str], None]
     announce_channel: AnnouncementChannel | None
     domain: str
     increment_metric: Callable[[str], None]
     record_submission_integrity_failure: Callable[[], Awaitable[None]]
+    restrict_player: Callable[[Player, str], Awaitable[None]]
+    schedule_player_activity_update: Callable[[Player], None]
+    update_player_rank: Callable[[Player, GameMode], Awaitable[int]]
 
     async def persist_score_submission_stats(
         self,
@@ -935,20 +935,14 @@ class ScoreSubmissionService:
             # after which, it will be enabled & perform restrictions.
             await self.record_submission_integrity_failure()
 
-            # await player.restrict(
-            #     admin=app.state.sessions.bot,
-            #     reason="mismatching hashes on score submission",
-            # )
-
-            # refresh their client state
-            # if player.online:
-            #     player.logout()
+            # TODO: enable restriction once the integrity checks finish their
+            # trial period, using the injected moderation callback.
 
             # return b"error: ban"
 
         # we should update their activity no matter
         # what the result of the score submission is.
-        player.update_latest_activity_soon()
+        self.schedule_player_activity_update(player)
 
         update_submitter_status_mode(
             score,
@@ -970,6 +964,7 @@ class ScoreSubmissionService:
                 score_time=request.score_time,
                 fail_time=request.fail_time,
                 ensure_osu_file_is_available=self.ensure_osu_file_is_available,
+                score_domain=self.score_domain,
             )
 
             # TODO: re-implement pp caps for non-whitelisted players?
@@ -981,7 +976,7 @@ class ScoreSubmissionService:
             if replay_data is not None and not replay_data_is_valid(replay_data):
                 await restrict_player_for_missing_replay(
                     score,
-                    restriction_admin=self.restriction_admin,
+                    restrict_player=self.restrict_player,
                 )
                 replay_data = None
 
@@ -1006,7 +1001,8 @@ class ScoreSubmissionService:
         )
 
         if persistence_result.should_update_rank:
-            persistence_result.current_stats.rank = await player.update_rank(
+            persistence_result.current_stats.rank = await self.update_player_rank(
+                player,
                 score.mode,
             )
 

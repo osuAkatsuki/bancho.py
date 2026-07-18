@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from app.constants.privileges import Privileges
@@ -13,6 +14,7 @@ from app.repositories.comments import TargetType
 @dataclass(frozen=True)
 class CommentsService:
     comments: CommentsRepository
+    schedule_latest_activity_update: Callable[[Player], None]
 
     async def fetch_relevant_to_replay_for_player(
         self,
@@ -27,7 +29,7 @@ class CommentsService:
             map_set_id=map_set_id,
             map_id=map_id,
         )
-        player.update_latest_activity_soon()
+        self.schedule_latest_activity_update(player)
         return comments
 
     async def create_comment_for_player(
@@ -67,4 +69,4 @@ class CommentsService:
             colour=colour,
         )
 
-        player.update_latest_activity_soon()
+        self.schedule_latest_activity_update(player)

@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-import pytest
-
 import app.packets
-import app.state.sessions
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
 from app.constants.privileges import Privileges
@@ -17,6 +14,7 @@ from app.objects.match import MatchTeamTypes
 from app.objects.match import MatchWinConditions
 from app.objects.match import SlotStatus
 from app.objects.player import Player
+from app.services.player_sessions import PlayerSessionService
 
 
 def _player(*, id: int, name: str) -> Player:
@@ -29,7 +27,12 @@ def _player(*, id: int, name: str) -> Player:
     )
 
 
-def _match(*, host_id: int, chat: Channel) -> Match:
+def _match(
+    *,
+    host_id: int,
+    chat: Channel,
+    lobby: Channel | None = None,
+) -> Match:
     return Match(
         id=0,
         name="test match",
@@ -46,29 +49,34 @@ def _match(*, host_id: int, chat: Channel) -> Match:
         freemods=False,
         seed=0,
         chat_channel=chat,
+        lobby_channel=lobby,
     )
 
 
-@pytest.fixture
-def isolated_sessions(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(app.state.sessions, "players", Players())
-    monkeypatch.setattr(app.state.sessions, "channels", Channels())
-    monkeypatch.setattr(app.state.sessions, "matches", Matches())
+def _sessions(bot: Player) -> PlayerSessionService:
+    players = Players()
+    players.append(bot)
+    return PlayerSessionService(
+        players=players,
+        channels=Channels(),
+        matches=Matches(),
+        bot=bot,
+        decrement_online_players=lambda: None,
+        debug=False,
+    )
 
 
-def test_join_match_rejects_an_incorrect_password(
-    isolated_sessions: None,
-) -> None:
+def test_join_match_rejects_an_incorrect_password() -> None:
     host = _player(id=3, name="host")
     guest = _player(id=4, name="guest")
-    app.state.sessions.players.append(host)
-    app.state.sessions.players.append(guest)
+    sessions = _sessions(host)
+    sessions.players.append(guest)
     match = _match(
         host_id=host.id,
         chat=Channel("#multi_0", "test match", instance=True),
     )
 
-    joined = guest.join_match(match, "incorrect")
+    joined = sessions.join_match(guest, match, "incorrect")
 
     assert joined is False
     assert guest.match is None
@@ -76,20 +84,18 @@ def test_join_match_rejects_an_incorrect_password(
     assert guest.dequeue() == app.packets.match_join_fail()
 
 
-def test_match_join_host_departure_and_empty_match_cleanup(
-    isolated_sessions: None,
-) -> None:
+def test_match_join_host_departure_and_empty_match_cleanup() -> None:
     host = _player(id=3, name="host")
     guest = _player(id=4, name="guest")
-    app.state.sessions.players.append(host)
-    app.state.sessions.players.append(guest)
+    sessions = _sessions(host)
+    sessions.players.append(guest)
     chat = Channel("#multi_0", "test match", auto_join=False, instance=True)
-    app.state.sessions.channels.append(chat)
+    sessions.channels.append(chat)
     match = _match(host_id=host.id, chat=chat)
-    app.state.sessions.matches[match.id] = match
+    sessions.matches[match.id] = match
 
-    assert host.join_match(match, "secret") is True
-    assert guest.join_match(match, "secret") is True
+    assert sessions.join_match(host, match, "secret") is True
+    assert sessions.join_match(guest, match, "secret") is True
     host.dequeue()
     guest.dequeue()
 
@@ -101,29 +107,25 @@ def test_match_join_host_departure_and_empty_match_cleanup(
     assert guest_slot.status is SlotStatus.not_ready
     assert guest_slot.team is MatchTeams.red
 
-    host.leave_match()
+    sessions.leave_match(host)
 
     assert host.match is None
     assert match.slots[0].status is SlotStatus.open
     assert match.host is guest
     assert guest.dequeue() is not None
-    assert match in app.state.sessions.matches
+    assert match in sessions.matches
 
-    guest.leave_match()
+    sessions.leave_match(guest)
 
     assert guest.match is None
     assert match.slots[1].status is SlotStatus.open
-    assert match not in app.state.sessions.matches
-    assert chat not in app.state.sessions.channels
+    assert match not in sessions.matches
+    assert chat not in sessions.channels
 
 
-def test_start_match_only_sends_start_packet_to_players_with_the_map(
-    isolated_sessions: None,
-) -> None:
+def test_start_match_only_sends_start_packet_to_players_with_the_map() -> None:
     ready_player = _player(id=3, name="ready")
     no_map_player = _player(id=4, name="no map")
-    app.state.sessions.players.append(ready_player)
-    app.state.sessions.players.append(no_map_player)
     chat = Channel("#multi_0", "test match", instance=True)
     match = _match(host_id=ready_player.id, chat=chat)
     chat.append(ready_player)
