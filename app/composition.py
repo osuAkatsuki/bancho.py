@@ -14,17 +14,18 @@ from typing import cast
 import httpx
 
 import app.packets
+import app.runtime as runtime_service_helpers
 import app.settings
 import app.utils
-from app.bg_loops import HousekeepingService
 from app.application import Application
 from app.application import BackgroundTaskSupervisor
 from app.application import RuntimeResources
+from app.bg_loops import HousekeepingService
 from app.caches import ApplicationCaches
+from app.discord import Webhook
 from app.objects.beatmap import Beatmap
 from app.objects.player import Player
 from app.objects.score import Score
-from app.discord import Webhook
 from app.repositories.container import Repositories
 from app.repositories.container import build_repositories
 from app.service_container import ApplicationServices
@@ -49,8 +50,8 @@ from app.services.maps import BeatmapRatingService
 from app.services.maps import BeatmapSetService
 from app.services.maps import MapsService
 from app.services.performance import PerformanceService
-from app.services.player_leaderboards import PlayerLeaderboardsService
 from app.services.player_data import PlayerDataService
+from app.services.player_leaderboards import PlayerLeaderboardsService
 from app.services.player_moderation import PlayerModerationService
 from app.services.player_sessions import PlayerSessionService
 from app.services.players import PlayersService
@@ -66,7 +67,6 @@ from app.services.session_bootstrap import SessionBootstrapService
 from app.services.tourney_pools import TourneyPoolsService
 from app.services.web_sessions import WebSessionsService
 from app.sessions import SessionState
-import app.runtime as runtime_service_helpers
 
 AVATARS_PATH = Path.cwd() / ".data/avatars"
 SCREENSHOTS_PATH = Path.cwd() / ".data/ss"
@@ -180,6 +180,7 @@ def build_services(
             user_id=player_id,
             username=None,
         )
+
     players = PlayersService(
         users=repositories.users,
         stats=repositories.stats,
@@ -194,7 +195,9 @@ def build_services(
         http_client=resources.http_client,
         caches=caches,
         beatmaps_path=BEATMAPS_PATH,
-        osu_api_key=(str(app.settings.OSU_API_KEY) if app.settings.OSU_API_KEY else None),
+        osu_api_key=(
+            str(app.settings.OSU_API_KEY) if app.settings.OSU_API_KEY else None
+        ),
         debug=app.settings.DEBUG,
     )
     performance = PerformanceService()

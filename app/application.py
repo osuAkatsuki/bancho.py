@@ -21,9 +21,9 @@ import app.settings
 from app.adapters.database import Database
 from app.caches import ApplicationCaches
 from app.repositories.container import Repositories
+from app.runtime import IPResolver
 from app.service_container import ApplicationServices
 from app.sessions import SessionState
-from app.runtime import IPResolver
 
 if TYPE_CHECKING:
     from app.bancho.router import BanchoPacketRouter

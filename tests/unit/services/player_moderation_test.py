@@ -151,9 +151,7 @@ class _Harness:
         )
 
 
-async def test_add_privileges_persists_and_refreshes_online_client_privileges() -> (
-    None
-):
+async def test_add_privileges_persists_and_refreshes_online_client_privileges() -> None:
     harness = _Harness()
     player = _player(3, privileges=Privileges.UNRESTRICTED)
     assert player.bancho_priv is ClientPrivileges.PLAYER

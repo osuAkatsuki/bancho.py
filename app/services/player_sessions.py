@@ -182,9 +182,7 @@ class PlayerSessionService:
         slot = match.get_slot(player)
         assert slot is not None
         new_status = (
-            SlotStatus.locked
-            if slot.status == SlotStatus.locked
-            else SlotStatus.open
+            SlotStatus.locked if slot.status == SlotStatus.locked else SlotStatus.open
         )
         slot.reset(new_status=new_status)
         self.leave_channel(player, match.chat)
