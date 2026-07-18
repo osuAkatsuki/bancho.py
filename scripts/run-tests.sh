@@ -57,5 +57,6 @@ execDBStatement "source /srv/root/migrations/base.sql"
 # Run tests
 echo "Running tests..."
 coverage run -m pytest -vv -s tests/
-coverage report --show-missing --fail-under=45
+coverage report --show-missing --fail-under=70
 coverage html
+coverage xml -o coverage/coverage.xml

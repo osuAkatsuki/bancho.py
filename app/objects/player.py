@@ -379,9 +379,6 @@ class Player:
 
     def logout(self) -> None:
         """Log `self` out of the server."""
-        # invalidate the user's token.
-        self.token = ""
-
         # leave multiplayer.
         if self.match:
             self.leave_match()
@@ -397,7 +394,12 @@ class Player:
 
         # remove from playerlist and
         # enqueue logout to all users.
+        # (this must happen before the token is invalidated, as the
+        #  player collection's token index is keyed by the login token)
         app.state.sessions.players.remove(self)
+
+        # invalidate the user's token.
+        self.token = ""
 
         if not self.restricted:
             if app.state.services.datadog:
