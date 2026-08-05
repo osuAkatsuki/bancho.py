@@ -33,7 +33,7 @@ dependencies = [
     "redis[hiredis]==8.0.0",
     "sqlalchemy>=2.0.51,<2.1",
     "akatsuki-pp-py==1.0.5",
-    "cryptography==49.0.0",
+    "cryptography==50.0.0",
     "tenacity==9.1.4",
     "httpx==0.28.1",
     "py-cpuinfo==9.0.0",
