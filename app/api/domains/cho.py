@@ -691,6 +691,19 @@ async def handle_osu_login_request(
 
     login_time = time.time()
 
+    user_info = await bancho_login_service.authenticate(
+        login_data["username"],
+        login_data["password_md5"],
+    )
+    if user_info is None:
+        return {
+            "osu_token": "incorrect-credentials",
+            "response_body": (
+                app.packets.notification(f"{BASE_DOMAIN}: Incorrect credentials")
+                + app.packets.login_reply(LoginFailureReason.AUTHENTICATION_FAILED)
+            ),
+        }
+
     # disallow multiple sessions from a single user
     # with the exception of tourney spectator clients
     player = app.state.sessions.players.get(name=login_data["username"])
@@ -708,19 +721,6 @@ async def handle_osu_login_request(
             # session is not active; replace it
             player.logout()
             del player
-
-    user_info = await bancho_login_service.authenticate(
-        login_data["username"],
-        login_data["password_md5"],
-    )
-    if user_info is None:
-        return {
-            "osu_token": "incorrect-credentials",
-            "response_body": (
-                app.packets.notification(f"{BASE_DOMAIN}: Incorrect credentials")
-                + app.packets.login_reply(LoginFailureReason.AUTHENTICATION_FAILED)
-            ),
-        }
 
     if osu_version.stream is OsuStream.TOURNEY and not (
         user_info.priv & Privileges.DONATOR and user_info.priv & Privileges.UNRESTRICTED
