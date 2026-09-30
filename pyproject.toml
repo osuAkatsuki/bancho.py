@@ -45,7 +45,7 @@ dependencies = [
     "coverage>=7.14.2,<8",
     "databases[mysql]>=0.9.0,<0.10",
     "python-json-logger>=4.1.0,<5",
-    "anyio>=4.9.0,<5",
+    "anyio>=4.14.2,<5",
 ]
 
 [tool.mypy]
