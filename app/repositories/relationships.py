@@ -9,6 +9,8 @@ from sqlalchemy import Integer
 from sqlalchemy import delete
 from sqlalchemy import insert
 from sqlalchemy import select
+from sqlalchemy.dialects.mysql import Insert as MysqlInsert
+from sqlalchemy.dialects.mysql import insert as mysql_insert
 
 from app.adapters.database import Database
 from app.adapters.database import MySQLRow
@@ -76,6 +78,20 @@ class RelationshipsRepository:
 
         assert relationship is not None
         return self._deserialize_relationship(relationship)
+
+    async def upsert(
+        self,
+        user1: int,
+        user2: int,
+        type: RelationshipType,
+    ) -> None:
+        """Atomically create a relationship or replace its type."""
+        insert_stmt: MysqlInsert = (
+            mysql_insert(RelationshipsTable)
+            .values(user1=user1, user2=user2, type=type)
+            .on_duplicate_key_update(type=type)
+        )
+        await self._database.execute(insert_stmt)
 
     async def fetch_all(
         self,

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from collections.abc import Collection
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Protocol
 
+from app.constants.privileges import ClanPrivileges
 from app.constants.privileges import Privileges
 from app.objects.player import Player
 from app.repositories.stats import Stat
@@ -11,6 +13,7 @@ from app.repositories.stats import StatsRepository
 from app.repositories.users import SearchUser
 from app.repositories.users import User
 from app.repositories.users import UsersRepository
+from app.runtime import Geolocation
 from app.services.player_leaderboards import ModeRanks
 from app.services.player_leaderboards import PlayerLeaderboardsService
 
@@ -22,12 +25,6 @@ class OnlinePlayers(Protocol):
     def get(
         self,
         token: str | None = None,
-        id: int | None = None,
-        name: str | None = None,
-    ) -> Player | None: ...
-
-    async def from_cache_or_sql(
-        self,
         id: int | None = None,
         name: str | None = None,
     ) -> Player | None: ...
@@ -113,6 +110,7 @@ class PlayersService:
     stats: StatsRepository
     online_players: OnlinePlayers
     player_leaderboards: PlayerLeaderboardsService
+    country_codes: Mapping[str, int]
 
     async def search_players(
         self,
@@ -218,12 +216,54 @@ class PlayersService:
         user_id: int | None,
         username: str | None,
     ) -> Player | None:
-        if user_id is not None:
-            return await self.online_players.from_cache_or_sql(id=user_id)
-        if username is not None:
-            return await self.online_players.from_cache_or_sql(name=username)
+        online_player = self.fetch_online_player(
+            user_id=user_id,
+            username=username,
+        )
+        if online_player is not None:
+            return online_player
 
-        raise ValueError("Must provide either user_id or username.")
+        if user_id is not None:
+            user = await self.users.fetch_one(id=user_id, fetch_all_fields=True)
+        elif username is not None:
+            user = await self.users.fetch_one(name=username, fetch_all_fields=True)
+        else:
+            raise ValueError("Must provide either user_id or username.")
+
+        if user is None:
+            return None
+
+        password_hash = await self.users.fetch_password_hash(id=user.id)
+        assert password_hash is not None
+
+        clan_id: int | None = None
+        clan_priv: ClanPrivileges | None = None
+        if user.clan_id != 0:
+            clan_id = user.clan_id
+            clan_priv = ClanPrivileges(user.clan_priv)
+
+        geoloc: Geolocation = {
+            "latitude": 0.0,
+            "longitude": 0.0,
+            "country": {
+                "acronym": user.country,
+                "numeric": self.country_codes[user.country],
+            },
+        }
+
+        return Player(
+            id=user.id,
+            name=user.name,
+            priv=Privileges(user.priv),
+            pw_bcrypt=password_hash.encode(),
+            token="",
+            clan_id=clan_id,
+            clan_priv=clan_priv,
+            geoloc=geoloc,
+            silence_end=user.silence_end,
+            donor_end=user.donor_end,
+            api_key=user.api_key,
+        )
 
     def fetch_player_status(self, player_id: int) -> PlayerStatus | None:
         player = self.online_players.get(id=player_id)

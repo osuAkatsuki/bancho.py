@@ -9,10 +9,11 @@ from app.repositories.mail import MailRepository
 
 
 class PlayerLookup(Protocol):
-    async def from_cache_or_sql(
+    async def fetch_player_session(
         self,
-        id: int | None = None,
-        name: str | None = None,
+        *,
+        user_id: int | None,
+        username: str | None,
     ) -> Player | None: ...
 
 
@@ -31,7 +32,10 @@ class MailReadService:
         if not target_name:
             return
 
-        target = await self.players.from_cache_or_sql(name=target_name)
+        target = await self.players.fetch_player_session(
+            user_id=None,
+            username=target_name,
+        )
         if target is not None:
             await self.mail.mark_conversation_as_read(
                 to_id=player.id,

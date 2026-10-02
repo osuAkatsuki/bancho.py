@@ -20,17 +20,23 @@ from fastapi.responses import Response
 from starlette.middleware.base import RequestResponseEndpoint
 from starlette.requests import ClientDisconnect
 
-import app.bg_loops
 import app.settings
-import app.state
 import app.utils
 from app.api import api_router  # type: ignore[attr-defined]
 from app.api import domains
 from app.api import middlewares
 from app.api.v2.common.json import ORJSONResponse
+from app.application import Application
+from app.application import build_runtime_resources
+from app.application import managed_runtime_resources
+from app.bg_loops import BOT_STATUS_UPDATE_INTERVAL
+from app.bg_loops import GHOST_DISCONNECT_INTERVAL
+from app.bg_loops import SUPPORTER_EXPIRATION_INTERVAL
+from app.bg_loops import run_periodically
+from app.composition import build_application
 from app.logging import Ansi
 from app.logging import log
-from app.objects import collections
+from app.runtime import run_sql_migrations
 
 
 class BanchoAPI(FastAPI):
@@ -74,7 +80,7 @@ async def lifespan(asgi_app: BanchoAPI) -> AsyncIterator[None]:
 
     app.utils.ensure_persistent_volumes_are_available()
 
-    app.state.loop = asyncio.get_running_loop()
+    loop = asyncio.get_running_loop()
 
     if app.utils.is_running_as_admin():
         log(
@@ -82,45 +88,64 @@ async def lifespan(asgi_app: BanchoAPI) -> AsyncIterator[None]:
             Ansi.LYELLOW,
         )
 
-    await app.state.services.database.connect()
-    await app.state.services.redis.initialize()  # type: ignore[unused-awaitable]
+    resources = build_runtime_resources(loop)
+    async with managed_runtime_resources(resources):
+        await run_sql_migrations(resources.database)
+        application = await build_application(resources)
+        asgi_app.state.application = application
 
-    if app.state.services.datadog is not None:
-        app.state.services.datadog.start(  # type: ignore[no-untyped-call]
-            flush_in_thread=True,
-            flush_interval=15,
-        )
-        app.state.services.datadog.gauge("bancho.online_players", 0)  # type: ignore[no-untyped-call]
+        try:
+            _schedule_housekeeping(application)
 
-    app.state.services.ip_resolver = app.state.services.IPResolver()
+            log("Startup process complete.", Ansi.LGREEN)
+            log(
+                f"Listening @ {app.settings.APP_HOST}:{app.settings.APP_PORT}",
+                Ansi.LMAGENTA,
+            )
 
-    await app.state.services.run_sql_migrations()
+            yield
+        finally:
+            await _cancel_background_tasks(application)
 
-    await collections.initialize_ram_caches()
 
-    await app.bg_loops.initialize_housekeeping_tasks()
-
-    log("Startup process complete.", Ansi.LGREEN)
-    log(
-        f"Listening @ {app.settings.APP_HOST}:{app.settings.APP_PORT}",
-        Ansi.LMAGENTA,
+def _schedule_housekeeping(application: Application) -> None:
+    housekeeping = application.services.housekeeping
+    schedules = (
+        (
+            housekeeping.expire_donation_privileges_once,
+            SUPPORTER_EXPIRATION_INTERVAL,
+            0,
+        ),
+        (
+            housekeeping.refresh_bot_status_once,
+            BOT_STATUS_UPDATE_INTERVAL,
+            BOT_STATUS_UPDATE_INTERVAL,
+        ),
+        (
+            housekeeping.disconnect_ghosts_once,
+            GHOST_DISCONNECT_INTERVAL,
+            GHOST_DISCONNECT_INTERVAL,
+        ),
     )
+    for action, interval, initial_delay in schedules:
+        application.background_tasks.schedule(
+            run_periodically(
+                action,
+                interval=interval,
+                initial_delay=initial_delay,
+            ),
+        )
 
-    yield
 
-    # we want to attempt to gracefully finish any ongoing connections
-    # and shut down any of the housekeeping tasks running in the background.
-    await app.state.sessions.cancel_housekeeping_tasks()
+async def _cancel_background_tasks(application: Application) -> None:
+    tasks = tuple(application.background_tasks.tasks)
+    if not tasks:
+        return
 
-    # shutdown services
-
-    await app.state.services.http_client.aclose()
-    await app.state.services.database.disconnect()
-    await app.state.services.redis.aclose()
-
-    if app.state.services.datadog is not None:
-        app.state.services.datadog.stop()  # type: ignore[no-untyped-call]
-        app.state.services.datadog.flush()  # type: ignore[no-untyped-call]
+    log(f"-> Cancelling {len(tasks)} background tasks.", Ansi.LMAGENTA)
+    for task in tasks:
+        task.cancel()
+    await asyncio.gather(*tasks, return_exceptions=True)
 
 
 def init_exception_handlers(asgi_app: BanchoAPI) -> None:

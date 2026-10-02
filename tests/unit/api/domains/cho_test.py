@@ -2,15 +2,118 @@ from __future__ import annotations
 
 from datetime import date
 from ipaddress import IPv4Address
+from pathlib import Path
+from typing import Any
+from typing import cast
+from unittest.mock import create_autospec
 
 import pytest
 
+import app.packets
 from app.api.domains import cho
+from app.bancho.router import BanchoPacketRouter
+from app.command_router import CommandRouter
+from app.constants.privileges import Privileges
+from app.objects.beatmap import Beatmap
+from app.objects.collections import Channels
+from app.objects.collections import Matches
+from app.objects.collections import Players
+from app.objects.match import MAX_MATCH_NAME_LENGTH
 from app.objects.player import WINE_ADAPTER_SENTINEL
 from app.objects.player import ClientDetails
 from app.objects.player import OsuStream
 from app.objects.player import OsuVersion
+from app.objects.player import Player
+from app.packets import BanchoPacketReader
+from app.packets import ClientPackets
 from app.packets import MultiplayerMatch
+from app.repositories.mail import MailRepository
+from app.services.performance import PerformanceService
+from app.services.player_data import PlayerDataService
+from app.services.player_sessions import PlayerSessionService
+from app.services.players import PlayersService
+from app.services.problem_reporting import ProblemReportingService
+from app.services.relationships import RelationshipsService
+
+
+async def _fetch_no_beatmap_by_id(beatmap_id: int) -> Beatmap | None:
+    _ = beatmap_id
+    return None
+
+
+async def _fetch_no_beatmap_by_md5(beatmap_md5: str) -> Beatmap | None:
+    _ = beatmap_md5
+    return None
+
+
+async def _ensure_no_osu_file(
+    beatmap_id: int,
+    *,
+    expected_md5: str,
+) -> bool:
+    _ = (beatmap_id, expected_md5)
+    return False
+
+
+async def _ignore_problem(_occurrence: object) -> None:
+    return None
+
+
+def _build_isolated_packet_router() -> BanchoPacketRouter:
+    bot = Player(
+        id=1,
+        name="BanchoBot",
+        priv=Privileges.UNRESTRICTED,
+        pw_bcrypt=None,
+        token=Player.generate_token(),
+        is_bot_client=True,
+    )
+    players = Players()
+    players.append(bot)
+    channels = Channels()
+    matches = Matches()
+    player_session_service = PlayerSessionService(
+        players=players,
+        channels=channels,
+        matches=matches,
+        bot=bot,
+        decrement_online_players=lambda: None,
+        debug=False,
+    )
+
+    return cho.build_packet_router(
+        players=players,
+        channels=channels,
+        matches=matches,
+        bot=bot,
+        command_router=CommandRouter(
+            prefix="!",
+            clock=lambda: 0,
+            format_elapsed=str,
+        ),
+        player_data_service=create_autospec(PlayerDataService, instance=True),
+        player_session_service=player_session_service,
+        players_service=create_autospec(PlayersService, instance=True),
+        relationships_service=create_autospec(
+            RelationshipsService,
+            instance=True,
+        ),
+        mail_repository=create_autospec(MailRepository, instance=True),
+        performance_service=PerformanceService(),
+        problem_reporting_service=ProblemReportingService(
+            report_occurrence=_ignore_problem,
+        ),
+        fetch_beatmap_by_id=_fetch_no_beatmap_by_id,
+        fetch_beatmap_by_md5=_fetch_no_beatmap_by_md5,
+        ensure_osu_file_available=_ensure_no_osu_file,
+        beatmaps_path=Path(".data/osu"),
+        pp_cached_accuracies=(95, 98, 99, 100),
+        clock=lambda: 0.0,
+        nanosecond_clock=lambda: 0,
+        chat_logger=lambda _player, _recipient, _message: None,
+        get_stacktrace=lambda: "stacktrace",
+        schedule_background=lambda coroutine: coroutine.close(),
+    )
 
 
 def test_parse_login_data_handles_protocol_trailing_newline() -> None:
@@ -116,7 +219,7 @@ def test_validate_match_data_accepts_expected_host_and_reasonable_name() -> None
     ("host_id", "name", "expected_host_id"),
     [
         (99, "friendly lobby", 32),
-        (32, "x" * (cho.MAX_MATCH_NAME_LENGTH + 1), 32),
+        (32, "x" * (MAX_MATCH_NAME_LENGTH + 1), 32),
     ],
 )
 def test_validate_match_data_rejects_untrusted_fields(
@@ -129,3 +232,222 @@ def test_validate_match_data_rejects_untrusted_fields(
     match_data.name = name
 
     assert cho.validate_match_data(match_data, expected_host_id) is False
+
+
+def test_build_packet_router_preserves_the_production_packet_contract() -> None:
+    packet_router = _build_isolated_packet_router()
+
+    assert packet_router.registered_packet_ids == (
+        ClientPackets.PING,
+        ClientPackets.CHANGE_ACTION,
+        ClientPackets.SEND_PUBLIC_MESSAGE,
+        ClientPackets.LOGOUT,
+        ClientPackets.REQUEST_STATUS_UPDATE,
+        ClientPackets.START_SPECTATING,
+        ClientPackets.STOP_SPECTATING,
+        ClientPackets.SPECTATE_FRAMES,
+        ClientPackets.CANT_SPECTATE,
+        ClientPackets.SEND_PRIVATE_MESSAGE,
+        ClientPackets.PART_LOBBY,
+        ClientPackets.JOIN_LOBBY,
+        ClientPackets.CREATE_MATCH,
+        ClientPackets.JOIN_MATCH,
+        ClientPackets.PART_MATCH,
+        ClientPackets.MATCH_CHANGE_SLOT,
+        ClientPackets.MATCH_READY,
+        ClientPackets.MATCH_LOCK,
+        ClientPackets.MATCH_CHANGE_SETTINGS,
+        ClientPackets.MATCH_START,
+        ClientPackets.MATCH_SCORE_UPDATE,
+        ClientPackets.MATCH_COMPLETE,
+        ClientPackets.MATCH_CHANGE_MODS,
+        ClientPackets.MATCH_LOAD_COMPLETE,
+        ClientPackets.MATCH_NO_BEATMAP,
+        ClientPackets.MATCH_NOT_READY,
+        ClientPackets.MATCH_FAILED,
+        ClientPackets.MATCH_HAS_BEATMAP,
+        ClientPackets.MATCH_SKIP_REQUEST,
+        ClientPackets.CHANNEL_JOIN,
+        ClientPackets.MATCH_TRANSFER_HOST,
+        ClientPackets.TOURNAMENT_MATCH_INFO_REQUEST,
+        ClientPackets.TOURNAMENT_JOIN_MATCH_CHANNEL,
+        ClientPackets.TOURNAMENT_LEAVE_MATCH_CHANNEL,
+        ClientPackets.FRIEND_ADD,
+        ClientPackets.FRIEND_REMOVE,
+        ClientPackets.MATCH_CHANGE_TEAM,
+        ClientPackets.CHANNEL_PART,
+        ClientPackets.RECEIVE_UPDATES,
+        ClientPackets.SET_AWAY_MESSAGE,
+        ClientPackets.USER_STATS_REQUEST,
+        ClientPackets.MATCH_INVITE,
+        ClientPackets.MATCH_CHANGE_PASSWORD,
+        ClientPackets.USER_PRESENCE_REQUEST,
+        ClientPackets.USER_PRESENCE_REQUEST_ALL,
+        ClientPackets.TOGGLE_BLOCK_NON_FRIEND_DMS,
+    )
+    assert packet_router.restricted_packet_ids == (
+        ClientPackets.PING,
+        ClientPackets.CHANGE_ACTION,
+        ClientPackets.LOGOUT,
+        ClientPackets.REQUEST_STATUS_UPDATE,
+        ClientPackets.CHANNEL_JOIN,
+        ClientPackets.CHANNEL_PART,
+        ClientPackets.RECEIVE_UPDATES,
+        ClientPackets.USER_STATS_REQUEST,
+    )
+
+
+async def test_match_create_publishes_only_after_the_host_joins() -> None:
+    bot = Player(
+        id=1,
+        name="BanchoBot",
+        priv=Privileges.UNRESTRICTED,
+        pw_bcrypt=None,
+        token=Player.generate_token(),
+        is_bot_client=True,
+    )
+    player = Player(
+        id=3,
+        name="host",
+        priv=Privileges.UNRESTRICTED,
+        pw_bcrypt=None,
+        token=Player.generate_token(),
+    )
+    players = Players()
+    players.append(bot)
+    players.append(player)
+    channels = Channels()
+    matches = Matches()
+    player_sessions = PlayerSessionService(
+        players=players,
+        channels=channels,
+        matches=matches,
+        bot=bot,
+        decrement_online_players=lambda: None,
+        debug=False,
+    )
+    player_data = create_autospec(PlayerDataService, instance=True)
+    reader = create_autospec(BanchoPacketReader, instance=True)
+    reader.read_match.return_value = MultiplayerMatch(
+        name="test lobby",
+        host_id=player.id,
+    )
+    packet = cho.MatchCreate(
+        reader,
+        matches=matches,
+        channels=channels,
+        bot=bot,
+        player_data_service=player_data,
+        player_session_service=player_sessions,
+    )
+
+    await packet.handle(player)
+
+    match = matches[0]
+    assert match is not None
+    assert match.host is player
+    assert player.match is match
+    assert match.chat in channels
+    player_data.schedule_latest_activity_update.assert_called_once_with(player)
+
+
+async def test_match_create_does_not_publish_a_match_when_host_join_fails() -> None:
+    bot = Player(
+        id=1,
+        name="BanchoBot",
+        priv=Privileges.UNRESTRICTED,
+        pw_bcrypt=None,
+        token=Player.generate_token(),
+        is_bot_client=True,
+    )
+    player = Player(
+        id=3,
+        name="host",
+        priv=Privileges.UNRESTRICTED,
+        pw_bcrypt=None,
+        token=Player.generate_token(),
+    )
+    player.match = cast(Any, object())
+    players = Players()
+    players.append(bot)
+    players.append(player)
+    channels = Channels()
+    matches = Matches()
+    player_sessions = PlayerSessionService(
+        players=players,
+        channels=channels,
+        matches=matches,
+        bot=bot,
+        decrement_online_players=lambda: None,
+        debug=False,
+    )
+    player_data = create_autospec(PlayerDataService, instance=True)
+    reader = create_autospec(BanchoPacketReader, instance=True)
+    reader.read_match.return_value = MultiplayerMatch(
+        name="test lobby",
+        host_id=player.id,
+    )
+    packet = cho.MatchCreate(
+        reader,
+        matches=matches,
+        channels=channels,
+        bot=bot,
+        player_data_service=player_data,
+        player_session_service=player_sessions,
+    )
+
+    await packet.handle(player)
+
+    assert all(match is None for match in matches)
+    assert channels == []
+    player_data.schedule_latest_activity_update.assert_not_called()
+    assert player.dequeue() == app.packets.match_join_fail()
+
+
+async def test_friend_add_does_not_mutate_blocks_before_persistence() -> None:
+    bot = Player(
+        id=1,
+        name="BanchoBot",
+        priv=Privileges.UNRESTRICTED,
+        pw_bcrypt=None,
+        token=Player.generate_token(),
+        is_bot_client=True,
+    )
+    player = Player(
+        id=3,
+        name="player",
+        priv=Privileges.UNRESTRICTED,
+        pw_bcrypt=None,
+        token=Player.generate_token(),
+    )
+    target = Player(
+        id=4,
+        name="target",
+        priv=Privileges.UNRESTRICTED,
+        pw_bcrypt=None,
+        token=Player.generate_token(),
+    )
+    player.blocks.add(target.id)
+    players = Players()
+    for online_player in (bot, player, target):
+        players.append(online_player)
+
+    reader = create_autospec(BanchoPacketReader, instance=True)
+    reader.read_i32.return_value = target.id
+    player_data_service = create_autospec(PlayerDataService, instance=True)
+    relationships_service = create_autospec(RelationshipsService, instance=True)
+    relationships_service.add_friend.side_effect = RuntimeError(
+        "relationship upsert failed",
+    )
+    packet = cho.FriendAdd(
+        reader,
+        players=players,
+        bot=bot,
+        player_data_service=player_data_service,
+        relationships_service=relationships_service,
+    )
+
+    with pytest.raises(RuntimeError, match="relationship upsert failed"):
+        await packet.handle(player)
+
+    assert player.blocks == {target.id}

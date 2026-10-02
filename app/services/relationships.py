@@ -10,6 +10,7 @@ from app.repositories.relationships import RelationshipsRepository
 from app.repositories.relationships import RelationshipType
 from app.repositories.users import User
 from app.repositories.users import UsersRepository
+from app.services.visibility import PlayerIdentity
 from app.services.visibility import can_view_player
 
 
@@ -27,6 +28,12 @@ class AddFriendResult(StrEnum):
     ALREADY_FRIENDS = "already_friends"
     TARGET_NOT_FOUND = "target_not_found"
     CANNOT_FRIEND_SELF = "cannot_friend_self"
+
+
+class AddBlockResult(StrEnum):
+    ADDED = "added"
+    ALREADY_BLOCKED = "already_blocked"
+    CANNOT_BLOCK_SELF = "cannot_block_self"
 
 
 @dataclass(frozen=True)
@@ -52,7 +59,11 @@ class RelationshipsService:
             include_hidden=viewer_is_staff,
         )
 
-    async def add_friend(self, viewer: User, target_id: int) -> AddFriendResult:
+    async def add_friend(
+        self,
+        viewer: PlayerIdentity,
+        target_id: int,
+    ) -> AddFriendResult:
         player_id = viewer.id
         if target_id == player_id:
             return AddFriendResult.CANNOT_FRIEND_SELF
@@ -70,10 +81,8 @@ class RelationshipsService:
         if existing is not None:
             if existing.type is RelationshipType.FRIEND:
                 return AddFriendResult.ALREADY_FRIENDS
-            # replace a block with a friendship
-            await self.relationships.delete(player_id, target_id)
 
-        await self.relationships.create(
+        await self.relationships.upsert(
             player_id,
             target_id,
             type=RelationshipType.FRIEND,
@@ -82,6 +91,7 @@ class RelationshipsService:
         # the game server caches friends in memory for online players
         online_player = self.online_players.get(id=player_id)
         if online_player is not None:
+            online_player.blocks.discard(target_id)
             online_player.friends.add(target_id)
 
         return AddFriendResult.ADDED
@@ -96,3 +106,38 @@ class RelationshipsService:
         online_player = self.online_players.get(id=player_id)
         if online_player is not None:
             online_player.friends.discard(target_id)
+
+    async def add_block(self, player: Player, target: Player) -> AddBlockResult:
+        if target.id == player.id:
+            return AddBlockResult.CANNOT_BLOCK_SELF
+
+        existing = await self.relationships.fetch_one(player.id, target.id)
+        if existing is not None:
+            if existing.type is RelationshipType.BLOCK:
+                return AddBlockResult.ALREADY_BLOCKED
+
+        await self.relationships.upsert(
+            player.id,
+            target.id,
+            type=RelationshipType.BLOCK,
+        )
+        player.friends.discard(target.id)
+        player.blocks.add(target.id)
+        return AddBlockResult.ADDED
+
+    async def remove_block(self, player: Player, target_id: int) -> None:
+        existing = await self.relationships.fetch_one(player.id, target_id)
+        if existing is None or existing.type is not RelationshipType.BLOCK:
+            return
+
+        await self.relationships.delete(player.id, target_id)
+        player.blocks.discard(target_id)
+
+    async def hydrate_relationships(self, player: Player, *, bot_id: int) -> None:
+        for relationship in await self.relationships.fetch_all(user1=player.id):
+            if relationship.type is RelationshipType.FRIEND:
+                player.friends.add(relationship.user2)
+            else:
+                player.blocks.add(relationship.user2)
+
+        player.friends.add(bot_id)

@@ -3,24 +3,21 @@ from __future__ import annotations
 from collections.abc import Iterable
 from collections.abc import Iterator
 from collections.abc import Sequence
+from typing import TYPE_CHECKING
 from typing import Any
 
 import app.settings
-import app.state
-import app.utils
-from app.constants.privileges import ClanPrivileges
 from app.constants.privileges import Privileges
-from app.logging import Ansi
 from app.logging import log
-from app.objects.channel import Channel
-from app.objects.match import Match
-from app.objects.player import Player
-from app.repositories.legacy import get_legacy_repositories
-from app.state.services import Geolocation
 from app.utils import make_safe_name
 
+if TYPE_CHECKING:
+    from app.objects.channel import Channel
+    from app.objects.match import Match
+    from app.objects.player import Player
 
-class Channels(list[Channel]):
+
+class Channels(list["Channel"]):
     """The currently active chat channels on the server."""
 
     def __iter__(self) -> Iterator[Channel]:
@@ -69,22 +66,8 @@ class Channels(list[Channel]):
         if app.settings.DEBUG:
             log(f"{channel} removed from channels list.")
 
-    async def prepare(self) -> None:
-        """Fetch data from sql & return; preparing to run the server."""
-        log("Fetching channels from sql.", Ansi.LCYAN)
-        for row in await get_legacy_repositories().channels.fetch_many():
-            self.append(
-                Channel(
-                    name=row.name,
-                    topic=row.topic,
-                    read_priv=Privileges(row.read_priv),
-                    write_priv=Privileges(row.write_priv),
-                    auto_join=row.auto_join,
-                ),
-            )
 
-
-class Matches(list[Match | None]):
+class Matches(list["Match | None"]):
     """The currently active multiplayer matches on the server."""
 
     def __init__(self) -> None:
@@ -116,7 +99,7 @@ class Matches(list[Match | None]):
             log(f"{match} removed from matches list.")
 
 
-class Players(list[Player]):
+class Players(list["Player"]):
     """The currently active players on the server."""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -178,69 +161,6 @@ class Players(list[Player]):
             return self._by_name.get(make_safe_name(name))
         return None
 
-    async def get_sql(
-        self,
-        id: int | None = None,
-        name: str | None = None,
-    ) -> Player | None:
-        """Get a player by token, id, or name from sql."""
-        # try to get from sql.
-        player = await get_legacy_repositories().users.fetch_one(
-            id=id,
-            name=name,
-            fetch_all_fields=True,
-        )
-        if player is None:
-            return None
-
-        clan_id: int | None = None
-        clan_priv: ClanPrivileges | None = None
-        if player.clan_id != 0:
-            clan_id = player.clan_id
-            clan_priv = ClanPrivileges(player.clan_priv)
-
-        password_hash = await get_legacy_repositories().users.fetch_password_hash(
-            id=player.id,
-        )
-        assert password_hash is not None
-        geoloc: Geolocation = {
-            "latitude": 0.0,
-            "longitude": 0.0,
-            "country": {
-                "acronym": player.country,
-                "numeric": app.state.services.country_codes[player.country],
-            },
-        }
-
-        return Player(
-            id=player.id,
-            name=player.name,
-            priv=Privileges(player.priv),
-            pw_bcrypt=password_hash.encode(),
-            token=Player.generate_token(),
-            clan_id=clan_id,
-            clan_priv=clan_priv,
-            geoloc=geoloc,
-            silence_end=player.silence_end,
-            donor_end=player.donor_end,
-            api_key=player.api_key,
-        )
-
-    async def from_cache_or_sql(
-        self,
-        id: int | None = None,
-        name: str | None = None,
-    ) -> Player | None:
-        """Try to get player from cache, or sql as fallback."""
-        player = self.get(id=id, name=name)
-        if player is not None:
-            return player
-        player = await self.get_sql(id=id, name=name)
-        if player is not None:
-            return player
-
-        return None
-
     def append(self, player: Player) -> None:
         """Append `player` to the list."""
         if player in self:
@@ -264,33 +184,3 @@ class Players(list[Player]):
         del self._by_token[player.token]
         del self._by_id[player.id]
         del self._by_name[player.safe_name]
-
-
-async def initialize_ram_caches() -> None:
-    """Setup & cache the global collections before listening for connections."""
-    # fetch channels, clans and pools from db
-    await app.state.sessions.channels.prepare()
-
-    bot = await get_legacy_repositories().users.fetch_one(id=1)
-    if bot is None:
-        raise RuntimeError("Bot account not found in database.")
-
-    # create bot & add it to online players
-    app.state.sessions.bot = Player(
-        id=1,
-        name=bot.name,
-        priv=Privileges.UNRESTRICTED,
-        pw_bcrypt=None,
-        token=Player.generate_token(),
-        login_time=float(0x7FFFFFFF),  # (never auto-dc)
-        is_bot_client=True,
-    )
-    app.state.sessions.players.append(app.state.sessions.bot)
-
-    # static api keys
-    app.state.sessions.api_keys = {
-        row["api_key"]: row["id"]
-        for row in await app.state.services.database.fetch_all(
-            "SELECT id, api_key FROM users WHERE api_key IS NOT NULL",
-        )
-    }

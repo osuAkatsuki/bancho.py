@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 from collections import defaultdict
+from collections.abc import Awaitable
+from collections.abc import Callable
 from collections.abc import Sequence
 from datetime import datetime as datetime
 from datetime import timedelta as timedelta
@@ -12,11 +14,9 @@ from typing import TypedDict
 
 import app.packets
 import app.settings
-import app.state
 from app.constants import regexes
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
-from app.objects.beatmap import Beatmap
 from app.repositories.tourney_pools import TourneyPool
 from app.utils import escape_enum
 from app.utils import pymysql_encode
@@ -24,6 +24,7 @@ from app.utils import pymysql_encode
 if TYPE_CHECKING:
     from asyncio import TimerHandle
 
+    from app.objects.beatmap import Beatmap
     from app.objects.channel import Channel
     from app.objects.player import Player
 
@@ -159,6 +160,7 @@ class Match:
         freemods: bool,
         seed: int,
         chat_channel: Channel,
+        lobby_channel: Channel | None,
     ) -> None:
         self.id = id
         self.name = name
@@ -178,6 +180,7 @@ class Match:
         self.freemods = freemods
 
         self.chat = chat_channel
+        self.lobby = lobby_channel
         self.slots = [Slot() for _ in range(16)]
 
         # self.type = MatchTypes.standard
@@ -202,12 +205,11 @@ class Match:
 
     @property
     def host(self) -> Player:
-        player = app.state.sessions.players.get(id=self.host_id)
-        if player is None:
-            raise ValueError(
-                f"Host with id {self.host_id} not found for match {self!r}",
-            )
-        return player
+        for slot in self.slots:
+            if slot.player is not None and slot.player.id == self.host_id:
+                return slot.player
+
+        raise ValueError(f"Host with id {self.host_id} not found for match {self!r}")
 
     @property
     def url(self) -> str:
@@ -290,9 +292,8 @@ class Match:
         """Add data to be sent to all clients in the match."""
         self.chat.enqueue(data, immune)
 
-        lchan = app.state.sessions.channels.get_by_name("#lobby")
-        if lobby and lchan and lchan.players:
-            lchan.enqueue(data)
+        if lobby and self.lobby and self.lobby.players:
+            self.lobby.enqueue(data)
 
     def enqueue_state(self, lobby: bool = True) -> None:
         """Enqueue `self`'s state to players in the match & lobby."""
@@ -301,9 +302,8 @@ class Match:
         # send password only to users currently in the match.
         self.chat.enqueue(app.packets.update_match(self, send_pw=True))
 
-        lchan = app.state.sessions.channels.get_by_name("#lobby")
-        if lobby and lchan and lchan.players:
-            lchan.enqueue(app.packets.update_match(self, send_pw=False))
+        if lobby and self.lobby and self.lobby.players:
+            self.lobby.enqueue(app.packets.update_match(self, send_pw=False))
 
     def unready_players(self, expected: SlotStatus = SlotStatus.ready) -> None:
         """Unready any players in the `expected` state."""
@@ -342,6 +342,8 @@ class Match:
     async def await_submissions(
         self,
         was_playing: Sequence[Slot],
+        *,
+        fetch_beatmap: Callable[[str], Awaitable[Beatmap | None]],
     ) -> tuple[dict[MatchTeams | Player, int], Sequence[Player]]:
         """Await score submissions from all players in completed state."""
         scores: dict[MatchTeams | Player, int] = defaultdict(int)
@@ -355,7 +357,7 @@ class Match:
         else:
             win_cond = ("score", "acc", "max_combo", "score")[self.win_condition]
 
-        bmap = await Beatmap.from_md5(self.map_md5)
+        bmap = await fetch_beatmap(self.map_md5)
 
         if not bmap:
             # map isn't submitted
@@ -399,7 +401,13 @@ class Match:
         # all scores retrieved, update the match.
         return scores, didnt_submit
 
-    async def update_matchpoints(self, was_playing: Sequence[Slot]) -> None:
+    async def update_matchpoints(
+        self,
+        was_playing: Sequence[Slot],
+        *,
+        fetch_beatmap: Callable[[str], Awaitable[Beatmap | None]],
+        bot: Player,
+    ) -> None:
         """\
         Determine the winner from `scores`, increment & inform players.
 
@@ -421,13 +429,19 @@ class Match:
           Justice takes the match, finishing with a score of 4 - 2!
         """
 
-        scores, didnt_submit = await self.await_submissions(was_playing)
+        scores, didnt_submit = await self.await_submissions(
+            was_playing,
+            fetch_beatmap=fetch_beatmap,
+        )
 
         for player in didnt_submit:
-            self.chat.send_bot(f"{player} didn't submit a score (timeout: 10s).")
+            self.chat.send_bot(
+                f"{player} didn't submit a score (timeout: 10s).",
+                bot=bot,
+            )
 
         if not scores:
-            self.chat.send_bot("Scores could not be calculated.")
+            self.chat.send_bot("Scores could not be calculated.", bot=bot)
             return None
 
         ffa = self.team_type in (
@@ -438,7 +452,7 @@ class Match:
         # all scores are equal, it was a tie.
         if len(scores) != 1 and len(set(scores.values())) == 1:
             self.winners.append(None)
-            self.chat.send_bot("The point has ended in a tie!")
+            self.chat.send_bot("The point has ended in a tie!", bot=bot)
             return None
 
         # Find the winner & increment their matchpoints.
@@ -541,7 +555,8 @@ class Match:
             self.chat.send_bot(
                 "If you'd like to perform a rematch, "
                 "please use the `!mp rematch` command.",
+                bot=bot,
             )
 
         for line in msg:
-            self.chat.send_bot(line)
+            self.chat.send_bot(line, bot=bot)

@@ -11,11 +11,8 @@ from collections.abc import MutableMapping
 from pathlib import Path
 from typing import TypedDict
 
-import datadog as datadog_module
-import datadog.threadstats.base as datadog_client
 import httpx
 import pymysql
-from redis import asyncio as aioredis
 
 import app.settings
 from app._typing import IPAddress
@@ -28,22 +25,6 @@ STRANGE_LOG_DIR = Path.cwd() / ".data/logs"
 VERSION_RGX = re.compile(r"^# v(?P<ver>\d+\.\d+\.\d+)$")
 SQL_UPDATES_FILE = Path.cwd() / "migrations/migrations.sql"
 
-
-""" session objects """
-
-http_client = httpx.AsyncClient()
-database = Database(app.settings.DB_DSN)
-redis: aioredis.Redis = aioredis.from_url(app.settings.REDIS_DSN)
-
-datadog: datadog_client.ThreadStats | None = None
-if str(app.settings.DATADOG_API_KEY) and str(app.settings.DATADOG_APP_KEY):
-    datadog_module.initialize(
-        api_key=str(app.settings.DATADOG_API_KEY),
-        app_key=str(app.settings.DATADOG_APP_KEY),
-    )
-    datadog = datadog_client.ThreadStats()  # type: ignore[no-untyped-call]
-
-ip_resolver: IPResolver
 
 """ geolocation """
 
@@ -123,6 +104,8 @@ class IPResolver:
 async def fetch_geoloc(
     ip: IPAddress,
     headers: Mapping[str, str] | None = None,
+    *,
+    http_client: httpx.AsyncClient,
 ) -> Geolocation | None:
     """Attempt to fetch geolocation data by any means necessary."""
     geoloc = None
@@ -130,7 +113,7 @@ async def fetch_geoloc(
         geoloc = _fetch_geoloc_from_headers(headers)
 
     if geoloc is None:
-        geoloc = await _fetch_geoloc_from_ip(ip)
+        geoloc = await _fetch_geoloc_from_ip(ip, http_client=http_client)
 
     return geoloc
 
@@ -187,7 +170,11 @@ def __fetch_geoloc_nginx(headers: Mapping[str, str]) -> Geolocation | None:
     }
 
 
-async def _fetch_geoloc_from_ip(ip: IPAddress) -> Geolocation | None:
+async def _fetch_geoloc_from_ip(
+    ip: IPAddress,
+    *,
+    http_client: httpx.AsyncClient,
+) -> Geolocation | None:
     """Fetch geolocation data based on ip (using ip-api)."""
     if not ip.is_private:
         url = f"http://ip-api.com/line/{ip}"
@@ -226,7 +213,11 @@ async def _fetch_geoloc_from_ip(ip: IPAddress) -> Geolocation | None:
     }
 
 
-async def log_strange_occurrence(obj: object) -> None:
+async def log_strange_occurrence(
+    obj: object,
+    *,
+    http_client: httpx.AsyncClient,
+) -> None:
     pickled_obj: bytes = pickle.dumps(obj)
     uploaded = False
 
@@ -324,7 +315,9 @@ class Version:
         return None
 
 
-async def _get_latest_dependency_versions() -> AsyncGenerator[
+async def _get_latest_dependency_versions(
+    http_client: httpx.AsyncClient,
+) -> AsyncGenerator[
     tuple[str, Version, Version],
     None,
 ]:
@@ -360,11 +353,13 @@ async def _get_latest_dependency_versions() -> AsyncGenerator[
             yield (dependency_name, current_ver, current_ver)
 
 
-async def check_for_dependency_updates() -> None:
+async def check_for_dependency_updates(http_client: httpx.AsyncClient) -> None:
     """Notify the developer of any dependency updates available."""
     updates_available = False
 
-    async for module, current_ver, latest_ver in _get_latest_dependency_versions():
+    async for module, current_ver, latest_ver in _get_latest_dependency_versions(
+        http_client,
+    ):
         if latest_ver > current_ver:
             updates_available = True
             log(
@@ -384,7 +379,7 @@ async def check_for_dependency_updates() -> None:
 # sql migrations
 
 
-async def _get_current_sql_structure_version() -> Version | None:
+async def _get_current_sql_structure_version(database: Database) -> Version | None:
     """Get the last launched version of the server."""
     res = await database.fetch_one(
         "SELECT ver_major, ver_minor, ver_micro "
@@ -397,13 +392,13 @@ async def _get_current_sql_structure_version() -> Version | None:
     return None
 
 
-async def run_sql_migrations() -> None:
+async def run_sql_migrations(database: Database) -> None:
     """Update the sql structure, if it has changed."""
     software_version = Version.from_str(app.settings.VERSION)
     if software_version is None:
         raise RuntimeError(f"Invalid bancho.py version '{app.settings.VERSION}'")
 
-    last_run_migration_version = await _get_current_sql_structure_version()
+    last_run_migration_version = await _get_current_sql_structure_version(database)
     if not last_run_migration_version:
         # Migrations have never run before - this is the first time starting the server.
         # We'll insert the current version into the database, so future versions know to migrate.

@@ -107,6 +107,12 @@ class SearchUser:
     name: str
 
 
+@dataclass(frozen=True, slots=True)
+class UserApiKey:
+    user_id: int
+    api_key: str
+
+
 class UsersRepository:
     def __init__(self, database: Database) -> None:
         self._database = database
@@ -282,6 +288,23 @@ class UsersRepository:
 
         users = await self._database.fetch_all(select_stmt)
         return [self._deserialize_search_user(user) for user in users]
+
+    async def fetch_api_keys(self) -> list[UserApiKey]:
+        """Fetch every configured static API key and its owning user."""
+        select_stmt = select(UsersTable.id, UsersTable.api_key).where(
+            UsersTable.api_key.is_not(None),
+        )
+        rows = await self._database.fetch_all(select_stmt)
+        return [UserApiKey(user_id=row["id"], api_key=row["api_key"]) for row in rows]
+
+    async def fetch_expired_donor_ids(self) -> list[int]:
+        """Fetch users whose supporter privilege has reached its expiry."""
+        select_stmt = select(UsersTable.id).where(
+            UsersTable.donor_end <= func.unix_timestamp(),
+            UsersTable.priv.bitwise_and(Privileges.DONATOR.value) != 0,
+        )
+        rows = await self._database.fetch_all(select_stmt)
+        return [row["id"] for row in rows]
 
     async def fetch_many(
         self,

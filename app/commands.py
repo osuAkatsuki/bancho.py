@@ -7,8 +7,8 @@ import random
 import secrets
 import signal
 import time
-import traceback
 import uuid
+from asyncio import AbstractEventLoop
 from collections.abc import Awaitable
 from collections.abc import Callable
 from collections.abc import Mapping
@@ -21,10 +21,12 @@ from pathlib import Path
 from time import perf_counter_ns as clock_ns
 from typing import TYPE_CHECKING
 from typing import Any
-from typing import NamedTuple
+from typing import Concatenate
 from typing import NoReturn
-from typing import Optional
-from typing import TypedDict
+from typing import ParamSpec
+from typing import Protocol
+from typing import TypeVar
+from typing import cast
 from urllib.parse import urlparse
 
 import cpuinfo
@@ -35,8 +37,14 @@ from pytimeparse.timeparse import timeparse
 import app.logging
 import app.packets
 import app.settings
-import app.state
 import app.utils
+from app.adapters.database import Database
+from app.command_router import Clock
+from app.command_router import CommandCallback
+from app.command_router import CommandGroup
+from app.command_router import CommandRouter
+from app.command_router import Context
+from app.command_router import ElapsedFormatter
 from app.constants import regexes
 from app.constants.beatmap_statuses import RankedStatus
 from app.constants.gamemodes import GAMEMODE_REPR_LIST
@@ -47,7 +55,9 @@ from app.constants.score_statuses import SubmissionStatus
 from app.logging import Ansi
 from app.logging import log
 from app.objects.beatmap import Beatmap
-from app.objects.beatmap import ensure_osu_file_is_available
+from app.objects.beatmap import BeatmapSet
+from app.objects.collections import Channels
+from app.objects.collections import Players
 from app.objects.match import Match
 from app.objects.match import MatchTeams
 from app.objects.match import MatchTeamTypes
@@ -55,14 +65,22 @@ from app.objects.match import MatchWinConditions
 from app.objects.match import SlotStatus
 from app.objects.match import StartingTimers
 from app.objects.player import Player
-from app.repositories.legacy import get_legacy_repositories
+from app.repositories.clans import ClansRepository
+from app.repositories.logs import LogsRepository
 from app.repositories.map_requests import MapRequest
+from app.repositories.map_requests import MapRequestsRepository
+from app.repositories.maps import MapsRepository
+from app.repositories.users import UsersRepository
 from app.services.clans import ClansService
 from app.services.clans import CreateClanResultCode
 from app.services.clans import LeaveClanResultCode
 from app.services.clans import TransferClanResultCode
 from app.services.performance import PerformanceService
 from app.services.performance import ScoreParams
+from app.services.player_moderation import PlayerModerationService
+from app.services.player_sessions import PlayerSessionService
+from app.services.players import PlayersService
+from app.services.relationships import RelationshipsService
 from app.services.tourney_pools import AddPoolMapResultCode
 from app.services.tourney_pools import CreatePoolResultCode
 from app.services.tourney_pools import TourneyPoolsService
@@ -74,55 +92,71 @@ if TYPE_CHECKING:
 BEATMAPS_PATH = Path.cwd() / ".data/osu"
 
 
-@dataclass
-class Context:
-    player: Player
-    trigger: str
-    args: Sequence[str]
-
-    recipient: Channel | Player
+class FetchBeatmapById(Protocol):
+    async def __call__(self, beatmap_id: int, /) -> Beatmap | None: ...
 
 
-Callback = Callable[[Context], Awaitable[Optional[str]]]
+class FetchBeatmapByMd5(Protocol):
+    async def __call__(self, beatmap_md5: str, /) -> Beatmap | None: ...
 
 
-class Command(NamedTuple):
-    triggers: list[str]
-    callback: Callback
-    priv: Privileges
+class EnsureOsuFileAvailable(Protocol):
+    async def __call__(
+        self,
+        beatmap_id: int,
+        *,
+        expected_md5: str,
+    ) -> bool: ...
+
+
+@dataclass(frozen=True)
+class CommandSpec:
+    privileges: Privileges
+    aliases: tuple[str, ...]
     hidden: bool
-    doc: str | None
+    group: str | None
 
 
+_COMMAND_SPEC_ATTRIBUTE = "__bancho_command_spec__"
+CommandHandler = TypeVar(
+    "CommandHandler",
+    bound=Callable[..., Awaitable[str | None]],
+)
+CommandParameters = ParamSpec("CommandParameters")
+
+
+def _set_command_spec(callback: CommandHandler, spec: CommandSpec) -> CommandHandler:
+    setattr(callback, _COMMAND_SPEC_ATTRIBUTE, spec)
+    return callback
+
+
+def _get_command_spec(
+    callback: Callable[..., Awaitable[str | None]],
+) -> CommandSpec:
+    return cast(CommandSpec, getattr(callback, _COMMAND_SPEC_ATTRIBUTE))
+
+
+@dataclass(frozen=True)
 class CommandSet:
-    def __init__(self, trigger: str, doc: str) -> None:
-        self.trigger = trigger
-        self.doc = doc
-
-        self.commands: list[Command] = []
+    trigger: str
+    doc: str
 
     def add(
         self,
         priv: Privileges,
-        aliases: list[str] = [],
+        aliases: Sequence[str] = (),
         hidden: bool = False,
-    ) -> Callable[[Callback], Callback]:
-        def wrapper(f: Callback) -> Callback:
-            self.commands.append(
-                Command(
-                    # NOTE: this method assumes that functions without any
-                    # triggers will be named like '{self.trigger}_{trigger}'.
-                    triggers=(
-                        [f.__name__.removeprefix(f"{self.trigger}_").strip()] + aliases
-                    ),
-                    callback=f,
-                    priv=priv,
+    ) -> Callable[[CommandHandler], CommandHandler]:
+        def wrapper(callback: CommandHandler) -> CommandHandler:
+            return _set_command_spec(
+                callback,
+                CommandSpec(
+                    privileges=priv,
+                    aliases=tuple(aliases),
                     hidden=hidden,
-                    doc=f.__doc__,
+                    group=self.trigger,
                 ),
             )
-
-            return f
 
         return wrapper
 
@@ -131,31 +165,22 @@ mp_commands = CommandSet("mp", "Multiplayer commands.")
 pool_commands = CommandSet("pool", "Mappool commands.")
 clan_commands = CommandSet("clan", "Clan commands.")
 
-regular_commands: list[Command] = []
-command_sets = [
-    mp_commands,
-    pool_commands,
-    clan_commands,
-]
-
 
 def command(
     priv: Privileges,
-    aliases: list[str] = [],
+    aliases: Sequence[str] = (),
     hidden: bool = False,
-) -> Callable[[Callback], Callback]:
-    def wrapper(f: Callback) -> Callback:
-        regular_commands.append(
-            Command(
-                callback=f,
-                priv=priv,
+) -> Callable[[CommandHandler], CommandHandler]:
+    def wrapper(callback: CommandHandler) -> CommandHandler:
+        return _set_command_spec(
+            callback,
+            CommandSpec(
+                privileges=priv,
+                aliases=tuple(aliases),
                 hidden=hidden,
-                triggers=[f.__name__.strip("_")] + aliases,
-                doc=f.__doc__,
+                group=None,
             ),
         )
-
-        return f
 
     return wrapper
 
@@ -167,23 +192,23 @@ def command(
 
 
 @command(Privileges.UNRESTRICTED, aliases=["", "h"], hidden=True)
-async def _help(ctx: Context) -> str | None:
+async def _help(ctx: Context, *, router: CommandRouter) -> str | None:
     """Show all documented commands the player can access."""
-    prefix = app.settings.COMMAND_PREFIX
+    prefix = router.prefix
     l = ["Individual commands", "-----------"]
 
-    for cmd in regular_commands:
-        if not cmd.doc or ctx.player.priv & cmd.priv != cmd.priv:
+    for cmd in router.commands:
+        if not cmd.description or ctx.player.priv & cmd.privileges != cmd.privileges:
             # no doc, or insufficient permissions.
             continue
 
-        l.append(f"{prefix}{cmd.triggers[0]}: {cmd.doc}")
+        l.append(f"{prefix}{cmd.triggers[0]}: {cmd.description}")
 
     l.append("")  # newline
     l.extend(["Command sets", "-----------"])
 
-    for cmd_set in command_sets:
-        l.append(f"{prefix}{cmd_set.trigger}: {cmd_set.doc}")
+    for group in router.groups:
+        l.append(f"{prefix}{group.trigger}: {group.description}")
 
     return "\n".join(l)
 
@@ -204,66 +229,91 @@ async def roll(ctx: Context) -> str | None:
 
 
 @command(Privileges.UNRESTRICTED, hidden=True)
-async def block(ctx: Context) -> str | None:
+async def block(
+    ctx: Context,
+    *,
+    players_service: PlayersService,
+    bot: Player,
+    relationships: RelationshipsService,
+) -> str | None:
     """Block another user from communicating with you."""
-    target = await app.state.sessions.players.from_cache_or_sql(name=" ".join(ctx.args))
+    target = await players_service.fetch_player_session(
+        user_id=None,
+        username=" ".join(ctx.args),
+    )
 
     if not target:
         return "User not found."
 
-    if target is app.state.sessions.bot or target is ctx.player:
+    if target is bot or target is ctx.player:
         return "What?"
 
     if target.id in ctx.player.blocks:
         return f"{target.name} already blocked!"
 
-    if target.id in ctx.player.friends:
-        ctx.player.friends.remove(target.id)
-
-    await ctx.player.add_block(target)
+    await relationships.add_block(ctx.player, target)
     return f"Added {target.name} to blocked users."
 
 
 @command(Privileges.UNRESTRICTED, hidden=True)
-async def unblock(ctx: Context) -> str | None:
+async def unblock(
+    ctx: Context,
+    *,
+    players_service: PlayersService,
+    bot: Player,
+    relationships: RelationshipsService,
+) -> str | None:
     """Unblock another user from communicating with you."""
-    target = await app.state.sessions.players.from_cache_or_sql(name=" ".join(ctx.args))
+    target = await players_service.fetch_player_session(
+        user_id=None,
+        username=" ".join(ctx.args),
+    )
 
     if not target:
         return "User not found."
 
-    if target is app.state.sessions.bot or target is ctx.player:
+    if target is bot or target is ctx.player:
         return "What?"
 
     if target.id not in ctx.player.blocks:
         return f"{target.name} not blocked!"
 
-    await ctx.player.remove_block(target)
+    await relationships.remove_block(ctx.player, target.id)
     return f"Removed {target.name} from blocked users."
 
 
 @command(Privileges.UNRESTRICTED)
-async def reconnect(ctx: Context) -> str | None:
+async def reconnect(
+    ctx: Context,
+    *,
+    players: Players,
+    player_sessions: PlayerSessionService,
+) -> str | None:
     """Disconnect and reconnect a given player (or self) to the server."""
     if ctx.args:
         # !reconnect <player>
         if not ctx.player.priv & Privileges.ADMINISTRATOR:
             return None  # requires admin
 
-        target = app.state.sessions.players.get(name=" ".join(ctx.args))
+        target = players.get(name=" ".join(ctx.args))
         if not target:
             return "Player not found"
     else:
         # !reconnect
         target = ctx.player
 
-    target.logout()
+    player_sessions.logout(target)
 
     return None
 
 
 @command(Privileges.SUPPORTER)
-async def changename(ctx: Context) -> str | None:
+async def changename(
+    ctx: Context,
+    *,
+    users: UsersRepository,
+    player_sessions: PlayerSessionService,
+) -> str | None:
     """Change your username."""
     name = " ".join(ctx.args).strip()
 
@@ -276,11 +326,11 @@ async def changename(ctx: Context) -> str | None:
     if name in app.settings.DISALLOWED_NAMES:
         return "Disallowed username; pick another."
 
-    if await get_legacy_repositories().users.fetch_one(name=name):
+    if await users.fetch_one(name=name):
         return "Username already taken by another player."
 
     # all checks passed, update their name
-    await get_legacy_repositories().users.partial_update(
+    await users.partial_update(
         ctx.player.id,
         name=name,
     )
@@ -288,13 +338,17 @@ async def changename(ctx: Context) -> str | None:
     ctx.player.enqueue(
         app.packets.notification(f"Your username has been changed to {name}!"),
     )
-    ctx.player.logout()
+    player_sessions.logout(ctx.player)
 
     return None
 
 
 @command(Privileges.UNRESTRICTED, aliases=["bloodcat", "beatconnect", "chimu", "q"])
-async def maplink(ctx: Context) -> str | None:
+async def maplink(
+    ctx: Context,
+    *,
+    fetch_beatmap_by_md5: FetchBeatmapByMd5,
+) -> str | None:
     """Return a download link to the user's current map (situation dependant)."""
     bmap = None
 
@@ -303,9 +357,9 @@ async def maplink(ctx: Context) -> str | None:
     spectating = ctx.player.spectating
 
     if match and match.map_id:
-        bmap = await Beatmap.from_md5(match.map_md5)
+        bmap = await fetch_beatmap_by_md5(match.map_md5)
     elif spectating and spectating.status.map_id:
-        bmap = await Beatmap.from_md5(spectating.status.map_md5)
+        bmap = await fetch_beatmap_by_md5(spectating.status.map_md5)
     elif ctx.player.last_np is not None and time.time() < ctx.player.last_np["timeout"]:
         bmap = ctx.player.last_np["bmap"]
 
@@ -316,10 +370,10 @@ async def maplink(ctx: Context) -> str | None:
 
 
 @command(Privileges.UNRESTRICTED, aliases=["last", "r"])
-async def recent(ctx: Context) -> str | None:
+async def recent(ctx: Context, *, players: Players) -> str | None:
     """Show information about a player's most recent score."""
     if ctx.args:
-        target = app.state.sessions.players.get(name=" ".join(ctx.args))
+        target = players.get(name=" ".join(ctx.args))
         if not target:
             return "Player not found."
     else:
@@ -360,7 +414,12 @@ TOP_SCORE_FMTSTR = "{idx}. ({pp:.2f}pp) [https://osu.{domain}/b/{map_id} {artist
 
 
 @command(Privileges.UNRESTRICTED, hidden=True)
-async def top(ctx: Context) -> str | None:
+async def top(
+    ctx: Context,
+    *,
+    users: UsersRepository,
+    database: Database,
+) -> str | None:
     """Show information about a player's top 10 scores."""
     # !top <mode> (player)
     args_len = len(ctx.args)
@@ -383,12 +442,12 @@ async def top(ctx: Context) -> str | None:
             return "Invalid username."
 
         # specific player provided
-        user = await get_legacy_repositories().users.fetch_one(
+        user = await users.fetch_one(
             name=ctx.args[1],
         )
     else:
         # no player provided, use self
-        user = await get_legacy_repositories().users.fetch_one(
+        user = await users.fetch_one(
             id=ctx.player.id,
         )
 
@@ -398,7 +457,7 @@ async def top(ctx: Context) -> str | None:
     # !top rx!std
     mode = GAMEMODE_REPR_LIST.index(ctx.args[0])
 
-    scores = await app.state.services.database.fetch_all(
+    scores = await database.fetch_all(
         "SELECT s.pp, b.artist, b.title, b.version, b.set_id map_set_id, b.id map_id "
         "FROM scores s "
         "LEFT JOIN maps b ON b.md5 = s.map_md5 "
@@ -476,9 +535,15 @@ def parse__with__command_args(
 
 
 @command(Privileges.UNRESTRICTED, aliases=["w"], hidden=True)
-async def _with(ctx: Context) -> str | None:
+async def _with(
+    ctx: Context,
+    *,
+    bot: Player,
+    ensure_osu_file_available: EnsureOsuFileAvailable,
+    performance: PerformanceService,
+) -> str | None:
     """Specify custom accuracy & mod combinations with `/np`."""
-    if ctx.recipient is not app.state.sessions.bot:
+    if ctx.recipient is not bot:
         return "This command can only be used in DM with bot."
 
     if ctx.player.last_np is None or time.time() >= ctx.player.last_np["timeout"]:
@@ -486,7 +551,7 @@ async def _with(ctx: Context) -> str | None:
 
     bmap: Beatmap = ctx.player.last_np["bmap"]
 
-    osu_file_available = await ensure_osu_file_is_available(
+    osu_file_available = await ensure_osu_file_available(
         bmap.id,
         expected_md5=bmap.md5,
     )
@@ -523,7 +588,7 @@ async def _with(ctx: Context) -> str | None:
         score_args.acc = acc
         msg_fields.append(f"{acc:.2f}%")
 
-    result = PerformanceService().calculate_performances(
+    result = performance.calculate_performances(
         osu_file_path=str(BEATMAPS_PATH / f"{bmap.id}.osu"),
         scores=[score_args],  # calculate one score
     )
@@ -536,7 +601,11 @@ async def _with(ctx: Context) -> str | None:
 
 
 @command(Privileges.UNRESTRICTED, aliases=["req"])
-async def request(ctx: Context) -> str | None:
+async def request(
+    ctx: Context,
+    *,
+    map_requests: MapRequestsRepository,
+) -> str | None:
     """Request a beatmap for nomination."""
     if ctx.args:
         return "Invalid syntax: !request"
@@ -549,15 +618,15 @@ async def request(ctx: Context) -> str | None:
     if bmap.status != RankedStatus.Pending:
         return "Only pending maps may be requested for status change."
 
-    map_requests = await get_legacy_repositories().map_requests.fetch_all(
+    existing_requests = await map_requests.fetch_all(
         map_id=bmap.id,
         player_id=ctx.player.id,
         active=True,
     )
-    if map_requests:
+    if existing_requests:
         return "You already have an active nomination request for that map."
 
-    await get_legacy_repositories().map_requests.create(
+    await map_requests.create(
         map_id=bmap.id,
         player_id=ctx.player.id,
         active=True,
@@ -567,23 +636,29 @@ async def request(ctx: Context) -> str | None:
 
 
 @command(Privileges.UNRESTRICTED)
-async def apikey(ctx: Context) -> str | None:
+async def apikey(
+    ctx: Context,
+    *,
+    bot: Player,
+    api_keys: dict[str, int],
+    users: UsersRepository,
+) -> str | None:
     """Generate a new api key & assign it to the player."""
-    if ctx.recipient is not app.state.sessions.bot:
-        return f"Command only available in DMs with {app.state.sessions.bot.name}."
+    if ctx.recipient is not bot:
+        return f"Command only available in DMs with {bot.name}."
 
     # remove old token
     if ctx.player.api_key:
-        app.state.sessions.api_keys.pop(ctx.player.api_key)
+        api_keys.pop(ctx.player.api_key)
 
     # generate new token
     ctx.player.api_key = str(uuid.uuid4())
 
-    await get_legacy_repositories().users.partial_update(
+    await users.partial_update(
         ctx.player.id,
         api_key=ctx.player.api_key,
     )
-    app.state.sessions.api_keys[ctx.player.api_key] = ctx.player.id
+    api_keys[ctx.player.api_key] = ctx.player.id
 
     return f"API key generated. Copy your api key from (this url)[http://{ctx.player.api_key}]."
 
@@ -595,12 +670,17 @@ async def apikey(ctx: Context) -> str | None:
 
 
 @command(Privileges.NOMINATOR, aliases=["reqs"], hidden=True)
-async def requests(ctx: Context) -> str | None:
+async def requests(
+    ctx: Context,
+    *,
+    map_requests: MapRequestsRepository,
+    fetch_beatmap_by_id: FetchBeatmapById,
+) -> str | None:
     """Check the nomination request queue."""
     if ctx.args:
         return "Invalid syntax: !requests"
 
-    rows = await get_legacy_repositories().map_requests.fetch_all(
+    rows = await map_requests.fetch_all(
         active=True,
     )
 
@@ -621,7 +701,7 @@ async def requests(ctx: Context) -> str | None:
     for map_id, reviews in grouped.items():
         assert len(reviews) != 0
 
-        bmap = await Beatmap.from_bid(map_id)
+        bmap = await fetch_beatmap_by_id(map_id)
         if not bmap:
             log(f"Failed to find requested map ({map_id})?", Ansi.LYELLOW)
             continue
@@ -643,7 +723,15 @@ def status_to_id(s: str) -> int:
 
 
 @command(Privileges.NOMINATOR)
-async def _map(ctx: Context) -> str | None:
+async def _map(
+    ctx: Context,
+    *,
+    maps: MapsRepository,
+    map_requests: MapRequestsRepository,
+    database: Database,
+    beatmap_cache: dict[str | int, Beatmap],
+    beatmapset_cache: dict[int, BeatmapSet],
+) -> str | None:
     """Changes the ranked status of the most recently /np'ed map."""
     if (
         len(ctx.args) != 2
@@ -670,48 +758,46 @@ async def _map(ctx: Context) -> str | None:
     # for updating cache would be faster?
     # surely this will not scale as well...
 
-    repositories = get_legacy_repositories()
-
-    async with app.state.services.database.transaction():
+    async with database.transaction():
         if ctx.args[1] == "set":
             # update all maps in the set
             for _bmap in bmap.set.maps:
-                await repositories.maps.partial_update(
+                await maps.partial_update(
                     _bmap.id,
                     status=new_status,
                     frozen=True,
                 )
 
             # make sure cache and db are synced about the newest change
-            for _bmap in app.state.cache.beatmapset[bmap.set_id].maps:
+            for _bmap in beatmapset_cache[bmap.set_id].maps:
                 _bmap.status = new_status
                 _bmap.frozen = True
 
             # select all map ids for clearing map requests.
             modified_beatmap_ids = [
                 row.id
-                for row in await repositories.maps.fetch_many(
+                for row in await maps.fetch_many(
                     set_id=bmap.set_id,
                 )
             ]
 
         else:
             # update only map
-            await repositories.maps.partial_update(
+            await maps.partial_update(
                 bmap.id,
                 status=new_status,
                 frozen=True,
             )
 
             # make sure cache and db are synced about the newest change
-            if bmap.md5 in app.state.cache.beatmap:
-                app.state.cache.beatmap[bmap.md5].status = new_status
-                app.state.cache.beatmap[bmap.md5].frozen = True
+            if bmap.md5 in beatmap_cache:
+                beatmap_cache[bmap.md5].status = new_status
+                beatmap_cache[bmap.md5].frozen = True
 
             modified_beatmap_ids = [bmap.id]
 
         # deactivate rank requests for all ids
-        await get_legacy_repositories().map_requests.mark_batch_as_inactive(
+        await map_requests.mark_batch_as_inactive(
             map_ids=modified_beatmap_ids,
         )
 
@@ -733,12 +819,20 @@ ACTION_STRINGS = {
 
 
 @command(Privileges.MODERATOR, hidden=True)
-async def notes(ctx: Context) -> str | None:
+async def notes(
+    ctx: Context,
+    *,
+    players_service: PlayersService,
+    database: Database,
+) -> str | None:
     """Retrieve the logs of a specified player by name."""
     if len(ctx.args) != 2 or not ctx.args[1].isdecimal():
         return "Invalid syntax: !notes <name> <days_back>"
 
-    target = await app.state.sessions.players.from_cache_or_sql(name=ctx.args[0])
+    target = await players_service.fetch_player_session(
+        user_id=None,
+        username=ctx.args[0],
+    )
     if not target:
         return f'"{ctx.args[0]}" not found.'
 
@@ -749,7 +843,7 @@ async def notes(ctx: Context) -> str | None:
     elif days <= 0:
         return "Invalid syntax: !notes <name> <days_back>"
 
-    res = await app.state.services.database.fetch_all(
+    res = await database.fetch_all(
         "SELECT `action`, `msg`, `time`, `from` "
         "FROM `logs` WHERE `to` = :to "
         "AND UNIX_TIMESTAMP(`time`) >= UNIX_TIMESTAMP(NOW()) - :seconds "
@@ -762,7 +856,10 @@ async def notes(ctx: Context) -> str | None:
 
     notes = []
     for row in res:
-        logger = await app.state.sessions.players.from_cache_or_sql(id=row["from"])
+        logger = await players_service.fetch_player_session(
+            user_id=row["from"],
+            username=None,
+        )
         if not logger:
             continue
 
@@ -776,16 +873,24 @@ async def notes(ctx: Context) -> str | None:
 
 
 @command(Privileges.MODERATOR, hidden=True)
-async def addnote(ctx: Context) -> str | None:
+async def addnote(
+    ctx: Context,
+    *,
+    players_service: PlayersService,
+    logs: LogsRepository,
+) -> str | None:
     """Add a note to a specified player by name."""
     if len(ctx.args) < 2:
         return "Invalid syntax: !addnote <name> <note ...>"
 
-    target = await app.state.sessions.players.from_cache_or_sql(name=ctx.args[0])
+    target = await players_service.fetch_player_session(
+        user_id=None,
+        username=ctx.args[0],
+    )
     if not target:
         return f'"{ctx.args[0]}" not found.'
 
-    await get_legacy_repositories().logs.create(
+    await logs.create(
         _from=ctx.player.id,
         to=target.id,
         action="note",
@@ -808,12 +913,20 @@ SHORTHAND_REASONS = {
 
 
 @command(Privileges.MODERATOR, hidden=True)
-async def silence(ctx: Context) -> str | None:
+async def silence(
+    ctx: Context,
+    *,
+    players_service: PlayersService,
+    player_moderation: PlayerModerationService,
+) -> str | None:
     """Silence a specified player with a specified duration & reason."""
     if len(ctx.args) < 3:
         return "Invalid syntax: !silence <name> <duration> <reason>"
 
-    target = await app.state.sessions.players.from_cache_or_sql(name=ctx.args[0])
+    target = await players_service.fetch_player_session(
+        user_id=None,
+        username=ctx.args[0],
+    )
     if not target:
         return f'"{ctx.args[0]}" not found.'
 
@@ -829,17 +942,30 @@ async def silence(ctx: Context) -> str | None:
     if reason in SHORTHAND_REASONS:
         reason = SHORTHAND_REASONS[reason]
 
-    await target.silence(ctx.player, duration, reason)
+    await player_moderation.silence(
+        target,
+        admin=ctx.player,
+        duration=duration,
+        reason=reason,
+    )
     return f"{target} was silenced."
 
 
 @command(Privileges.MODERATOR, hidden=True)
-async def unsilence(ctx: Context) -> str | None:
+async def unsilence(
+    ctx: Context,
+    *,
+    players_service: PlayersService,
+    player_moderation: PlayerModerationService,
+) -> str | None:
     """Unsilence a specified player."""
     if len(ctx.args) < 2:
         return "Invalid syntax: !unsilence <name> <reason>"
 
-    target = await app.state.sessions.players.from_cache_or_sql(name=ctx.args[0])
+    target = await players_service.fetch_player_session(
+        user_id=None,
+        username=ctx.args[0],
+    )
     if not target:
         return f'"{ctx.args[0]}" not found.'
 
@@ -851,7 +977,7 @@ async def unsilence(ctx: Context) -> str | None:
 
     reason = " ".join(ctx.args[1:])
 
-    await target.unsilence(ctx.player, reason)
+    await player_moderation.unsilence(target, admin=ctx.player, reason=reason)
     return f"{target} was unsilenced."
 
 
@@ -862,15 +988,21 @@ async def unsilence(ctx: Context) -> str | None:
 
 
 @command(Privileges.ADMINISTRATOR, aliases=["u"], hidden=True)
-async def user(ctx: Context) -> str | None:
+async def user(
+    ctx: Context,
+    *,
+    players_service: PlayersService,
+    clans_repository: ClansRepository,
+) -> str | None:
     """Return general information about a given user."""
     if not ctx.args:
         # no username specified, use ctx.player
         player = ctx.player
     else:
         # username given, fetch the player
-        maybe_player = await app.state.sessions.players.from_cache_or_sql(
-            name=" ".join(ctx.args),
+        maybe_player = await players_service.fetch_player_session(
+            user_id=None,
+            username=" ".join(ctx.args),
         )
 
         if maybe_player is None:
@@ -900,7 +1032,7 @@ async def user(ctx: Context) -> str | None:
     )
 
     user_clan = (
-        await get_legacy_repositories().clans.fetch_one(
+        await clans_repository.fetch_one(
             id=player.clan_id,
         )
         if player.clan_id is not None
@@ -929,13 +1061,21 @@ async def user(ctx: Context) -> str | None:
 
 
 @command(Privileges.ADMINISTRATOR, hidden=True)
-async def restrict(ctx: Context) -> str | None:
+async def restrict(
+    ctx: Context,
+    *,
+    players_service: PlayersService,
+    player_moderation: PlayerModerationService,
+) -> str | None:
     """Restrict a specified player's account, with a reason."""
     if len(ctx.args) < 2:
         return "Invalid syntax: !restrict <name> <reason>"
 
     # find any user matching (including offline).
-    target = await app.state.sessions.players.from_cache_or_sql(name=ctx.args[0])
+    target = await players_service.fetch_player_session(
+        user_id=None,
+        username=ctx.args[0],
+    )
     if not target:
         return f'"{ctx.args[0]}" not found.'
 
@@ -950,23 +1090,27 @@ async def restrict(ctx: Context) -> str | None:
     if reason in SHORTHAND_REASONS:
         reason = SHORTHAND_REASONS[reason]
 
-    await target.restrict(admin=ctx.player, reason=reason)
-
-    # refresh their client state
-    if target.is_online:
-        target.logout()
+    await player_moderation.restrict(target, admin=ctx.player, reason=reason)
 
     return f"{target} was restricted."
 
 
 @command(Privileges.ADMINISTRATOR, hidden=True)
-async def unrestrict(ctx: Context) -> str | None:
+async def unrestrict(
+    ctx: Context,
+    *,
+    players_service: PlayersService,
+    player_moderation: PlayerModerationService,
+) -> str | None:
     """Unrestrict a specified player's account, with a reason."""
     if len(ctx.args) < 2:
         return "Invalid syntax: !unrestrict <name> <reason>"
 
     # find any user matching (including offline).
-    target = await app.state.sessions.players.from_cache_or_sql(name=ctx.args[0])
+    target = await players_service.fetch_player_session(
+        user_id=None,
+        username=ctx.args[0],
+    )
     if not target:
         return f'"{ctx.args[0]}" not found.'
 
@@ -981,34 +1125,30 @@ async def unrestrict(ctx: Context) -> str | None:
     if reason in SHORTHAND_REASONS:
         reason = SHORTHAND_REASONS[reason]
 
-    await target.unrestrict(ctx.player, reason)
-
-    # refresh their client state
-    if target.is_online:
-        target.logout()
+    await player_moderation.unrestrict(target, admin=ctx.player, reason=reason)
 
     return f"{target} was unrestricted."
 
 
 @command(Privileges.ADMINISTRATOR, hidden=True)
-async def alert(ctx: Context) -> str | None:
+async def alert(ctx: Context, *, players: Players) -> str | None:
     """Send a notification to all players."""
     if len(ctx.args) < 1:
         return "Invalid syntax: !alert <msg>"
 
     notif_txt = " ".join(ctx.args)
 
-    app.state.sessions.players.enqueue(app.packets.notification(notif_txt))
+    players.enqueue(app.packets.notification(notif_txt))
     return "Alert sent."
 
 
 @command(Privileges.ADMINISTRATOR, aliases=["alertu"], hidden=True)
-async def alertuser(ctx: Context) -> str | None:
+async def alertuser(ctx: Context, *, players: Players) -> str | None:
     """Send a notification to a specified player by name."""
     if len(ctx.args) < 2:
         return "Invalid syntax: !alertu <name> <msg>"
 
-    target = app.state.sessions.players.get(name=ctx.args[0])
+    target = players.get(name=ctx.args[0])
     if not target:
         return "Could not find a user by that name."
 
@@ -1034,7 +1174,12 @@ async def switchserv(ctx: Context) -> str | None:
 
 
 @command(Privileges.ADMINISTRATOR)
-async def shutdown(ctx: Context) -> str | None | NoReturn:
+async def shutdown(
+    ctx: Context,
+    *,
+    players: Players,
+    loop: AbstractEventLoop,
+) -> str | None | NoReturn:
     """Gracefully shutdown the server."""
     if ctx.args:  # shutdown after a delay
         delay = timeparse(ctx.args[0])
@@ -1051,9 +1196,9 @@ async def shutdown(ctx: Context) -> str | None | NoReturn:
                 f'Reason: {" ".join(ctx.args[1:])}'
             )
 
-            app.state.sessions.players.enqueue(app.packets.notification(alert_msg))
+            players.enqueue(app.packets.notification(alert_msg))
 
-        app.state.loop.call_later(delay, os.kill, os.getpid(), signal.SIGTERM)
+        loop.call_later(delay, os.kill, os.getpid(), signal.SIGTERM)
         return f"Enqueued {ctx.trigger}."
     else:  # shutdown immediately
         os.kill(os.getpid(), signal.SIGTERM)
@@ -1110,7 +1255,12 @@ str_priv_dict = {
 
 
 @command(Privileges.DEVELOPER, hidden=True)
-async def addpriv(ctx: Context) -> str | None:
+async def addpriv(
+    ctx: Context,
+    *,
+    players_service: PlayersService,
+    player_moderation: PlayerModerationService,
+) -> str | None:
     """Set privileges for a specified player (by name)."""
     if len(ctx.args) < 2:
         return "Invalid syntax: !addpriv <name> <role1 role2 role3 ...>"
@@ -1123,19 +1273,28 @@ async def addpriv(ctx: Context) -> str | None:
 
         bits |= str_priv_dict[m]
 
-    target = await app.state.sessions.players.from_cache_or_sql(name=ctx.args[0])
+    target = await players_service.fetch_player_session(
+        user_id=None,
+        username=ctx.args[0],
+    )
     if not target:
         return "Could not find user."
 
     if bits & Privileges.DONATOR != 0:
         return "Please use the !givedonator command to assign donator privileges to players."
 
-    await target.add_privs(bits)
+    await player_moderation.add_privileges(target, bits)
     return f"Updated {target}'s privileges."
 
 
 @command(Privileges.DEVELOPER, hidden=True)
-async def rmpriv(ctx: Context) -> str | None:
+async def rmpriv(
+    ctx: Context,
+    *,
+    players_service: PlayersService,
+    database: Database,
+    player_moderation: PlayerModerationService,
+) -> str | None:
     """Set privileges for a specified player (by name)."""
     if len(ctx.args) < 2:
         return "Invalid syntax: !rmpriv <name> <role1 role2 role3 ...>"
@@ -1148,15 +1307,18 @@ async def rmpriv(ctx: Context) -> str | None:
 
         bits |= str_priv_dict[m]
 
-    target = await app.state.sessions.players.from_cache_or_sql(name=ctx.args[0])
+    target = await players_service.fetch_player_session(
+        user_id=None,
+        username=ctx.args[0],
+    )
     if not target:
         return "Could not find user."
 
-    await target.remove_privs(bits)
+    await player_moderation.remove_privileges(target, bits)
 
     if bits & Privileges.DONATOR != 0:
         target.donor_end = 0
-        await app.state.services.database.execute(
+        await database.execute(
             "UPDATE users SET donor_end = 0 WHERE id = :user_id",
             {"user_id": target.id},
         )
@@ -1165,12 +1327,21 @@ async def rmpriv(ctx: Context) -> str | None:
 
 
 @command(Privileges.DEVELOPER, hidden=True)
-async def givedonator(ctx: Context) -> str | None:
+async def givedonator(
+    ctx: Context,
+    *,
+    players_service: PlayersService,
+    database: Database,
+    player_moderation: PlayerModerationService,
+) -> str | None:
     """Give donator status to a specified player for a specified duration."""
     if len(ctx.args) < 2:
         return "Invalid syntax: !givedonator <name> <duration>"
 
-    target = await app.state.sessions.players.from_cache_or_sql(name=ctx.args[0])
+    target = await players_service.fetch_player_session(
+        user_id=None,
+        username=ctx.args[0],
+    )
     if not target:
         return "Could not find user."
 
@@ -1184,18 +1355,18 @@ async def givedonator(ctx: Context) -> str | None:
         timespan += target.donor_end
 
     target.donor_end = int(timespan)
-    await app.state.services.database.execute(
+    await database.execute(
         "UPDATE users SET donor_end = :end WHERE id = :user_id",
         {"end": timespan, "user_id": target.id},
     )
 
-    await target.add_privs(Privileges.SUPPORTER)
+    await player_moderation.add_privileges(target, Privileges.SUPPORTER)
 
     return f"Added {ctx.args[1]} of donator status to {target}."
 
 
 @command(Privileges.DEVELOPER)
-async def wipemap(ctx: Context) -> str | None:
+async def wipemap(ctx: Context, *, database: Database) -> str | None:
     # (intentionally no docstring)
     if ctx.args:
         return "Invalid syntax: !wipemap"
@@ -1206,7 +1377,7 @@ async def wipemap(ctx: Context) -> str | None:
     map_md5 = ctx.player.last_np["bmap"].md5
 
     # delete scores from all tables
-    await app.state.services.database.execute(
+    await database.execute(
         "DELETE FROM scores WHERE map_md5 = :map_md5",
         {"map_md5": map_md5},
     )
@@ -1308,17 +1479,10 @@ async def server(ctx: Context) -> str | None:
     )
 
 
-if app.settings.DEVELOPER_MODE:
-    """Advanced (& potentially dangerous) commands"""
+def _build_py_namespace() -> dict[str, Any]:
+    from sys import modules as installed_modules
 
-    # NOTE: some of these commands are potentially dangerous, and only
-    # really intended for advanced users looking for access to lower level
-    # utilities. Some may give direct access to utilties that could perform
-    # harmful tasks to the underlying machine, so use at your own risk.
-
-    from sys import modules as installed_mods
-
-    __py_namespace: dict[str, Any] = globals() | {
+    return globals() | {
         mod: importlib.import_module(mod)
         for mod in (
             "asyncio",
@@ -1333,34 +1497,34 @@ if app.settings.DEVELOPER_MODE:
             "math",
             "importlib",
         )
-        if mod in installed_mods
+        if mod in installed_modules
     }
 
-    @command(Privileges.DEVELOPER)
-    async def py(ctx: Context) -> str | None:
-        """Allow for (async) access to the python interpreter."""
-        # This can be very good for getting used to bancho.py's API; just look
-        # around the codebase and find things to play with in your server.
-        # Ex: !py return (await app.state.sessions.players.get(name='cmyui')).status.action
-        if not ctx.args:
-            return "owo"
 
-        # turn our input args into a coroutine definition string.
-        definition = "\n ".join(["async def __py(ctx):", " ".join(ctx.args)])
+@command(Privileges.DEVELOPER)
+async def py(ctx: Context, *, namespace: dict[str, Any]) -> str | None:
+    """Allow for (async) access to the python interpreter."""
+    # This can be very good for getting used to bancho.py's API; just look
+    # around the codebase and find things to play with in your server.
+    if not ctx.args:
+        return "owo"
 
-        try:  # def __py(ctx)
-            exec(definition, __py_namespace)  # add to namespace
-            ret = await __py_namespace["__py"](ctx)  # await it's return
-        except Exception as exc:  # return exception in osu! chat
-            ret = f"{exc.__class__}: {exc}"
+    # turn our input args into a coroutine definition string.
+    definition = "\n ".join(["async def __py(ctx):", " ".join(ctx.args)])
 
-        if "__py" in __py_namespace:
-            del __py_namespace["__py"]
+    try:  # def __py(ctx)
+        exec(definition, namespace)  # add to namespace
+        ret = await namespace["__py"](ctx)  # await it's return
+    except Exception as exc:  # return exception in osu! chat
+        ret = f"{exc.__class__}: {exc}"
 
-        if not isinstance(ret, str):
-            ret = pprint.pformat(ret, compact=True)
+    if "__py" in namespace:
+        del namespace["__py"]
 
-        return str(ret)
+    if not isinstance(ret, str):
+        ret = pprint.pformat(ret, compact=True)
+
+    return str(ret)
 
 
 """ Multiplayer commands
@@ -1370,10 +1534,17 @@ if app.settings.DEVELOPER_MODE:
 
 
 def ensure_match(
-    f: Callable[[Context, Match], Awaitable[str | None]],
-) -> Callable[[Context], Awaitable[str | None]]:
+    f: Callable[
+        Concatenate[Context, Match, CommandParameters],
+        Awaitable[str | None],
+    ],
+) -> Callable[Concatenate[Context, CommandParameters], Awaitable[str | None]]:
     @wraps(f)
-    async def wrapper(ctx: Context) -> str | None:
+    async def wrapper(
+        ctx: Context,
+        *args: CommandParameters.args,
+        **kwargs: CommandParameters.kwargs,
+    ) -> str | None:
         match = ctx.player.match
 
         # multi set is a bit of a special case,
@@ -1393,31 +1564,45 @@ def ensure_match(
         ):
             return None
 
-        return await f(ctx, match)
+        return await f(ctx, match, *args, **kwargs)
 
-    return wrapper
+    return cast(
+        Callable[Concatenate[Context, CommandParameters], Awaitable[str | None]],
+        wrapper,
+    )
 
 
 @mp_commands.add(Privileges.UNRESTRICTED, aliases=["h"])
 @ensure_match
-async def mp_help(ctx: Context, match: Match) -> str | None:
+async def mp_help(
+    ctx: Context,
+    match: Match,
+    *,
+    group: CommandGroup,
+) -> str | None:
     """Show all documented multiplayer commands the player can access."""
     prefix = app.settings.COMMAND_PREFIX
     cmds = []
 
-    for cmd in mp_commands.commands:
-        if not cmd.doc or ctx.player.priv & cmd.priv != cmd.priv:
+    for cmd in group.commands:
+        if not cmd.description or ctx.player.priv & cmd.privileges != cmd.privileges:
             # no doc, or insufficient permissions.
             continue
 
-        cmds.append(f"{prefix}mp {cmd.triggers[0]}: {cmd.doc}")
+        cmds.append(f"{prefix}mp {cmd.triggers[0]}: {cmd.description}")
 
     return "\n".join(cmds)
 
 
 @mp_commands.add(Privileges.UNRESTRICTED, aliases=["st"])
 @ensure_match
-async def mp_start(ctx: Context, match: Match) -> str | None:
+async def mp_start(
+    ctx: Context,
+    match: Match,
+    *,
+    loop: AbstractEventLoop,
+    bot: Player,
+) -> str | None:
     """Start the current multiplayer match, with any players ready."""
     if len(ctx.args) > 1:
         return "Invalid syntax: !mp start <force/seconds>"
@@ -1456,22 +1641,22 @@ async def mp_start(ctx: Context, match: Match) -> str | None:
                 # make sure player didn't leave the
                 # match since queueing this start lol...
                 if ctx.player not in {slot.player for slot in match.slots}:
-                    match.chat.send_bot("Player left match? (cancelled)")
+                    match.chat.send_bot("Player left match? (cancelled)", bot=bot)
                     return
 
                 match.start()
-                match.chat.send_bot("Starting match.")
+                match.chat.send_bot("Starting match.", bot=bot)
 
             def _alert_start(t: int) -> None:
                 """Alert the match of the impending start."""
-                match.chat.send_bot(f"Match starting in {t} seconds.")
+                match.chat.send_bot(f"Match starting in {t} seconds.", bot=bot)
 
             # add timers to our match object,
             # so we can cancel them if needed.
             starting: StartingTimers = {
-                "start": app.state.loop.call_later(duration, _start),
+                "start": loop.call_later(duration, _start),
                 "alerts": [
-                    app.state.loop.call_later(duration - t, _alert_start, t)
+                    loop.call_later(duration - t, _alert_start, t)
                     for t in (60, 30, 10, 5, 4, 3, 2, 1)
                     if t < duration
                 ],
@@ -1518,7 +1703,12 @@ async def mp_abort(ctx: Context, match: Match) -> str | None:
 
 @mp_commands.add(Privileges.UNRESTRICTED)
 @ensure_match
-async def mp_map(ctx: Context, match: Match) -> str | None:
+async def mp_map(
+    ctx: Context,
+    match: Match,
+    *,
+    fetch_beatmap_by_id: FetchBeatmapById,
+) -> str | None:
     """Set the current match's current map by id."""
     if len(ctx.args) != 1 or not ctx.args[0].isdecimal():
         return "Invalid syntax: !mp map <beatmapid>"
@@ -1528,7 +1718,7 @@ async def mp_map(ctx: Context, match: Match) -> str | None:
     if map_id == match.map_id:
         return "Map already selected."
 
-    bmap = await Beatmap.from_bid(map_id)
+    bmap = await fetch_beatmap_by_id(map_id)
     if not bmap:
         return "Beatmap not found."
 
@@ -1610,12 +1800,17 @@ async def mp_freemods(ctx: Context, match: Match) -> str | None:
 
 @mp_commands.add(Privileges.UNRESTRICTED)
 @ensure_match
-async def mp_host(ctx: Context, match: Match) -> str | None:
+async def mp_host(
+    ctx: Context,
+    match: Match,
+    *,
+    players: Players,
+) -> str | None:
     """Set the current match's current host by id."""
     if len(ctx.args) != 1:
         return "Invalid syntax: !mp host <name>"
 
-    target = app.state.sessions.players.get(name=ctx.args[0])
+    target = players.get(name=ctx.args[0])
     if not target:
         return "Could not find a user by that name."
 
@@ -1642,16 +1837,22 @@ async def mp_randpw(ctx: Context, match: Match) -> str | None:
 
 @mp_commands.add(Privileges.UNRESTRICTED, aliases=["inv"])
 @ensure_match
-async def mp_invite(ctx: Context, match: Match) -> str | None:
+async def mp_invite(
+    ctx: Context,
+    match: Match,
+    *,
+    players: Players,
+    bot: Player,
+) -> str | None:
     """Invite a player to the current match by name."""
     if len(ctx.args) != 1:
         return "Invalid syntax: !mp invite <name>"
 
-    target = app.state.sessions.players.get(name=ctx.args[0])
+    target = players.get(name=ctx.args[0])
     if not target:
         return "Could not find a user by that name."
 
-    if target is app.state.sessions.bot:
+    if target is bot:
         return "I'm too busy!"
 
     if target is ctx.player:
@@ -1663,12 +1864,17 @@ async def mp_invite(ctx: Context, match: Match) -> str | None:
 
 @mp_commands.add(Privileges.UNRESTRICTED)
 @ensure_match
-async def mp_addref(ctx: Context, match: Match) -> str | None:
+async def mp_addref(
+    ctx: Context,
+    match: Match,
+    *,
+    players: Players,
+) -> str | None:
     """Add a referee to the current match by name."""
     if len(ctx.args) != 1:
         return "Invalid syntax: !mp addref <name>"
 
-    target = app.state.sessions.players.get(name=ctx.args[0])
+    target = players.get(name=ctx.args[0])
     if not target:
         return "Could not find a user by that name."
 
@@ -1684,12 +1890,17 @@ async def mp_addref(ctx: Context, match: Match) -> str | None:
 
 @mp_commands.add(Privileges.UNRESTRICTED)
 @ensure_match
-async def mp_rmref(ctx: Context, match: Match) -> str | None:
+async def mp_rmref(
+    ctx: Context,
+    match: Match,
+    *,
+    players: Players,
+) -> str | None:
     """Remove a referee from the current match by name."""
     if len(ctx.args) != 1:
         return "Invalid syntax: !mp addref <name>"
 
-    target = app.state.sessions.players.get(name=ctx.args[0])
+    target = players.get(name=ctx.args[0])
     if not target:
         return "Could not find a user by that name."
 
@@ -1907,17 +2118,23 @@ async def mp_rematch(ctx: Context, match: Match) -> str | None:
 
 @mp_commands.add(Privileges.ADMINISTRATOR, aliases=["f"], hidden=True)
 @ensure_match
-async def mp_force(ctx: Context, match: Match) -> str | None:
+async def mp_force(
+    ctx: Context,
+    match: Match,
+    *,
+    players: Players,
+    player_sessions: PlayerSessionService,
+) -> str | None:
     """Force a player into the current match by name."""
     # NOTE: this overrides any limits such as silences or passwd.
     if len(ctx.args) != 1:
         return "Invalid syntax: !mp force <name>"
 
-    target = app.state.sessions.players.get(name=ctx.args[0])
+    target = players.get(name=ctx.args[0])
     if not target:
         return "Could not find a user by that name."
 
-    target.join_match(match, match.passwd)
+    player_sessions.join_match(target, match, match.passwd)
     return "Welcome."
 
 
@@ -1926,7 +2143,12 @@ async def mp_force(ctx: Context, match: Match) -> str | None:
 
 @mp_commands.add(Privileges.UNRESTRICTED, aliases=["lp"])
 @ensure_match
-async def mp_loadpool(ctx: Context, match: Match) -> str | None:
+async def mp_loadpool(
+    ctx: Context,
+    match: Match,
+    *,
+    tourney_pools: TourneyPoolsService,
+) -> str | None:
     """Load a mappool into the current match."""
     if len(ctx.args) != 1:
         return "Invalid syntax: !mp loadpool <name>"
@@ -1936,7 +2158,7 @@ async def mp_loadpool(ctx: Context, match: Match) -> str | None:
 
     name = ctx.args[0]
 
-    tourney_pool = await _get_tourney_pools_service().fetch_tourney_pool_by_name(
+    tourney_pool = await tourney_pools.fetch_tourney_pool_by_name(
         name,
     )
     if tourney_pool is None:
@@ -1968,7 +2190,12 @@ async def mp_unloadpool(ctx: Context, match: Match) -> str | None:
 
 @mp_commands.add(Privileges.UNRESTRICTED)
 @ensure_match
-async def mp_ban(ctx: Context, match: Match) -> str | None:
+async def mp_ban(
+    ctx: Context,
+    match: Match,
+    *,
+    tourney_pools: TourneyPoolsService,
+) -> str | None:
     """Ban a pick in the currently loaded mappool."""
     if len(ctx.args) != 1:
         return "Invalid syntax: !mp ban <pick>"
@@ -1987,7 +2214,7 @@ async def mp_ban(ctx: Context, match: Match) -> str | None:
     mods = Mods.from_modstr(r_match[1])
     slot = int(r_match[2])
 
-    map_pick = await _get_tourney_pools_service().fetch_pool_map_pick(
+    map_pick = await tourney_pools.fetch_pool_map_pick(
         pool_id=match.tourney_pool.id,
         mods=mods,
         slot=slot,
@@ -2004,7 +2231,12 @@ async def mp_ban(ctx: Context, match: Match) -> str | None:
 
 @mp_commands.add(Privileges.UNRESTRICTED)
 @ensure_match
-async def mp_unban(ctx: Context, match: Match) -> str | None:
+async def mp_unban(
+    ctx: Context,
+    match: Match,
+    *,
+    tourney_pools: TourneyPoolsService,
+) -> str | None:
     """Unban a pick in the currently loaded mappool."""
     if len(ctx.args) != 1:
         return "Invalid syntax: !mp unban <pick>"
@@ -2023,7 +2255,7 @@ async def mp_unban(ctx: Context, match: Match) -> str | None:
     mods = Mods.from_modstr(r_match[1])
     slot = int(r_match[2])
 
-    map_pick = await _get_tourney_pools_service().fetch_pool_map_pick(
+    map_pick = await tourney_pools.fetch_pool_map_pick(
         pool_id=match.tourney_pool.id,
         mods=mods,
         slot=slot,
@@ -2040,7 +2272,13 @@ async def mp_unban(ctx: Context, match: Match) -> str | None:
 
 @mp_commands.add(Privileges.UNRESTRICTED)
 @ensure_match
-async def mp_pick(ctx: Context, match: Match) -> str | None:
+async def mp_pick(
+    ctx: Context,
+    match: Match,
+    *,
+    tourney_pools: TourneyPoolsService,
+    fetch_beatmap_by_id: FetchBeatmapById,
+) -> str | None:
     """Pick a map from the currently loaded mappool."""
     if len(ctx.args) != 1:
         return "Invalid syntax: !mp pick <pick>"
@@ -2059,7 +2297,7 @@ async def mp_pick(ctx: Context, match: Match) -> str | None:
     mods = Mods.from_modstr(r_match[1])
     slot = int(r_match[2])
 
-    map_pick = await _get_tourney_pools_service().fetch_pool_map_pick(
+    map_pick = await tourney_pools.fetch_pool_map_pick(
         pool_id=match.tourney_pool.id,
         mods=mods,
         slot=slot,
@@ -2070,7 +2308,7 @@ async def mp_pick(ctx: Context, match: Match) -> str | None:
     if (mods, slot) in match.bans:
         return f"{mods_slot} has been banned from being picked."
 
-    bmap = await Beatmap.from_bid(map_pick.map_id)
+    bmap = await fetch_beatmap_by_id(map_pick.map_id)
     if not bmap:
         return f"Found no beatmap for {mods_slot} pick."
 
@@ -2103,40 +2341,35 @@ async def mp_pick(ctx: Context, match: Match) -> str | None:
 """
 
 
-def _get_tourney_pools_service() -> TourneyPoolsService:
-    repositories = get_legacy_repositories()
-    return TourneyPoolsService(
-        tourney_pools=repositories.tourney_pools,
-        tourney_pool_maps=repositories.tourney_pool_maps,
-        database=app.state.services.database,
-    )
-
-
 @pool_commands.add(Privileges.TOURNEY_MANAGER, aliases=["h"], hidden=True)
-async def pool_help(ctx: Context) -> str | None:
+async def pool_help(ctx: Context, *, group: CommandGroup) -> str | None:
     """Show all documented mappool commands the player can access."""
     prefix = app.settings.COMMAND_PREFIX
     cmds = []
 
-    for cmd in pool_commands.commands:
-        if not cmd.doc or ctx.player.priv & cmd.priv != cmd.priv:
+    for cmd in group.commands:
+        if not cmd.description or ctx.player.priv & cmd.privileges != cmd.privileges:
             # no doc, or insufficient permissions.
             continue
 
-        cmds.append(f"{prefix}pool {cmd.triggers[0]}: {cmd.doc}")
+        cmds.append(f"{prefix}pool {cmd.triggers[0]}: {cmd.description}")
 
     return "\n".join(cmds)
 
 
 @pool_commands.add(Privileges.TOURNEY_MANAGER, aliases=["c"], hidden=True)
-async def pool_create(ctx: Context) -> str | None:
+async def pool_create(
+    ctx: Context,
+    *,
+    tourney_pools: TourneyPoolsService,
+) -> str | None:
     """Add a new mappool to the database."""
     if len(ctx.args) != 1:
         return "Invalid syntax: !pool create <name>"
 
     name = ctx.args[0]
 
-    result = await _get_tourney_pools_service().create_pool(
+    result = await tourney_pools.create_pool(
         name=name,
         created_by=ctx.player.id,
     )
@@ -2147,25 +2380,33 @@ async def pool_create(ctx: Context) -> str | None:
 
 
 @pool_commands.add(Privileges.TOURNEY_MANAGER, aliases=["del", "d"], hidden=True)
-async def pool_delete(ctx: Context) -> str | None:
+async def pool_delete(
+    ctx: Context,
+    *,
+    tourney_pools: TourneyPoolsService,
+) -> str | None:
     """Remove a mappool from the database."""
     if len(ctx.args) != 1:
         return "Invalid syntax: !pool delete <name>"
 
     name = ctx.args[0]
 
-    tourney_pools_service = _get_tourney_pools_service()
-    existing_pool = await tourney_pools_service.fetch_tourney_pool_by_name(name)
+    existing_pool = await tourney_pools.fetch_tourney_pool_by_name(name)
     if existing_pool is None:
         return "Could not find a pool by that name!"
 
-    await tourney_pools_service.delete_pool(existing_pool.id)
+    await tourney_pools.delete_pool(existing_pool.id)
 
     return f"{name} deleted."
 
 
 @pool_commands.add(Privileges.TOURNEY_MANAGER, aliases=["a"], hidden=True)
-async def pool_add(ctx: Context) -> str | None:
+async def pool_add(
+    ctx: Context,
+    *,
+    tourney_pools: TourneyPoolsService,
+    fetch_beatmap_by_id: FetchBeatmapById,
+) -> str | None:
     """Add a new map to a mappool in the database."""
     if len(ctx.args) != 2:
         return "Invalid syntax: !pool add <name> <pick>"
@@ -2189,12 +2430,11 @@ async def pool_add(ctx: Context) -> str | None:
     mods = Mods.from_modstr(r_match[1])
     slot = int(r_match[2])
 
-    tourney_pools_service = _get_tourney_pools_service()
-    tourney_pool = await tourney_pools_service.fetch_tourney_pool_by_name(name)
+    tourney_pool = await tourney_pools.fetch_tourney_pool_by_name(name)
     if tourney_pool is None:
         return "Could not find a pool by that name!"
 
-    result = await tourney_pools_service.add_map_to_pool(
+    result = await tourney_pools.add_map_to_pool(
         pool_id=tourney_pool.id,
         map_id=bmap.id,
         mods=mods,
@@ -2202,7 +2442,7 @@ async def pool_add(ctx: Context) -> str | None:
     )
     if result.code is AddPoolMapResultCode.PICK_TAKEN:
         assert result.existing_map_id is not None
-        pool_beatmap = await Beatmap.from_bid(result.existing_map_id)
+        pool_beatmap = await fetch_beatmap_by_id(result.existing_map_id)
         assert pool_beatmap is not None
         return f"{mods_slot} is already {pool_beatmap.embed}!"
     if result.code is AddPoolMapResultCode.MAP_ALREADY_IN_POOL:
@@ -2212,7 +2452,11 @@ async def pool_add(ctx: Context) -> str | None:
 
 
 @pool_commands.add(Privileges.TOURNEY_MANAGER, aliases=["rm", "r"], hidden=True)
-async def pool_remove(ctx: Context) -> str | None:
+async def pool_remove(
+    ctx: Context,
+    *,
+    tourney_pools: TourneyPoolsService,
+) -> str | None:
     """Remove a map from a mappool in the database."""
     if len(ctx.args) != 2:
         return "Invalid syntax: !pool remove <name> <pick>"
@@ -2229,12 +2473,11 @@ async def pool_remove(ctx: Context) -> str | None:
     mods = Mods.from_modstr(r_match[1])
     slot = int(r_match[2])
 
-    tourney_pools_service = _get_tourney_pools_service()
-    tourney_pool = await tourney_pools_service.fetch_tourney_pool_by_name(name)
+    tourney_pool = await tourney_pools.fetch_tourney_pool_by_name(name)
     if tourney_pool is None:
         return "Could not find a pool by that name!"
 
-    map_pick = await tourney_pools_service.remove_map_from_pool(
+    map_pick = await tourney_pools.remove_map_from_pool(
         pool_id=tourney_pool.id,
         mods=mods,
         slot=slot,
@@ -2246,16 +2489,21 @@ async def pool_remove(ctx: Context) -> str | None:
 
 
 @pool_commands.add(Privileges.TOURNEY_MANAGER, aliases=["l"], hidden=True)
-async def pool_list(ctx: Context) -> str | None:
+async def pool_list(
+    ctx: Context,
+    *,
+    tourney_pools_service: TourneyPoolsService,
+    users: UsersRepository,
+) -> str | None:
     """List all existing mappools information."""
-    tourney_pools = await _get_tourney_pools_service().fetch_tourney_pools()
-    if not tourney_pools:
+    pools = await tourney_pools_service.fetch_tourney_pools()
+    if not pools:
         return "There are currently no pools!"
 
-    l = [f"Mappools ({len(tourney_pools)})"]
+    l = [f"Mappools ({len(pools)})"]
 
-    for pool in tourney_pools:
-        created_by = await get_legacy_repositories().users.fetch_one(
+    for pool in pools:
+        created_by = await users.fetch_one(
             id=pool.created_by,
         )
         if created_by is None:
@@ -2270,14 +2518,19 @@ async def pool_list(ctx: Context) -> str | None:
 
 
 @pool_commands.add(Privileges.TOURNEY_MANAGER, aliases=["i"], hidden=True)
-async def pool_info(ctx: Context) -> str | None:
+async def pool_info(
+    ctx: Context,
+    *,
+    tourney_pools: TourneyPoolsService,
+    fetch_beatmap_by_id: FetchBeatmapById,
+) -> str | None:
     """Get all information for a specific mappool."""
     if len(ctx.args) != 1:
         return "Invalid syntax: !pool info <name>"
 
     name = ctx.args[0]
 
-    tourney_pool = await _get_tourney_pools_service().fetch_tourney_pool_by_name(
+    tourney_pool = await tourney_pools.fetch_tourney_pool_by_name(
         name,
     )
     if tourney_pool is None:
@@ -2291,12 +2544,12 @@ async def pool_info(ctx: Context) -> str | None:
     ]
 
     for tourney_map in sorted(
-        await _get_tourney_pools_service().fetch_tourney_pool_maps(
+        await tourney_pools.fetch_tourney_pool_maps(
             pool_id=tourney_pool.id,
         ),
         key=lambda x: (repr(Mods(x.mods)), x.slot),
     ):
-        bmap = await Beatmap.from_bid(tourney_map.map_id)
+        bmap = await fetch_beatmap_by_id(tourney_map.map_id)
         if bmap is None:
             log(f"Could not find beatmap {tourney_map.map_id}.", Ansi.LRED)
             continue
@@ -2312,38 +2565,33 @@ async def pool_info(ctx: Context) -> str | None:
 
 
 @clan_commands.add(Privileges.UNRESTRICTED, aliases=["h"])
-async def clan_help(ctx: Context) -> str | None:
+async def clan_help(ctx: Context, *, group: CommandGroup) -> str | None:
     """Show all documented clan commands the player can access."""
     prefix = app.settings.COMMAND_PREFIX
     cmds = []
 
-    for cmd in clan_commands.commands:
-        if not cmd.doc or ctx.player.priv & cmd.priv != cmd.priv:
+    for cmd in group.commands:
+        if not cmd.description or ctx.player.priv & cmd.privileges != cmd.privileges:
             # no doc, or insufficient permissions.
             continue
 
-        cmds.append(f"{prefix}clan {cmd.triggers[0]}: {cmd.doc}")
+        cmds.append(f"{prefix}clan {cmd.triggers[0]}: {cmd.description}")
 
     return "\n".join(cmds)
 
 
-def _get_clans_service() -> ClansService:
-    repositories = get_legacy_repositories()
-    return ClansService(
-        clans=repositories.clans,
-        users=repositories.users,
-        online_players=app.state.sessions.players,
-        database=app.state.services.database,
-    )
-
-
 @clan_commands.add(Privileges.UNRESTRICTED, aliases=["c"])
-async def clan_create(ctx: Context) -> str | None:
+async def clan_create(
+    ctx: Context,
+    *,
+    clans: ClansService,
+    channels: Channels,
+) -> str | None:
     """Create a clan with a given tag & name."""
     if len(ctx.args) < 2:
         return "Invalid syntax: !clan create <tag> <name>"
 
-    result = await _get_clans_service().create_clan(
+    result = await clans.create_clan(
         player_id=ctx.player.id,
         tag=ctx.args[0],
         name=" ".join(ctx.args[1:]),
@@ -2364,7 +2612,7 @@ async def clan_create(ctx: Context) -> str | None:
     assert result.clan is not None
 
     # announce clan creation
-    announce_chan = app.state.sessions.channels.get_by_name("#announce")
+    announce_chan = channels.get_by_name("#announce")
     clan_display_name = f"[{result.clan.tag}] {result.clan.name}"
     if announce_chan:
         msg = f"\x01ACTION founded {clan_display_name}."
@@ -2374,14 +2622,20 @@ async def clan_create(ctx: Context) -> str | None:
 
 
 @clan_commands.add(Privileges.UNRESTRICTED, aliases=["delete", "d"])
-async def clan_disband(ctx: Context) -> str | None:
+async def clan_disband(
+    ctx: Context,
+    *,
+    clans: ClansService,
+    clans_repository: ClansRepository,
+    channels: Channels,
+) -> str | None:
     """Disband a clan (admins may disband others clans)."""
     if ctx.args:
         # disband a specified clan by tag
-        if ctx.player not in app.state.sessions.players.staff:
+        if not ctx.player.priv & Privileges.STAFF:
             return "Only staff members may disband the clans of others."
 
-        clan = await get_legacy_repositories().clans.fetch_one(
+        clan = await clans_repository.fetch_one(
             tag=" ".join(ctx.args).upper(),
         )
         if not clan:
@@ -2391,17 +2645,17 @@ async def clan_disband(ctx: Context) -> str | None:
             return "You're not a member of a clan!"
 
         # disband the player's clan
-        clan = await get_legacy_repositories().clans.fetch_one(
+        clan = await clans_repository.fetch_one(
             id=ctx.player.clan_id,
         )
         if not clan:
             return "You're not a member of a clan!"
 
-    disbanded_clan = await _get_clans_service().disband_clan(clan.id)
+    disbanded_clan = await clans.disband_clan(clan.id)
     assert disbanded_clan is not None
 
     # announce clan disbanding
-    announce_chan = app.state.sessions.channels.get_by_name("#announce")
+    announce_chan = channels.get_by_name("#announce")
     clan_display_name = f"[{clan.tag}] {clan.name}"
     if announce_chan:
         msg = f"\x01ACTION disbanded {clan_display_name}."
@@ -2411,12 +2665,12 @@ async def clan_disband(ctx: Context) -> str | None:
 
 
 @clan_commands.add(Privileges.UNRESTRICTED, aliases=["t"])
-async def clan_transfer(ctx: Context) -> str | None:
+async def clan_transfer(ctx: Context, *, clans: ClansService) -> str | None:
     """Transfer ownership of your clan to another member."""
     if not ctx.args:
         return "Invalid syntax: !clan transfer <username>"
 
-    result = await _get_clans_service().transfer_clan_ownership(
+    result = await clans.transfer_clan_ownership(
         owner_id=ctx.player.id,
         target_name=" ".join(ctx.args),
     )
@@ -2433,12 +2687,17 @@ async def clan_transfer(ctx: Context) -> str | None:
 
 
 @clan_commands.add(Privileges.UNRESTRICTED, aliases=["i"])
-async def clan_info(ctx: Context) -> str | None:
+async def clan_info(
+    ctx: Context,
+    *,
+    clans_repository: ClansRepository,
+    users: UsersRepository,
+) -> str | None:
     """Lookup information of a clan by tag."""
     if not ctx.args:
         return "Invalid syntax: !clan info <tag>"
 
-    clan = await get_legacy_repositories().clans.fetch_one(
+    clan = await clans_repository.fetch_one(
         tag=" ".join(ctx.args).upper(),
     )
     if not clan:
@@ -2449,7 +2708,7 @@ async def clan_info(ctx: Context) -> str | None:
 
     # get members privs from sql; hidden (restricted or unverified)
     # members are only listed for staff and for themselves
-    clan_members = await get_legacy_repositories().users.fetch_many(
+    clan_members = await users.fetch_many(
         clan_id=clan.id,
         include_hidden=ctx.player.priv & Privileges.STAFF != 0,
         always_visible_id=ctx.player.id,
@@ -2462,9 +2721,14 @@ async def clan_info(ctx: Context) -> str | None:
 
 
 @clan_commands.add(Privileges.UNRESTRICTED)
-async def clan_leave(ctx: Context) -> str | None:
+async def clan_leave(
+    ctx: Context,
+    *,
+    clans: ClansService,
+    channels: Channels,
+) -> str | None:
     """Leaves the clan you're in."""
-    result = await _get_clans_service().leave_clan(ctx.player.id)
+    result = await clans.leave_clan(ctx.player.id)
     if result.code is LeaveClanResultCode.NOT_IN_CLAN:
         return "You're not in a clan."
     if result.code is LeaveClanResultCode.OWNER_MUST_TRANSFER:
@@ -2475,7 +2739,7 @@ async def clan_leave(ctx: Context) -> str | None:
 
     if result.disbanded:
         # announce clan disbanding
-        announce_chan = app.state.sessions.channels.get_by_name("#announce")
+        announce_chan = channels.get_by_name("#announce")
         if announce_chan:
             msg = f"\x01ACTION disbanded {clan_display_name}."
             announce_chan.send(msg, sender=ctx.player, to_self=True)
@@ -2487,7 +2751,11 @@ async def clan_leave(ctx: Context) -> str | None:
 
 
 @clan_commands.add(Privileges.UNRESTRICTED, aliases=["l"])
-async def clan_list(ctx: Context) -> str | None:
+async def clan_list(
+    ctx: Context,
+    *,
+    clans_repository: ClansRepository,
+) -> str | None:
     """List all existing clans' information."""
     if ctx.args:
         if len(ctx.args) != 1 or not ctx.args[0].isdecimal():
@@ -2497,7 +2765,7 @@ async def clan_list(ctx: Context) -> str | None:
     else:
         offset = 0
 
-    all_clans = await get_legacy_repositories().clans.fetch_many(
+    all_clans = await clans_repository.fetch_many(
         page=None,
         page_size=None,
     )
@@ -2514,69 +2782,458 @@ async def clan_list(ctx: Context) -> str | None:
     return "\n".join(msg)
 
 
-class CommandResponse(TypedDict):
-    resp: str | None
-    hidden: bool
+def _bind_command(
+    callback: Callable[
+        Concatenate[Context, CommandParameters],
+        Awaitable[str | None],
+    ],
+    *args: CommandParameters.args,
+    **kwargs: CommandParameters.kwargs,
+) -> CommandCallback:
+    @wraps(callback)
+    async def bound(ctx: Context) -> str | None:
+        return await callback(ctx, *args, **kwargs)
+
+    return cast(CommandCallback, bound)
 
 
-async def process_commands(
-    player: Player,
-    target: Channel | Player,
-    msg: str,
-) -> CommandResponse | None:
-    # response is either a CommandResponse if we hit a command,
-    # or simply False if we don't have any command hits.
-    start_time = clock_ns()
+def _register_command(
+    command_router: CommandRouter,
+    groups: Mapping[str, CommandGroup],
+    callback: CommandCallback,
+) -> None:
+    spec = _get_command_spec(callback)
 
-    prefix_len = len(app.settings.COMMAND_PREFIX)
-    trigger, *args = msg[prefix_len:].strip().split(" ")
+    if spec.group is None:
+        trigger = callback.__name__.strip("_")
+        command_router.register(
+            callback,
+            trigger=trigger,
+            privileges=spec.privileges,
+            aliases=spec.aliases,
+            hidden=spec.hidden,
+            description=callback.__doc__,
+        )
+        return
 
-    # case-insensitive triggers
-    trigger = trigger.lower()
+    group = groups[spec.group]
+    trigger = callback.__name__.removeprefix(f"{spec.group}_").strip()
+    group.register(
+        callback,
+        trigger=trigger,
+        privileges=spec.privileges,
+        aliases=spec.aliases,
+        hidden=spec.hidden,
+        description=callback.__doc__,
+    )
 
-    # check if any command sets match.
-    commands: list[Command] = []
-    for cmd_set in command_sets:
-        if trigger == cmd_set.trigger:
-            if not args:
-                args = ["help"]
 
-            trigger, *args = args  # get subcommand
+def build_command_router(
+    *,
+    prefix: str,
+    clock: Clock,
+    format_elapsed: ElapsedFormatter,
+    developer_mode: bool,
+    players: Players,
+    players_service: PlayersService,
+    channels: Channels,
+    bot: Player,
+    api_keys: dict[str, int],
+    database: Database,
+    loop: AbstractEventLoop,
+    beatmap_cache: dict[str | int, Beatmap],
+    beatmapset_cache: dict[int, BeatmapSet],
+    users: UsersRepository,
+    map_requests: MapRequestsRepository,
+    maps: MapsRepository,
+    logs: LogsRepository,
+    clans_repository: ClansRepository,
+    clans: ClansService,
+    tourney_pools: TourneyPoolsService,
+    performance: PerformanceService,
+    player_sessions: PlayerSessionService,
+    player_moderation: PlayerModerationService,
+    relationships: RelationshipsService,
+    fetch_beatmap_by_id: FetchBeatmapById,
+    fetch_beatmap_by_md5: FetchBeatmapByMd5,
+    ensure_osu_file_available: EnsureOsuFileAvailable,
+) -> CommandRouter:
+    """Build one isolated command registry from explicit dependencies."""
+    router = CommandRouter(
+        prefix=prefix,
+        clock=clock,
+        format_elapsed=format_elapsed,
+    )
+    groups = {
+        definition.trigger: router.create_group(
+            definition.trigger,
+            definition.doc,
+        )
+        for definition in (mp_commands, pool_commands, clan_commands)
+    }
 
-            # case-insensitive triggers
-            trigger = trigger.lower()
+    _register_command(router, groups, _bind_command(_help, router=router))
+    _register_command(router, groups, roll)
+    _register_command(
+        router,
+        groups,
+        _bind_command(
+            block,
+            players_service=players_service,
+            bot=bot,
+            relationships=relationships,
+        ),
+    )
+    _register_command(
+        router,
+        groups,
+        _bind_command(
+            unblock,
+            players_service=players_service,
+            bot=bot,
+            relationships=relationships,
+        ),
+    )
+    _register_command(
+        router,
+        groups,
+        _bind_command(
+            reconnect,
+            players=players,
+            player_sessions=player_sessions,
+        ),
+    )
+    _register_command(
+        router,
+        groups,
+        _bind_command(
+            changename,
+            users=users,
+            player_sessions=player_sessions,
+        ),
+    )
+    _register_command(
+        router,
+        groups,
+        _bind_command(maplink, fetch_beatmap_by_md5=fetch_beatmap_by_md5),
+    )
+    _register_command(router, groups, _bind_command(recent, players=players))
+    _register_command(
+        router,
+        groups,
+        _bind_command(top, users=users, database=database),
+    )
+    _register_command(
+        router,
+        groups,
+        _bind_command(
+            _with,
+            bot=bot,
+            ensure_osu_file_available=ensure_osu_file_available,
+            performance=performance,
+        ),
+    )
+    _register_command(
+        router,
+        groups,
+        _bind_command(request, map_requests=map_requests),
+    )
+    _register_command(
+        router,
+        groups,
+        _bind_command(apikey, bot=bot, api_keys=api_keys, users=users),
+    )
+    _register_command(
+        router,
+        groups,
+        _bind_command(
+            requests,
+            map_requests=map_requests,
+            fetch_beatmap_by_id=fetch_beatmap_by_id,
+        ),
+    )
+    _register_command(
+        router,
+        groups,
+        _bind_command(
+            _map,
+            maps=maps,
+            map_requests=map_requests,
+            database=database,
+            beatmap_cache=beatmap_cache,
+            beatmapset_cache=beatmapset_cache,
+        ),
+    )
+    _register_command(
+        router,
+        groups,
+        _bind_command(
+            notes,
+            players_service=players_service,
+            database=database,
+        ),
+    )
+    _register_command(
+        router,
+        groups,
+        _bind_command(addnote, players_service=players_service, logs=logs),
+    )
+    _register_command(
+        router,
+        groups,
+        _bind_command(
+            silence,
+            players_service=players_service,
+            player_moderation=player_moderation,
+        ),
+    )
+    _register_command(
+        router,
+        groups,
+        _bind_command(
+            unsilence,
+            players_service=players_service,
+            player_moderation=player_moderation,
+        ),
+    )
+    _register_command(
+        router,
+        groups,
+        _bind_command(
+            user,
+            players_service=players_service,
+            clans_repository=clans_repository,
+        ),
+    )
+    _register_command(
+        router,
+        groups,
+        _bind_command(
+            restrict,
+            players_service=players_service,
+            player_moderation=player_moderation,
+        ),
+    )
+    _register_command(
+        router,
+        groups,
+        _bind_command(
+            unrestrict,
+            players_service=players_service,
+            player_moderation=player_moderation,
+        ),
+    )
+    _register_command(router, groups, _bind_command(alert, players=players))
+    _register_command(router, groups, _bind_command(alertuser, players=players))
+    _register_command(router, groups, switchserv)
+    _register_command(
+        router,
+        groups,
+        _bind_command(shutdown, players=players, loop=loop),
+    )
+    _register_command(router, groups, stealth)
+    _register_command(router, groups, recalc)
+    _register_command(router, groups, debug)
+    _register_command(
+        router,
+        groups,
+        _bind_command(
+            addpriv,
+            players_service=players_service,
+            player_moderation=player_moderation,
+        ),
+    )
+    _register_command(
+        router,
+        groups,
+        _bind_command(
+            rmpriv,
+            players_service=players_service,
+            database=database,
+            player_moderation=player_moderation,
+        ),
+    )
+    _register_command(
+        router,
+        groups,
+        _bind_command(
+            givedonator,
+            players_service=players_service,
+            database=database,
+            player_moderation=player_moderation,
+        ),
+    )
+    _register_command(router, groups, _bind_command(wipemap, database=database))
+    _register_command(router, groups, reload)
+    _register_command(router, groups, server)
+    if developer_mode:
+        _register_command(
+            router,
+            groups,
+            _bind_command(py, namespace=_build_py_namespace()),
+        )
 
-            commands = cmd_set.commands
-            break
-    else:
-        # no set commands matched, check normal commands.
-        commands = regular_commands
+    _register_command(
+        router,
+        groups,
+        _bind_command(mp_help, group=groups["mp"]),
+    )
+    _register_command(
+        router,
+        groups,
+        _bind_command(mp_start, loop=loop, bot=bot),
+    )
+    _register_command(router, groups, mp_abort)
+    _register_command(
+        router,
+        groups,
+        _bind_command(mp_map, fetch_beatmap_by_id=fetch_beatmap_by_id),
+    )
+    _register_command(router, groups, mp_mods)
+    _register_command(router, groups, mp_freemods)
+    _register_command(router, groups, _bind_command(mp_host, players=players))
+    _register_command(router, groups, mp_randpw)
+    _register_command(
+        router,
+        groups,
+        _bind_command(mp_invite, players=players, bot=bot),
+    )
+    _register_command(router, groups, _bind_command(mp_addref, players=players))
+    _register_command(router, groups, _bind_command(mp_rmref, players=players))
+    _register_command(router, groups, mp_listref)
+    _register_command(router, groups, mp_lock)
+    _register_command(router, groups, mp_unlock)
+    _register_command(router, groups, mp_teams)
+    _register_command(router, groups, mp_condition)
+    _register_command(router, groups, mp_scrim)
+    _register_command(router, groups, mp_endscrim)
+    _register_command(router, groups, mp_rematch)
+    _register_command(
+        router,
+        groups,
+        _bind_command(
+            mp_force,
+            players=players,
+            player_sessions=player_sessions,
+        ),
+    )
+    _register_command(
+        router,
+        groups,
+        _bind_command(mp_loadpool, tourney_pools=tourney_pools),
+    )
+    _register_command(router, groups, mp_unloadpool)
+    _register_command(
+        router,
+        groups,
+        _bind_command(mp_ban, tourney_pools=tourney_pools),
+    )
+    _register_command(
+        router,
+        groups,
+        _bind_command(mp_unban, tourney_pools=tourney_pools),
+    )
+    _register_command(
+        router,
+        groups,
+        _bind_command(
+            mp_pick,
+            tourney_pools=tourney_pools,
+            fetch_beatmap_by_id=fetch_beatmap_by_id,
+        ),
+    )
 
-    for cmd in commands:
-        if trigger in cmd.triggers and player.priv & cmd.priv == cmd.priv:
-            # found matching trigger with sufficient privs
-            try:
-                res = await cmd.callback(
-                    Context(
-                        player=player,
-                        trigger=trigger,
-                        args=args,
-                        recipient=target,
-                    ),
-                )
-            except Exception:
-                # print exception info to the console,
-                # but do not break the player's session.
-                traceback.print_exc()
+    _register_command(
+        router,
+        groups,
+        _bind_command(pool_help, group=groups["pool"]),
+    )
+    _register_command(
+        router,
+        groups,
+        _bind_command(pool_create, tourney_pools=tourney_pools),
+    )
+    _register_command(
+        router,
+        groups,
+        _bind_command(pool_delete, tourney_pools=tourney_pools),
+    )
+    _register_command(
+        router,
+        groups,
+        _bind_command(
+            pool_add,
+            tourney_pools=tourney_pools,
+            fetch_beatmap_by_id=fetch_beatmap_by_id,
+        ),
+    )
+    _register_command(
+        router,
+        groups,
+        _bind_command(pool_remove, tourney_pools=tourney_pools),
+    )
+    _register_command(
+        router,
+        groups,
+        _bind_command(
+            pool_list,
+            tourney_pools_service=tourney_pools,
+            users=users,
+        ),
+    )
+    _register_command(
+        router,
+        groups,
+        _bind_command(
+            pool_info,
+            tourney_pools=tourney_pools,
+            fetch_beatmap_by_id=fetch_beatmap_by_id,
+        ),
+    )
 
-                res = "An exception occurred when running the command."
+    _register_command(
+        router,
+        groups,
+        _bind_command(clan_help, group=groups["clan"]),
+    )
+    _register_command(
+        router,
+        groups,
+        _bind_command(clan_create, clans=clans, channels=channels),
+    )
+    _register_command(
+        router,
+        groups,
+        _bind_command(
+            clan_disband,
+            clans=clans,
+            clans_repository=clans_repository,
+            channels=channels,
+        ),
+    )
+    _register_command(
+        router,
+        groups,
+        _bind_command(clan_transfer, clans=clans),
+    )
+    _register_command(
+        router,
+        groups,
+        _bind_command(
+            clan_info,
+            clans_repository=clans_repository,
+            users=users,
+        ),
+    )
+    _register_command(
+        router,
+        groups,
+        _bind_command(clan_leave, clans=clans, channels=channels),
+    )
+    _register_command(
+        router,
+        groups,
+        _bind_command(clan_list, clans_repository=clans_repository),
+    )
 
-            if res is not None:
-                # we have a message to return, include elapsed time
-                elapsed = app.logging.magnitude_fmt_time(clock_ns() - start_time)
-                return {"resp": f"{res} | Elapsed: {elapsed}", "hidden": cmd.hidden}
-            else:
-                # no message to return
-                return {"resp": None, "hidden": False}
-
-    return None
+    return router

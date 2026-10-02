@@ -2,18 +2,20 @@ from __future__ import annotations
 
 import secrets
 
-import app.state.services
+from app.application import Application
 from app.constants.privileges import Privileges
-from app.repositories.users import UsersRepository
-from tests import factories
+from tests.factories import TestDataFactory
 
 
-async def test_search_public_filters_to_verified_unrestricted_users() -> None:
-    users = UsersRepository(app.state.services.database)
+async def test_search_public_filters_to_verified_unrestricted_users(
+    application: Application,
+    test_data: TestDataFactory,
+) -> None:
+    users = application.repositories.users
     suffix = secrets.token_hex(4)
-    visible = await factories.create_user()
-    unverified = await factories.create_user()
-    restricted = await factories.create_user()
+    visible = await test_data.create_user()
+    unverified = await test_data.create_user()
+    restricted = await test_data.create_user()
 
     await users.partial_update(
         id=visible.id,
@@ -36,3 +38,47 @@ async def test_search_public_filters_to_verified_unrestricted_users() -> None:
     assert [(row.id, row.name) for row in rows] == [
         (visible.id, f"search-{suffix}-visible"),
     ]
+
+
+async def test_fetch_api_keys_returns_configured_keys(
+    application: Application,
+    test_data: TestDataFactory,
+) -> None:
+    users = application.repositories.users
+    user = await test_data.create_user()
+    api_key = secrets.token_hex(16)
+    await users.partial_update(id=user.id, api_key=api_key)
+
+    records = await users.fetch_api_keys()
+
+    assert (user.id, api_key) in {
+        (record.user_id, record.api_key) for record in records
+    }
+
+
+async def test_fetch_expired_donor_ids_filters_by_expiry_and_privilege(
+    application: Application,
+    test_data: TestDataFactory,
+) -> None:
+    users = application.repositories.users
+    expired_donor = await test_data.create_user()
+    expired_non_donor = await test_data.create_user()
+    active_donor = await test_data.create_user()
+
+    await users.partial_update(
+        id=expired_donor.id,
+        donor_end=1,
+        priv=expired_donor.priv | Privileges.DONATOR.value,
+    )
+    await users.partial_update(id=expired_non_donor.id, donor_end=1)
+    await users.partial_update(
+        id=active_donor.id,
+        donor_end=0x7FFFFFFF,
+        priv=active_donor.priv | Privileges.DONATOR.value,
+    )
+
+    expired_ids = await users.fetch_expired_donor_ids()
+
+    assert expired_donor.id in expired_ids
+    assert expired_non_donor.id not in expired_ids
+    assert active_donor.id not in expired_ids

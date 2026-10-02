@@ -11,9 +11,8 @@ from fastapi import status
 from httpx import AsyncClient
 
 import app.packets
-import app.state.sessions
+from app.application import Application
 from app.packets import ClientPackets
-from app.repositories.users import UsersRepository
 
 CHO_HEADERS = {
     "Host": "c.cmyui.xyz",
@@ -72,6 +71,7 @@ def _mock_geolocation(respx_mock: respx.MockRouter) -> None:
 
 
 async def test_bancho_login_packet_dispatch_and_logout_lifecycle(
+    application: Application,
     http_client: AsyncClient,
     respx_mock: respx.MockRouter,
 ) -> None:
@@ -87,7 +87,7 @@ async def test_bancho_login_packet_dispatch_and_logout_lifecycle(
     assert login_response.status_code == status.HTTP_200_OK
     token = login_response.headers["cho-token"]
     UUID(token)
-    player = app.state.sessions.players.get(token=token)
+    player = application.sessions.players.get(token=token)
     assert player is not None
     assert player.name == username
     assert player.dequeue() == app.packets.bancho_privileges(player.bancho_priv)
@@ -121,18 +121,19 @@ async def test_bancho_login_packet_dispatch_and_logout_lifecycle(
 
     assert logout_response.status_code == status.HTTP_200_OK
     assert player.token == ""
-    assert app.state.sessions.players.get(token=token) is None
-    assert app.state.sessions.players.get(id=player.id) is None
-    assert app.state.sessions.players.get(name=username) is None
+    assert application.sessions.players.get(token=token) is None
+    assert application.sessions.players.get(id=player.id) is None
+    assert application.sessions.players.get(name=username) is None
 
 
 async def test_bancho_login_rejects_incorrect_credentials_without_a_session(
+    application: Application,
     http_client: AsyncClient,
     respx_mock: respx.MockRouter,
 ) -> None:
     _mock_geolocation(respx_mock)
     username, password = await _register_user(http_client)
-    user = await UsersRepository(app.state.services.database).fetch_one(name=username)
+    user = await application.repositories.users.fetch_one(name=username)
     assert user is not None
 
     response = await http_client.post(
@@ -143,5 +144,5 @@ async def test_bancho_login_rejects_incorrect_credentials_without_a_session(
 
     assert response.status_code == status.HTTP_200_OK
     assert response.headers["cho-token"] == "incorrect-credentials"
-    assert app.state.sessions.players.get(id=user.id) is None
-    assert app.state.sessions.players.get(name=username) is None
+    assert application.sessions.players.get(id=user.id) is None
+    assert application.sessions.players.get(name=username) is None

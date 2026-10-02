@@ -1,89 +1,86 @@
 from __future__ import annotations
 
 import asyncio
-import time
+from collections.abc import Awaitable
+from collections.abc import Callable
+from collections.abc import Collection
+from dataclasses import dataclass
 
-import app.packets
-import app.settings
-import app.state
 from app.constants.privileges import Privileges
 from app.logging import Ansi
 from app.logging import log
+from app.objects.player import Player
+from app.repositories.users import UsersRepository
 
 OSU_CLIENT_MIN_PING_INTERVAL = 300000 // 1000  # defined by osu!
+SUPPORTER_EXPIRATION_INTERVAL = 30 * 60
+BOT_STATUS_UPDATE_INTERVAL = 5 * 60
+GHOST_DISCONNECT_INTERVAL = OSU_CLIENT_MIN_PING_INTERVAL // 3
+SUPPORTER_EXPIRED_NOTIFICATION = "Your supporter status has expired."
+
+PlayerFetcher = Callable[[int], Awaitable[Player | None]]
+PrivilegeRemover = Callable[[Player, Privileges], Awaitable[None]]
+PlayerNotifier = Callable[[Player, str], None]
+PlayerLogout = Callable[[Player], None]
+Sleep = Callable[[float], Awaitable[None]]
 
 
-async def initialize_housekeeping_tasks() -> None:
-    """Create tasks for each housekeeping tasks."""
-    log("Initializing housekeeping tasks.", Ansi.LCYAN)
+@dataclass(frozen=True)
+class HousekeepingService:
+    """One-shot housekeeping actions for one application graph."""
 
-    loop = asyncio.get_running_loop()
+    users: UsersRepository
+    online_players: Collection[Player]
+    fetch_player: PlayerFetcher
+    remove_privileges: PrivilegeRemover
+    notify_player: PlayerNotifier
+    logout_player: PlayerLogout
+    clear_bot_status_cache: Callable[[], None]
+    current_time: Callable[[], float]
+    debug: bool
 
-    app.state.sessions.housekeeping_tasks.update(
-        {
-            loop.create_task(task)
-            for task in (
-                _remove_expired_donation_privileges(interval=30 * 60),
-                _update_bot_status(interval=5 * 60),
-                _disconnect_ghosts(interval=OSU_CLIENT_MIN_PING_INTERVAL // 3),
-            )
-        },
-    )
-
-
-async def _remove_expired_donation_privileges(interval: int) -> None:
-    """Remove donation privileges from users with expired sessions."""
-    while True:
-        if app.settings.DEBUG:
+    async def expire_donation_privileges_once(self) -> None:
+        """Remove supporter privileges whose persisted expiry has passed."""
+        if self.debug:
             log("Removing expired donation privileges.", Ansi.LMAGENTA)
 
-        expired_donors = await app.state.services.database.fetch_all(
-            "SELECT id FROM users "
-            "WHERE donor_end <= UNIX_TIMESTAMP() "
-            "AND priv & :donor_priv",
-            {"donor_priv": Privileges.DONATOR.value},
-        )
-
-        for expired_donor in expired_donors:
-            player = await app.state.sessions.players.from_cache_or_sql(
-                id=expired_donor["id"],
-            )
-
+        for player_id in await self.users.fetch_expired_donor_ids():
+            player = await self.fetch_player(player_id)
             assert player is not None
 
-            # TODO: perhaps make a `revoke_donor` method?
-            await player.remove_privs(Privileges.DONATOR)
+            await self.remove_privileges(player, Privileges.DONATOR)
             player.donor_end = 0
-            await app.state.services.database.execute(
-                "UPDATE users SET donor_end = 0 WHERE id = :id",
-                {"id": player.id},
-            )
+            await self.users.partial_update(id=player.id, donor_end=0)
 
             if player.is_online:
-                player.enqueue(
-                    app.packets.notification("Your supporter status has expired."),
-                )
+                self.notify_player(player, SUPPORTER_EXPIRED_NOTIFICATION)
 
             log(f"{player}'s supporter status has expired.", Ansi.LMAGENTA)
 
-        await asyncio.sleep(interval)
-
-
-async def _disconnect_ghosts(interval: int) -> None:
-    """Actively disconnect users above the
-    disconnection time threshold on the osu! server."""
-    while True:
-        await asyncio.sleep(interval)
-        current_time = time.time()
-
-        for player in app.state.sessions.players:
+    async def disconnect_ghosts_once(self) -> None:
+        """Disconnect online players beyond the client ping timeout."""
+        current_time = self.current_time()
+        for player in self.online_players:
             if current_time - player.last_recv_time > OSU_CLIENT_MIN_PING_INTERVAL:
                 log(f"Auto-dced {player}.", Ansi.LMAGENTA)
-                player.logout()
+                self.logout_player(player)
+
+    async def refresh_bot_status_once(self) -> None:
+        """Invalidate the cached bot status so it is re-rolled on next use."""
+        self.clear_bot_status_cache()
 
 
-async def _update_bot_status(interval: int) -> None:
-    """Re roll the bot status, every `interval`."""
+async def run_periodically(
+    action: Callable[[], Awaitable[None]],
+    *,
+    interval: float,
+    initial_delay: float = 0,
+    sleep: Sleep = asyncio.sleep,
+) -> None:
+    """Run an injected action until the owning task is cancelled."""
+    if initial_delay:
+        await sleep(initial_delay)
+
     while True:
-        await asyncio.sleep(interval)
-        app.packets.bot_stats.cache_clear()
+        await action()
+        await sleep(interval)

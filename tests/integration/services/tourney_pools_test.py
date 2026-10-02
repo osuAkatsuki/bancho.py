@@ -4,7 +4,7 @@ import secrets
 
 import pytest
 
-import app.state.services
+from app.application import Application
 from app.constants.mods import Mods
 from app.constants.privileges import Privileges
 from app.repositories.tourney_pool_maps import TourneyPoolMap
@@ -13,7 +13,7 @@ from app.repositories.tourney_pools import TourneyPoolsRepository
 from app.services.tourney_pools import AddPoolMapResultCode
 from app.services.tourney_pools import CreatePoolResultCode
 from app.services.tourney_pools import TourneyPoolsService
-from tests import factories
+from tests.factories import TestDataFactory
 
 VISIBLE_PRIV = int(Privileges.UNRESTRICTED | Privileges.VERIFIED)
 
@@ -24,10 +24,11 @@ class _FailingPoolMapsRepository(TourneyPoolMapsRepository):
 
 
 def _tourney_pools_service(
+    application: Application,
     *,
     pool_maps: TourneyPoolMapsRepository | None = None,
 ) -> TourneyPoolsService:
-    database = app.state.services.database
+    database = application.resources.database
     return TourneyPoolsService(
         tourney_pools=TourneyPoolsRepository(database),
         tourney_pool_maps=pool_maps or TourneyPoolMapsRepository(database),
@@ -35,11 +36,14 @@ def _tourney_pools_service(
     )
 
 
-async def test_tourney_pool_lifecycle_persists_and_deletes_pool_maps() -> None:
-    creator = await factories.create_user(priv=VISIBLE_PRIV)
-    first_map = await factories.create_map()
-    second_map = await factories.create_map()
-    service = _tourney_pools_service()
+async def test_tourney_pool_lifecycle_persists_and_deletes_pool_maps(
+    application: Application,
+    test_data: TestDataFactory,
+) -> None:
+    creator = await test_data.create_user(priv=VISIBLE_PRIV)
+    first_map = await test_data.create_map()
+    second_map = await test_data.create_map()
+    service = _tourney_pools_service(application)
 
     created = await service.create_pool(
         name=f"Pool {secrets.token_hex(3)}",
@@ -89,11 +93,14 @@ async def test_tourney_pool_lifecycle_persists_and_deletes_pool_maps() -> None:
     assert await service.fetch_tourney_pool_maps(pool.id) == []
 
 
-async def test_delete_pool_rolls_back_when_map_cleanup_fails() -> None:
-    creator = await factories.create_user(priv=VISIBLE_PRIV)
-    beatmap = await factories.create_map()
-    database = app.state.services.database
-    service = _tourney_pools_service()
+async def test_delete_pool_rolls_back_when_map_cleanup_fails(
+    application: Application,
+    test_data: TestDataFactory,
+) -> None:
+    creator = await test_data.create_user(priv=VISIBLE_PRIV)
+    beatmap = await test_data.create_map()
+    database = application.resources.database
+    service = _tourney_pools_service(application)
     created = await service.create_pool(
         name=f"Pool {secrets.token_hex(3)}",
         created_by=creator.id,
@@ -108,6 +115,7 @@ async def test_delete_pool_rolls_back_when_map_cleanup_fails() -> None:
     )
     assert added.code is AddPoolMapResultCode.ADDED
     failing_service = _tourney_pools_service(
+        application,
         pool_maps=_FailingPoolMapsRepository(database),
     )
 

@@ -8,20 +8,20 @@ import respx
 from fastapi import status
 from httpx import AsyncClient
 
-import app.state.services
+from app.application import Application
 from app.constants.privileges import Privileges
-from app.repositories.users import UsersRepository
-from tests import factories
+from tests.factories import TestDataFactory
 
 API_HEADERS = {"Host": "api.cmyui.xyz"}
 
 
 async def test_v2_player_routes_return_seeded_player_and_stats(
+    test_data: TestDataFactory,
     http_client: AsyncClient,
 ) -> None:
     preferred_mode = secrets.randbelow(1_000_000) + 10_000
-    user = await factories.create_user(preferred_mode=preferred_mode)
-    stat = await factories.create_player_stats(player_id=user.id, pp=456, plays=9)
+    user = await test_data.create_user(preferred_mode=preferred_mode)
+    stat = await test_data.create_player_stats(player_id=user.id, pp=456, plays=9)
 
     player_response = await http_client.get(
         f"/v2/players/{user.id}",
@@ -80,10 +80,11 @@ async def test_v2_player_route_returns_not_found_for_missing_player(
 
 
 async def test_v2_map_routes_return_seeded_map(
+    test_data: TestDataFactory,
     http_client: AsyncClient,
 ) -> None:
     set_id = secrets.randbelow(1_000_000) + 20_000
-    beatmap = await factories.create_map(set_id=set_id)
+    beatmap = await test_data.create_map(set_id=set_id)
 
     map_response = await http_client.get(
         f"/v2/maps/{beatmap.id}",
@@ -118,11 +119,12 @@ async def test_v2_map_route_returns_not_found_for_missing_map(
 
 
 async def test_v2_score_routes_return_seeded_score(
+    test_data: TestDataFactory,
     http_client: AsyncClient,
 ) -> None:
-    user = await factories.create_user()
-    beatmap = await factories.create_map()
-    score = await factories.create_score(
+    user = await test_data.create_user()
+    beatmap = await test_data.create_map()
+    score = await test_data.create_score(
         player_id=user.id,
         map_md5=beatmap.md5,
     )
@@ -161,10 +163,11 @@ async def test_v2_score_route_returns_not_found_for_missing_score(
 
 
 async def test_v2_clan_routes_return_seeded_clan(
+    test_data: TestDataFactory,
     http_client: AsyncClient,
 ) -> None:
-    owner = await factories.create_user()
-    clan = await factories.create_clan(owner_id=owner.id)
+    owner = await test_data.create_user()
+    clan = await test_data.create_clan(owner_id=owner.id)
 
     clan_response = await http_client.get(
         f"/v2/clans/{clan.id}",
@@ -194,10 +197,11 @@ async def test_v2_clan_route_returns_not_found_for_missing_clan(
 
 
 async def test_v2_leaderboard_route_returns_ranked_players(
+    test_data: TestDataFactory,
     http_client: AsyncClient,
 ) -> None:
-    user = await factories.create_user()
-    await factories.create_player_stats(player_id=user.id, pp=727, plays=10)
+    user = await test_data.create_user()
+    await test_data.create_player_stats(player_id=user.id, pp=727, plays=10)
 
     response = await http_client.get(
         "/v2/leaderboards/0",
@@ -230,15 +234,17 @@ async def test_v2_leaderboard_route_rejects_invalid_gamemodes(
 
 
 async def test_v2_player_stats_include_leaderboard_ranks(
+    application: Application,
+    test_data: TestDataFactory,
     http_client: AsyncClient,
 ) -> None:
-    user = await factories.create_user()
-    await factories.create_player_stats(player_id=user.id, pp=555)
-    await app.state.services.redis.zadd(
+    user = await test_data.create_user()
+    await test_data.create_player_stats(player_id=user.id, pp=555)
+    await application.resources.redis.zadd(
         "bancho:leaderboard:0",
         {str(user.id): 555},
     )
-    await app.state.services.redis.zadd(
+    await application.resources.redis.zadd(
         f"bancho:leaderboard:0:{user.country}",
         {str(user.id): 555},
     )
@@ -254,10 +260,11 @@ async def test_v2_player_stats_include_leaderboard_ranks(
 
 
 async def test_v2_player_search_returns_matching_public_players(
+    test_data: TestDataFactory,
     http_client: AsyncClient,
 ) -> None:
     # players must be unrestricted & verified to appear in search results.
-    user = await factories.create_user(priv=3)
+    user = await test_data.create_user(priv=3)
 
     response = await http_client.get(
         "/v2/players/search",
@@ -271,11 +278,12 @@ async def test_v2_player_search_returns_matching_public_players(
 
 
 async def test_v2_player_scores_routes_return_seeded_scores(
+    test_data: TestDataFactory,
     http_client: AsyncClient,
 ) -> None:
-    user = await factories.create_user()
-    beatmap = await factories.create_map()
-    score = await factories.create_score(player_id=user.id, map_md5=beatmap.md5)
+    user = await test_data.create_user()
+    beatmap = await test_data.create_map()
+    score = await test_data.create_score(player_id=user.id, map_md5=beatmap.md5)
 
     best_response = await http_client.get(
         f"/v2/players/{user.id}/scores",
@@ -326,11 +334,12 @@ async def test_v2_player_scores_route_returns_not_found_for_missing_player(
 
 
 async def test_v2_map_scores_route_returns_seeded_scores(
+    test_data: TestDataFactory,
     http_client: AsyncClient,
 ) -> None:
-    user = await factories.create_user()
-    beatmap = await factories.create_map()
-    score = await factories.create_score(player_id=user.id, map_md5=beatmap.md5)
+    user = await test_data.create_user()
+    beatmap = await test_data.create_map()
+    score = await test_data.create_score(player_id=user.id, map_md5=beatmap.md5)
 
     response = await http_client.get(
         f"/v2/maps/{beatmap.id}/scores",
@@ -362,9 +371,10 @@ async def test_v2_map_scores_route_returns_not_found_for_missing_map(
 
 
 async def test_v2_server_stats_reports_player_counts(
+    test_data: TestDataFactory,
     http_client: AsyncClient,
 ) -> None:
-    await factories.create_user()
+    await test_data.create_user()
 
     response = await http_client.get("/v2/server/stats", headers=API_HEADERS)
 
@@ -469,9 +479,10 @@ async def test_v2_account_registration_and_session_lifecycle(
 
 
 async def test_v2_account_registration_rejects_taken_usernames(
+    test_data: TestDataFactory,
     http_client: AsyncClient,
 ) -> None:
-    user = await factories.create_user()
+    user = await test_data.create_user()
 
     response = await http_client.post(
         "/v2/accounts",
@@ -572,11 +583,12 @@ async def test_v2_player_avatar_upload_lifecycle(
 
 
 async def test_v2_score_detail_embeds_beatmap_and_player(
+    test_data: TestDataFactory,
     http_client: AsyncClient,
 ) -> None:
-    user = await factories.create_user()
-    beatmap = await factories.create_map()
-    score = await factories.create_score(player_id=user.id, map_md5=beatmap.md5)
+    user = await test_data.create_user()
+    beatmap = await test_data.create_map()
+    score = await test_data.create_score(player_id=user.id, map_md5=beatmap.md5)
 
     response = await http_client.get(f"/v2/scores/{score.id}", headers=API_HEADERS)
 
@@ -589,6 +601,7 @@ async def test_v2_score_detail_embeds_beatmap_and_player(
 
 
 async def test_v2_score_detail_is_gone_once_its_map_version_is(
+    test_data: TestDataFactory,
     http_client: AsyncClient,
     respx_mock: respx.MockRouter,
 ) -> None:
@@ -600,8 +613,8 @@ async def test_v2_score_detail_is_gone_once_its_map_version_is(
     ).mock(
         return_value=httpx.Response(status_code=status.HTTP_200_OK, json=[]),
     )
-    user = await factories.create_user()
-    score = await factories.create_score(
+    user = await test_data.create_user()
+    score = await test_data.create_score(
         player_id=user.id,
         map_md5=secrets.token_hex(16),
     )
@@ -612,6 +625,7 @@ async def test_v2_score_detail_is_gone_once_its_map_version_is(
 
 
 async def test_v2_player_friends_lifecycle(
+    test_data: TestDataFactory,
     http_client: AsyncClient,
     respx_mock: respx.MockRouter,
 ) -> None:
@@ -623,7 +637,7 @@ async def test_v2_player_friends_lifecycle(
         username=username,
         password=password,
     )
-    friend = await factories.create_user()
+    friend = await test_data.create_user()
 
     # listing friends requires authentication
     response = await http_client.get(
@@ -687,6 +701,7 @@ async def test_v2_player_friends_lifecycle(
 
 
 async def test_v2_player_favourites_lifecycle(
+    test_data: TestDataFactory,
     http_client: AsyncClient,
     respx_mock: respx.MockRouter,
 ) -> None:
@@ -698,7 +713,7 @@ async def test_v2_player_favourites_lifecycle(
         username=username,
         password=password,
     )
-    beatmap = await factories.create_map()
+    beatmap = await test_data.create_map()
 
     # mutations require authentication
     response = await http_client.put(
@@ -749,9 +764,10 @@ async def test_v2_player_favourites_lifecycle(
 
 
 async def test_v2_map_rating_reports_average_and_count(
+    test_data: TestDataFactory,
     http_client: AsyncClient,
 ) -> None:
-    beatmap = await factories.create_map()
+    beatmap = await test_data.create_map()
 
     # no ratings yet
     response = await http_client.get(
@@ -761,10 +777,10 @@ async def test_v2_map_rating_reports_average_and_count(
     assert response.status_code == status.HTTP_200_OK
     assert response.json()["data"] == {"average": None, "count": 0}
 
-    rater_1 = await factories.create_user()
-    rater_2 = await factories.create_user()
-    await factories.create_rating(user_id=rater_1.id, map_md5=beatmap.md5, rating=10)
-    await factories.create_rating(user_id=rater_2.id, map_md5=beatmap.md5, rating=7)
+    rater_1 = await test_data.create_user()
+    rater_2 = await test_data.create_user()
+    await test_data.create_rating(user_id=rater_1.id, map_md5=beatmap.md5, rating=10)
+    await test_data.create_rating(user_id=rater_2.id, map_md5=beatmap.md5, rating=7)
 
     response = await http_client.get(
         f"/v2/maps/{beatmap.id}/rating",
@@ -780,6 +796,8 @@ async def test_v2_map_rating_reports_average_and_count(
 
 
 async def test_v2_profile_update_lifecycle(
+    application: Application,
+    test_data: TestDataFactory,
     http_client: AsyncClient,
     respx_mock: respx.MockRouter,
 ) -> None:
@@ -824,7 +842,7 @@ async def test_v2_profile_update_lifecycle(
     assert response.status_code == status.HTTP_400_BAD_REQUEST
     assert "country" in response.json()["error"].lower()
 
-    taken = await factories.create_user()
+    taken = await test_data.create_user()
     response = await http_client.patch(
         f"/v2/players/{player_id}",
         headers=API_HEADERS,
@@ -853,7 +871,7 @@ async def test_v2_profile_update_lifecycle(
     assert body["data"]["userpage_content"] == "hello from the integration tests"
 
     # the country change moved the player onto their new country leaderboard
-    zscore = await app.state.services.redis.zscore(
+    zscore = await application.resources.redis.zscore(
         "bancho:leaderboard:0:de",
         str(player_id),
     )
@@ -938,11 +956,12 @@ async def test_v2_password_change_lifecycle(
 
 
 async def test_v2_score_replay_download(
+    test_data: TestDataFactory,
     http_client: AsyncClient,
 ) -> None:
-    user = await factories.create_user()
-    beatmap = await factories.create_map()
-    score = await factories.create_score(player_id=user.id, map_md5=beatmap.md5)
+    user = await test_data.create_user()
+    beatmap = await test_data.create_map()
+    score = await test_data.create_score(player_id=user.id, map_md5=beatmap.md5)
 
     # no replay file on disk yet (the id may collide with leftovers from
     # local development, since the data volume outlives the database)
@@ -970,6 +989,8 @@ async def test_v2_score_replay_download(
 
 
 async def test_v2_player_search_visibility(
+    application: Application,
+    test_data: TestDataFactory,
     http_client: AsyncClient,
     respx_mock: respx.MockRouter,
 ) -> None:
@@ -1007,14 +1028,14 @@ async def test_v2_player_search_visibility(
     assert [rec["id"] for rec in response.json()["data"]] == [player_id]
 
     # ...and staff can see everyone
-    hidden = await factories.create_user(priv=1)  # unverified
+    hidden = await test_data.create_user(priv=1)  # unverified
     staff_username = f"web-{secrets.token_hex(4)}"
     staff_id = await _register_account(
         http_client,
         username=staff_username,
         password=password,
     )
-    users = UsersRepository(app.state.services.database)
+    users = application.repositories.users
     await users.partial_update(
         id=staff_id,
         priv=int(Privileges.UNRESTRICTED | Privileges.ADMINISTRATOR),
@@ -1035,9 +1056,10 @@ async def test_v2_player_search_visibility(
 
 
 async def test_v2_player_lookup_by_name(
+    test_data: TestDataFactory,
     http_client: AsyncClient,
 ) -> None:
-    user = await factories.create_user()
+    user = await test_data.create_user()
 
     response = await http_client.get(f"/v2/players/{user.name}", headers=API_HEADERS)
     assert response.status_code == status.HTTP_200_OK
@@ -1051,12 +1073,14 @@ async def test_v2_player_lookup_by_name(
 
 
 async def test_v2_player_lookup_key_disambiguates_digit_names(
+    application: Application,
+    test_data: TestDataFactory,
     http_client: AsyncClient,
 ) -> None:
     # an all-digit username is shadowed by the id namespace by default;
     # ?key forces the interpretation, as in osu!api v2
-    user = await factories.create_user()
-    users = UsersRepository(app.state.services.database)
+    user = await test_data.create_user()
+    users = application.repositories.users
     digit_name = str(user.id + 1_000_000)
     await users.partial_update(id=user.id, name=digit_name)
 
@@ -1093,17 +1117,18 @@ async def test_v2_player_lookup_key_disambiguates_digit_names(
 
 
 async def test_v2_hidden_player_resources_are_not_exposed(
+    test_data: TestDataFactory,
     http_client: AsyncClient,
 ) -> None:
     # a hidden (unverified) player with stats, a score & a replay on disk
     marker = secrets.randbelow(1_000_000) + 10_000
-    hidden = await factories.create_user(
+    hidden = await test_data.create_user(
         priv=int(Privileges.UNRESTRICTED),
         preferred_mode=marker,
     )
-    await factories.create_player_stats(player_id=hidden.id)
-    beatmap = await factories.create_map()
-    score = await factories.create_score(player_id=hidden.id, map_md5=beatmap.md5)
+    await test_data.create_player_stats(player_id=hidden.id)
+    beatmap = await test_data.create_map()
+    score = await test_data.create_score(player_id=hidden.id, map_md5=beatmap.md5)
     replay_path = Path.cwd() / ".data/osr" / f"{score.id}.osr"
     replay_path.write_bytes(b"raw replay frames")
     try:
@@ -1142,6 +1167,7 @@ async def test_v2_hidden_player_resources_are_not_exposed(
 
 
 async def test_v2_hidden_players_can_view_their_own_resources(
+    test_data: TestDataFactory,
     http_client: AsyncClient,
     respx_mock: respx.MockRouter,
 ) -> None:
@@ -1154,8 +1180,8 @@ async def test_v2_hidden_players_can_view_their_own_resources(
         username=username,
         password=password,
     )
-    beatmap = await factories.create_map()
-    score = await factories.create_score(player_id=player_id, map_md5=beatmap.md5)
+    beatmap = await test_data.create_map()
+    score = await test_data.create_score(player_id=player_id, map_md5=beatmap.md5)
     replay_path = Path.cwd() / ".data/osr" / f"{score.id}.osr"
     replay_path.write_bytes(b"raw replay frames")
     try:
@@ -1193,17 +1219,19 @@ async def test_v2_hidden_players_can_view_their_own_resources(
 
 
 async def test_v2_staff_can_view_hidden_player_resources(
+    application: Application,
+    test_data: TestDataFactory,
     http_client: AsyncClient,
     respx_mock: respx.MockRouter,
 ) -> None:
     _mock_out_geolocation(respx_mock)
     marker = secrets.randbelow(1_000_000) + 10_000
-    hidden = await factories.create_user(
+    hidden = await test_data.create_user(
         priv=int(Privileges.UNRESTRICTED),
         preferred_mode=marker,
     )
-    beatmap = await factories.create_map()
-    score = await factories.create_score(player_id=hidden.id, map_md5=beatmap.md5)
+    beatmap = await test_data.create_map()
+    score = await test_data.create_score(player_id=hidden.id, map_md5=beatmap.md5)
     replay_path = Path.cwd() / ".data/osr" / f"{score.id}.osr"
     replay_path.write_bytes(b"raw replay frames")
 
@@ -1214,7 +1242,7 @@ async def test_v2_staff_can_view_hidden_player_resources(
         username=staff_username,
         password=password,
     )
-    users = UsersRepository(app.state.services.database)
+    users = application.repositories.users
     await users.partial_update(
         id=staff_id,
         priv=int(Privileges.UNRESTRICTED | Privileges.ADMINISTRATOR),
@@ -1247,6 +1275,8 @@ async def test_v2_staff_can_view_hidden_player_resources(
 
 
 async def test_v2_hidden_players_are_omitted_from_friends_lists(
+    application: Application,
+    test_data: TestDataFactory,
     http_client: AsyncClient,
     respx_mock: respx.MockRouter,
 ) -> None:
@@ -1265,8 +1295,8 @@ async def test_v2_hidden_players_are_omitted_from_friends_lists(
     )
     assert login_response.status_code == status.HTTP_201_CREATED
 
-    friend = await factories.create_user()
-    hidden = await factories.create_user(priv=int(Privileges.UNRESTRICTED))
+    friend = await test_data.create_user()
+    hidden = await test_data.create_user(priv=int(Privileges.UNRESTRICTED))
 
     # hidden players can't be friended (reported as missing)
     response = await http_client.put(
@@ -1282,7 +1312,7 @@ async def test_v2_hidden_players_are_omitted_from_friends_lists(
     )
     assert response.status_code == status.HTTP_200_OK
 
-    users = UsersRepository(app.state.services.database)
+    users = application.repositories.users
     await users.partial_update(id=friend.id, priv=int(Privileges.VERIFIED))
 
     response = await http_client.get(

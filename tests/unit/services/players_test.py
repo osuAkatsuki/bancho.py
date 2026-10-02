@@ -89,7 +89,6 @@ class _FakeOnlinePlayers:
         self.player = SimpleNamespace(id=3, name="cmyui")
         self.unrestricted = {object(), object(), object()}
         self.get_calls: list[dict[str, object | None]] = []
-        self.from_cache_or_sql_calls: list[dict[str, object | None]] = []
 
     def get(
         self,
@@ -98,14 +97,6 @@ class _FakeOnlinePlayers:
         name: str | None = None,
     ) -> object | None:
         self.get_calls.append({"token": token, "id": id, "name": name})
-        return self.player
-
-    async def from_cache_or_sql(
-        self,
-        id: int | None = None,
-        name: str | None = None,
-    ) -> object | None:
-        self.from_cache_or_sql_calls.append({"id": id, "name": name})
         return self.player
 
 
@@ -129,6 +120,48 @@ class _FakePlayerLeaderboardsService:
         return self.ranks
 
 
+class _OfflineUsersRepository:
+    async def fetch_one(
+        self,
+        id: int | None = None,
+        name: str | None = None,
+        *,
+        fetch_all_fields: bool = False,
+    ) -> SimpleNamespace | None:
+        if id != 4 and name != "offline-user":
+            return None
+        return SimpleNamespace(
+            id=4,
+            name="offline-user",
+            priv=int(Privileges.UNRESTRICTED),
+            clan_id=0,
+            clan_priv=0,
+            country="ca",
+            silence_end=0,
+            donor_end=0,
+            api_key=None,
+        )
+
+    async def fetch_password_hash(
+        self,
+        id: int | None = None,
+        name: str | None = None,
+    ) -> str | None:
+        return "not-a-real-password-hash" if id == 4 else None
+
+
+class _EmptyOnlinePlayers:
+    unrestricted: set[object] = set()
+
+    def get(
+        self,
+        token: str | None = None,
+        id: int | None = None,
+        name: str | None = None,
+    ) -> None:
+        return None
+
+
 def _service(
     player_leaderboards: _FakePlayerLeaderboardsService | None = None,
 ) -> players.PlayersService:
@@ -140,6 +173,7 @@ def _service(
         stats=_FakeStatsRepository(),
         online_players=_FakeOnlinePlayers(),
         player_leaderboards=player_leaderboards,
+        country_codes={"ca": 38},
     )
 
 
@@ -261,11 +295,25 @@ async def test_players_service_fetches_online_and_cached_player_sessions() -> No
 
     assert service.online_players.get_calls == [
         {"token": None, "id": None, "name": "cmyui"},
+        {"token": None, "id": 3, "name": None},
+        {"token": None, "id": 4, "name": None},
     ]
-    assert service.online_players.from_cache_or_sql_calls == [
-        {"id": 3, "name": None},
-        {"id": 4, "name": None},
-    ]
+
+
+async def test_players_service_marks_database_hydrated_player_offline() -> None:
+    service = players.PlayersService(
+        users=_OfflineUsersRepository(),  # type: ignore[arg-type]
+        stats=_FakeStatsRepository(),
+        online_players=_EmptyOnlinePlayers(),
+        player_leaderboards=_FakePlayerLeaderboardsService(),
+        country_codes={"ca": 38},
+    )
+
+    player = await service.fetch_player_session(user_id=4, username=None)
+
+    assert player is not None
+    assert player.token == ""
+    assert player.is_online is False
 
 
 async def test_players_service_composes_mode_stats_with_ranks() -> None:

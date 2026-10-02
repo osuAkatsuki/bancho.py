@@ -4,11 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
+import httpx
 from tenacity import retry
 from tenacity import stop_after_attempt
 from tenacity import wait_exponential
-
-from app.state import services
 
 
 class Footer:
@@ -160,12 +159,12 @@ class Webhook:
         stop=stop_after_attempt(10),
         wait=wait_exponential(multiplier=1, min=4, max=10),
     )
-    async def post(self) -> None:
+    async def post(self, http_client: httpx.AsyncClient) -> None:
         """Post the webhook in JSON format."""
         # TODO: if `self.file is not None`, then we should
         #       use multipart/form-data instead of json payload.
         headers = {"Content-Type": "application/json"}
-        response = await services.http_client.post(
+        response = await http_client.post(
             self.url,
             json=self.json,
             headers=headers,

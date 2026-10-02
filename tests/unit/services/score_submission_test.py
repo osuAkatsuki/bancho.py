@@ -330,9 +330,14 @@ async def test_restrict_player_for_missing_replay_restricts_unrestricted_player(
     admin = _FakeReplayPlayer()
     score.player = player
 
+    async def restrict_player(target: _FakeReplayPlayer, reason: str) -> None:
+        await target.restrict(admin=admin, reason=reason)
+        if target.is_online:
+            target.logout()
+
     await score_submission.restrict_player_for_missing_replay(
         score,
-        restriction_admin=admin,
+        restrict_player=restrict_player,
     )
 
     assert player.restriction_admins == [admin]
@@ -347,9 +352,12 @@ async def test_restrict_player_for_missing_replay_does_not_restrict_restricted_p
     player = _FakeReplayPlayer(restricted=True)
     score.player = player
 
+    async def restrict_player(target: _FakeReplayPlayer, reason: str) -> None:
+        raise AssertionError("restricted player should not be restricted again")
+
     await score_submission.restrict_player_for_missing_replay(
         score,
-        restriction_admin=player,
+        restrict_player=restrict_player,
     )
 
     assert player.restriction_reasons == []
@@ -731,6 +739,38 @@ class _FakeOsuFileAvailability:
         return self.available
 
 
+class _FakeScoreDomainService:
+    def __init__(
+        self,
+        *,
+        performance: tuple[float, float] = (10.448, 4.2),
+        status: SubmissionStatus = SubmissionStatus.BEST,
+        placement: int = 1,
+    ) -> None:
+        self.performance = performance
+        self.status = status
+        self.placement = placement
+        self.performance_calls: list[tuple[Score, int]] = []
+        self.status_calls: list[Score] = []
+        self.placement_calls: list[Score] = []
+
+    def calculate_performance(
+        self,
+        score: Score,
+        beatmap_id: int,
+    ) -> tuple[float, float]:
+        self.performance_calls.append((score, beatmap_id))
+        return self.performance
+
+    async def calculate_submission_status(self, score: Score) -> None:
+        self.status_calls.append(score)
+        score.status = self.status
+
+    async def calculate_placement(self, score: Score) -> int:
+        self.placement_calls.append(score)
+        return self.placement
+
+
 class _CreatedScore:
     def __init__(self, id: int) -> None:
         self.id = id
@@ -951,6 +991,7 @@ def _score_submission_service(
     achievements: object | None = None,
     user_achievements: object | None = None,
     ensure_osu_file_is_available: object | None = None,
+    score_domain: object | None = None,
     publish_user_stats=None,
     send_personal_best_notification=None,
     announce_channel: object | None = None,
@@ -958,9 +999,21 @@ def _score_submission_service(
     increment_metric=None,
     record_submission_integrity_failure=None,
 ) -> score_submission.ScoreSubmissionService:
+    admin = restriction_admin or _FakePlayer(stats=_mode_data())
+
+    async def restrict_player(player: _FakePlayer, reason: str) -> None:
+        await player.restrict(admin=admin, reason=reason)
+        if player.is_online:
+            player.logout()
+
+    def schedule_player_activity_update(player: _FakePlayer) -> None:
+        player.update_latest_activity_soon()
+
+    async def update_player_rank(player: _FakePlayer, mode: GameMode) -> int:
+        return await player.update_rank(mode)
+
     return score_submission.ScoreSubmissionService(
         replays_path=replays_path,
-        restriction_admin=restriction_admin or _FakePlayer(stats=_mode_data()),
         fetch_beatmap=fetch_beatmap or _FakeBeatmapFetcher(None),
         bancho_authentication=bancho_authentication or _FakePlayerAuthenticator(None),
         score_submission_locks=score_submission_locks
@@ -973,6 +1026,7 @@ def _score_submission_service(
         user_achievements=user_achievements or _FakeUserAchievements(),
         ensure_osu_file_is_available=ensure_osu_file_is_available
         or _FakeOsuFileAvailability(),
+        score_domain=score_domain or _FakeScoreDomainService(),
         publish_user_stats=publish_user_stats or (lambda player: None),
         send_personal_best_notification=send_personal_best_notification
         or (lambda player, message: None),
@@ -981,6 +1035,9 @@ def _score_submission_service(
         increment_metric=increment_metric or (lambda metric: None),
         record_submission_integrity_failure=record_submission_integrity_failure
         or _record_no_submission_integrity_failure,
+        restrict_player=restrict_player,
+        schedule_player_activity_update=schedule_player_activity_update,
+        update_player_rank=update_player_rank,
     )
 
 
@@ -1352,7 +1409,6 @@ async def test_persist_score_submission_restores_memory_state_on_failure() -> No
 
 async def test_submit_score_orchestrates_submission_side_effects(
     tmp_path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     score = _score()
     score.id = None
@@ -1365,22 +1421,6 @@ async def test_submit_score_orchestrates_submission_side_effects(
     score.bmap.plays = 1
     score.bmap.passes = 1
     request = _score_submission_request(score, player=player)
-
-    performance_calls: list[int] = []
-
-    def calculate_performance(self: Score, beatmap_id: int) -> tuple[float, float]:
-        performance_calls.append(beatmap_id)
-        return 10.448, 4.2
-
-    async def calculate_status(self: Score) -> None:
-        self.status = SubmissionStatus.BEST
-
-    async def calculate_placement(self: Score) -> int:
-        return 1
-
-    monkeypatch.setattr(Score, "calculate_performance", calculate_performance)
-    monkeypatch.setattr(Score, "calculate_status", calculate_status)
-    monkeypatch.setattr(Score, "calculate_placement", calculate_placement)
 
     lock = _FakeScoreSubmissionLock()
     locks = _FakeScoreSubmissionLocks(lock)
@@ -1403,6 +1443,7 @@ async def test_submit_score_orchestrates_submission_side_effects(
     metrics: list[str] = []
     integrity_failures = 0
     announce_channel = _FakeAnnounceChannel()
+    score_domain = _FakeScoreDomainService()
 
     async def record_submission_integrity_failure() -> None:
         nonlocal integrity_failures
@@ -1421,6 +1462,7 @@ async def test_submit_score_orchestrates_submission_side_effects(
         achievements=_FakeAchievements(),
         user_achievements=user_achievements,
         ensure_osu_file_is_available=osu_file_availability,
+        score_domain=score_domain,
         publish_user_stats=published_stats.append,
         send_personal_best_notification=lambda player, message: notifications.append(
             (player, message),
@@ -1446,7 +1488,9 @@ async def test_submit_score_orchestrates_submission_side_effects(
     assert osu_file_availability.calls == [
         (315, "1cf5b2c2edfafd055536d2cefcb89c0e"),
     ]
-    assert performance_calls == [315]
+    assert score_domain.performance_calls == [(submitted_score, 315)]
+    assert score_domain.status_calls == [submitted_score]
+    assert score_domain.placement_calls == [submitted_score]
     assert metrics == ["bancho.submitted_scores", "bancho.submitted_scores_best"]
     assert database.calls == ["transaction", "transaction_enter", "transaction_exit"]
     assert submitted_score.id == 123
@@ -1520,25 +1564,11 @@ async def test_submit_score_rejects_duplicate_inside_submission_lock(tmp_path) -
 
 async def test_submit_score_maps_duplicate_insert_to_duplicate_submission(
     tmp_path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     score = _score()
     score.id = None
     player = _FakePlayer(stats=_mode_data())
     request = _score_submission_request(score, player=player)
-
-    def calculate_performance(self: Score, beatmap_id: int) -> tuple[float, float]:
-        return 10.448, 4.2
-
-    async def calculate_status(self: Score) -> None:
-        self.status = SubmissionStatus.SUBMITTED
-
-    async def calculate_placement(self: Score) -> int:
-        return 2
-
-    monkeypatch.setattr(Score, "calculate_performance", calculate_performance)
-    monkeypatch.setattr(Score, "calculate_status", calculate_status)
-    monkeypatch.setattr(Score, "calculate_placement", calculate_placement)
 
     lock = _FakeScoreSubmissionLock()
     locks = _FakeScoreSubmissionLocks(lock)
@@ -1562,6 +1592,10 @@ async def test_submit_score_maps_duplicate_insert_to_duplicate_submission(
         achievements=_FakeAchievements(),
         user_achievements=_FakeUserAchievements(),
         ensure_osu_file_is_available=_FakeOsuFileAvailability(),
+        score_domain=_FakeScoreDomainService(
+            status=SubmissionStatus.SUBMITTED,
+            placement=2,
+        ),
         publish_user_stats=lambda player: None,
         send_personal_best_notification=lambda player, message: None,
         announce_channel=_FakeAnnounceChannel(),
@@ -1671,7 +1705,6 @@ async def test_submit_score_returns_error_when_player_authentication_fails(
 
 async def test_submit_score_logs_integrity_failure_and_continues(
     tmp_path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     score = _score()
     score.id = None
@@ -1688,19 +1721,6 @@ async def test_submit_score_logs_integrity_failure_and_continues(
         player=player,
         client_checksum="wrong-checksum",
     )
-
-    def calculate_performance(self: Score, beatmap_id: int) -> tuple[float, float]:
-        return 10.448, 4.2
-
-    async def calculate_status(self: Score) -> None:
-        self.status = SubmissionStatus.BEST
-
-    async def calculate_placement(self: Score) -> int:
-        return 1
-
-    monkeypatch.setattr(Score, "calculate_performance", calculate_performance)
-    monkeypatch.setattr(Score, "calculate_status", calculate_status)
-    monkeypatch.setattr(Score, "calculate_placement", calculate_placement)
 
     integrity_failures = 0
 

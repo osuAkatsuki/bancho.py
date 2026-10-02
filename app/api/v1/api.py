@@ -17,15 +17,15 @@ from fastapi.security import HTTPAuthorizationCredentials as HTTPCredentials
 from fastapi.security import HTTPBearer
 
 import app.packets
-import app.state
 from app.api import dependencies as api_dependencies
 from app.api.v2.common.json import ORJSONResponse
 from app.constants import regexes
 from app.constants.gamemodes import GameMode
 from app.constants.mods import Mods
 from app.objects.beatmap import Beatmap
-from app.objects.beatmap import ensure_osu_file_is_available
+from app.objects.collections import Matches
 from app.repositories.users import User
+from app.services.beatmaps import BeatmapsService
 from app.services.clans import ClansService
 from app.services.performance import PerformanceResult
 from app.services.performance import PerformanceService
@@ -85,23 +85,28 @@ async def api_calculate_pp(
         PerformanceService,
         Depends(api_dependencies.get_performance_service),
     ],
+    beatmaps_service: Annotated[
+        BeatmapsService,
+        Depends(api_dependencies.get_beatmaps_service),
+    ],
+    api_keys: Annotated[dict[str, int], Depends(api_dependencies.get_api_keys)],
 ) -> Response:
     """Calculates the PP of a specified map with specified score parameters."""
 
-    if token is None or app.state.sessions.api_keys.get(token.credentials) is None:
+    if token is None or api_keys.get(token.credentials) is None:
         return ORJSONResponse(
             {"status": "Invalid API key."},
             status_code=status.HTTP_401_UNAUTHORIZED,
         )
 
-    beatmap = await Beatmap.from_bid(beatmap_id)
+    beatmap = await beatmaps_service.fetch_by_id(beatmap_id)
     if not beatmap:
         return ORJSONResponse(
             {"status": "Beatmap not found."},
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
-    osu_file_available = await ensure_osu_file_is_available(
+    osu_file_available = await beatmaps_service.ensure_osu_file_is_available(
         beatmap.id,
         expected_md5=beatmap.md5,
     )
@@ -344,6 +349,10 @@ async def api_get_player_status(
         PlayersService,
         Depends(api_dependencies.get_players_service),
     ],
+    beatmaps_service: Annotated[
+        BeatmapsService,
+        Depends(api_dependencies.get_beatmaps_service),
+    ],
 ) -> Response:
     """Return a players current status, if they are online."""
     if username and user_id:
@@ -402,7 +411,7 @@ async def api_get_player_status(
         )
 
     if player.status.map_md5:
-        bmap = await Beatmap.from_md5(player.status.map_md5)
+        bmap = await beatmaps_service.fetch_by_md5(player.status.map_md5)
     else:
         bmap = None
 
@@ -646,12 +655,17 @@ async def api_get_player_most_played(
 async def api_get_map_info(
     map_id: int | None = Query(None, alias="id", ge=3, le=2_147_483_647),
     md5: str | None = Query(None, alias="md5", min_length=32, max_length=32),
+    *,
+    beatmaps_service: Annotated[
+        BeatmapsService,
+        Depends(api_dependencies.get_beatmaps_service),
+    ],
 ) -> Response:
     """Return information about a given beatmap."""
     if map_id is not None:
-        bmap = await Beatmap.from_bid(map_id)
+        bmap = await beatmaps_service.fetch_by_id(map_id)
     elif md5 is not None:
-        bmap = await Beatmap.from_md5(md5)
+        bmap = await beatmaps_service.fetch_by_md5(md5)
     else:
         return ORJSONResponse(
             {"status": "Must provide either id or md5!"},
@@ -685,6 +699,10 @@ async def api_get_map_scores(
         ScoresService,
         Depends(api_dependencies.get_scores_service),
     ],
+    beatmaps_service: Annotated[
+        BeatmapsService,
+        Depends(api_dependencies.get_beatmaps_service),
+    ],
 ) -> Response:
     """Return the top n scores on a given beatmap."""
     if mode_arg in (
@@ -699,9 +717,9 @@ async def api_get_map_scores(
         )
 
     if map_id is not None:
-        bmap = await Beatmap.from_bid(map_id)
+        bmap = await beatmaps_service.fetch_by_id(map_id)
     elif map_md5 is not None:
-        bmap = await Beatmap.from_md5(map_md5)
+        bmap = await beatmaps_service.fetch_by_md5(map_md5)
     else:
         return ORJSONResponse(
             {"status": "Must provide either id or md5!"},
@@ -838,10 +856,11 @@ async def api_get_replay(
 
 @router.get("/get_match")
 async def api_get_match(
+    matches: Annotated[Matches, Depends(api_dependencies.get_matches)],
     match_id: int = Query(..., alias="id", ge=1, le=64),
 ) -> Response:
     """Return information of a given multiplayer match."""
-    match = app.state.sessions.matches[match_id]
+    match = matches[match_id]
     if not match:
         return ORJSONResponse(
             {"status": "Match not found."},
@@ -1003,6 +1022,10 @@ async def api_get_pool(
         ClansService,
         Depends(api_dependencies.get_clans_service),
     ],
+    beatmaps_service: Annotated[
+        BeatmapsService,
+        Depends(api_dependencies.get_beatmaps_service),
+    ],
 ) -> Response:
     """Return information of a given mappool."""
 
@@ -1015,7 +1038,7 @@ async def api_get_pool(
 
     tourney_pool_maps: dict[tuple[int, int], Beatmap] = {}
     for pool_map in await tourney_pools_service.fetch_tourney_pool_maps(pool_id):
-        bmap = await Beatmap.from_bid(pool_map.map_id)
+        bmap = await beatmaps_service.fetch_by_id(pool_map.map_id)
         if bmap is not None:
             tourney_pool_maps[(pool_map.mods, pool_map.slot)] = bmap
 
