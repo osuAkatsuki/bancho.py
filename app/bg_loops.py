@@ -61,10 +61,10 @@ async def _remove_expired_donation_privileges(interval: int) -> None:
 
             if player.is_online:
                 player.enqueue(
-                    app.packets.notification("Your supporter status has expired."),
+                    app.packets.notification("Your AKATSUKI+ status has expired."),
                 )
 
-            log(f"{player}'s supporter status has expired.", Ansi.LMAGENTA)
+            log(f"{player}'s AKATSUKI+ status has expired.", Ansi.LMAGENTA)
 
         await asyncio.sleep(interval)
 

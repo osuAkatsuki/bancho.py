@@ -262,7 +262,7 @@ async def reconnect(ctx: Context) -> str | None:
     return None
 
 
-@command(Privileges.SUPPORTER)
+@command(Privileges.DONATOR)
 async def changename(ctx: Context) -> str | None:
     """Change your username."""
     name = " ".join(ctx.args).strip()
@@ -1098,8 +1098,8 @@ str_priv_dict = {
     "normal": Privileges.UNRESTRICTED,
     "verified": Privileges.VERIFIED,
     "whitelisted": Privileges.WHITELISTED,
-    "supporter": Privileges.SUPPORTER,
-    "premium": Privileges.PREMIUM,
+    "supporter": Privileges.DONATOR,
+    "premium": Privileges.DONATOR,
     "alumni": Privileges.ALUMNI,
     "tournament": Privileges.TOURNEY_MANAGER,
     "nominator": Privileges.NOMINATOR,
@@ -1166,7 +1166,7 @@ async def rmpriv(ctx: Context) -> str | None:
 
 @command(Privileges.DEVELOPER, hidden=True)
 async def givedonator(ctx: Context) -> str | None:
-    """Give donator status to a specified player for a specified duration."""
+    """Give AKATSUKI+ status to a specified player for a specified duration."""
     if len(ctx.args) < 2:
         return "Invalid syntax: !givedonator <name> <duration>"
 
@@ -1178,10 +1178,11 @@ async def givedonator(ctx: Context) -> str | None:
     if not timespan:
         return "Invalid timespan."
 
-    if target.donor_end < time.time():
-        timespan += time.time()
+    now = time.time()
+    if target.priv & Privileges.DONATOR == Privileges.DONATOR:
+        timespan += max(target.donor_end, now)
     else:
-        timespan += target.donor_end
+        timespan += now
 
     target.donor_end = int(timespan)
     await app.state.services.database.execute(
@@ -1189,9 +1190,9 @@ async def givedonator(ctx: Context) -> str | None:
         {"end": timespan, "user_id": target.id},
     )
 
-    await target.add_privs(Privileges.SUPPORTER)
+    await target.add_privs(Privileges.DONATOR)
 
-    return f"Added {ctx.args[1]} of donator status to {target}."
+    return f"Added {ctx.args[1]} of AKATSUKI+ status to {target}."
 
 
 @command(Privileges.DEVELOPER)

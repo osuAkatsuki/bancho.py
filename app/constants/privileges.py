@@ -20,7 +20,7 @@ class Privileges(IntFlag):
     # has bypass to low-ceiling anticheat measures (trusted).
     WHITELISTED = 1 << 2
 
-    # donation tiers, receives some extra benefits.
+    # AKATSUKI+ membership uses both of these server-side bits.
     SUPPORTER = 1 << 4
     PREMIUM = 1 << 5
 
